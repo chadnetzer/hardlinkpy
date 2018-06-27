@@ -149,40 +149,38 @@ def are_files_hardlinkable((filename1, stat1), (filename2, stat2), options):
 
 # Hardlink two files together
 def hardlink_files(sourcefile, destfile, stat_info, options):
-    # rename the destination file to save it
-    temp_name = destfile + ".$$$___cleanit___$$$"
-    try:
-        if not options.dryrun:
-            os.rename(destfile, temp_name)
-    except OSError as error:
-        print "Failed to rename: %s to %s: %s" % (destfile, temp_name, error)
-        result = False
-    else:
-        # Now link the sourcefile to the destination file
+    result = False
+    if not options.dryrun:
+        # rename the destination file to save it
+        temp_name = destfile + ".$$$___cleanit___$$$"
         try:
-            if not options.dryrun:
-                os.link(sourcefile, destfile)
-        except Exception as error:
-            print "Failed to hardlink: %s to %s: %s" % (sourcefile, destfile, error)
-            # Try to recover
-            try:
-                os.rename(temp_name, destfile)
-            except Exception as error:
-                print "BAD BAD - failed to rename back %s to %s: %s" % (temp_name, destfile, error)
-            result = False
+            os.rename(destfile, temp_name)
+        except OSError as error:
+            print "Failed to rename: %s to %s: %s" % (destfile, temp_name, error)
         else:
-            # hard link succeeded
-            # Delete the renamed version since we don't need it.
-            if not options.dryrun:
+            # Now link the sourcefile to the destination file
+            try:
+                os.link(sourcefile, destfile)
+            except Exception as error:
+                print "Failed to hardlink: %s to %s: %s" % (sourcefile, destfile, error)
+                # Try to recover
+                try:
+                    os.rename(temp_name, destfile)
+                except Exception as error:
+                    print "BAD BAD - failed to rename back %s to %s: %s" % (temp_name, destfile, error)
+            else:
+                # hard link succeeded
+                # Delete the renamed version since we don't need it.
                 os.unlink(temp_name)
-            # update our stats
-            gStats.did_hardlink(sourcefile, destfile, stat_info)
-            if options.verbosity > 0:
-                if options.dryrun:
-                    print "Did NOT link.  Dry run"
-                print "Linked: %s" % sourcefile
-                print"     to: %s, saved %s" % (destfile, stat_info.st_size)
-            result = True
+                result = True
+    if result or options.dryrun:
+        # update our stats
+        gStats.did_hardlink(sourcefile, destfile, stat_info)
+        if options.verbosity > 0:
+            if options.dryrun:
+                print "Did NOT link.  Dry run"
+            print "Linked: %s" % sourcefile
+            print"     to: %s, saved %s" % (destfile, stat_info.st_size)
     return result
 
 
