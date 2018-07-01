@@ -212,44 +212,43 @@ def hardlink_identical_files(filename, stat_info, options):
 
      Add the file info to the list of files that have the same hash value."""
 
-    if True: # Keep indentation temporarily for cleaner git diff
-        # Create the hash for the file.
-        file_hash = hash_value(stat_info.st_size, stat_info.st_mtime,
-                               options.notimestamp or options.contentonly)
-        # Bump statistics count of regular files found.
-        gStats.found_regular_file()
-        if options.verbosity > 2:
-            print "File: %s" % filename
-        work_file_info = (filename, stat_info)
-        if file_hash in file_hashes:
-            # We have file(s) that have the same hash as our current file.
-            # Let's go through the list of files with the same hash and see if
-            # we are already hardlinked to any of them.
-            base_filename = os.path.basename(filename)
-            for (temp_filename, temp_stat_info) in file_hashes[file_hash]:
-                if is_already_hardlinked(stat_info, temp_stat_info):
-                    if not options.samename or (base_filename == os.path.basename(temp_filename)):
-                        gStats.found_hardlink(temp_filename, filename,
-                                              temp_stat_info)
-                        break
-            else:
-                # We did not find this file as hardlinked to any other file
-                # yet.  So now lets see if our file should be hardlinked to any
-                # of the other files with the same hash.
-                for (temp_filename, temp_stat_info) in file_hashes[file_hash]:
-                    if are_files_hardlinkable(work_file_info, (temp_filename, temp_stat_info),
-                                              options):
-                        hardlink_files(temp_filename, filename, temp_stat_info, options)
-                        break
-                else:
-                    # The file should NOT be hardlinked to any of the other
-                    # files with the same hash.  So we will add it to the list
-                    # of files.
-                    file_hashes[file_hash].append(work_file_info)
+    # Create the hash for the file.
+    file_hash = hash_value(stat_info.st_size, stat_info.st_mtime,
+                           options.notimestamp or options.contentonly)
+    # Bump statistics count of regular files found.
+    gStats.found_regular_file()
+    if options.verbosity > 2:
+        print "File: %s" % filename
+    work_file_info = (filename, stat_info)
+    if file_hash in file_hashes:
+        # We have file(s) that have the same hash as our current file.
+        # Let's go through the list of files with the same hash and see if
+        # we are already hardlinked to any of them.
+        base_filename = os.path.basename(filename)
+        for (temp_filename, temp_stat_info) in file_hashes[file_hash]:
+            if is_already_hardlinked(stat_info, temp_stat_info):
+                if not options.samename or (base_filename == os.path.basename(temp_filename)):
+                    gStats.found_hardlink(temp_filename, filename,
+                                          temp_stat_info)
+                    break
         else:
-            # There weren't any other files with the same hash value so we will
-            # create a new entry and store our file.
-            file_hashes[file_hash] = [work_file_info]
+            # We did not find this file as hardlinked to any other file
+            # yet.  So now lets see if our file should be hardlinked to any
+            # of the other files with the same hash.
+            for (temp_filename, temp_stat_info) in file_hashes[file_hash]:
+                if are_files_hardlinkable(work_file_info, (temp_filename, temp_stat_info),
+                                          options):
+                    hardlink_files(temp_filename, filename, temp_stat_info, options)
+                    break
+            else:
+                # The file should NOT be hardlinked to any of the other
+                # files with the same hash.  So we will add it to the list
+                # of files.
+                file_hashes[file_hash].append(work_file_info)
+    else:
+        # There weren't any other files with the same hash value so we will
+        # create a new entry and store our file.
+        file_hashes[file_hash] = [work_file_info]
 
 
 class Statistics:
