@@ -186,7 +186,7 @@ def hardlink_files(sourcefile, destfile, stat_info, options):
     return result
 
 
-def hardlink_identical_files(directories, filename, options):
+def hardlink_identical_files(filename, stat_info, options):
     """
     The purpose of this function is to hardlink files together if the files are
     the same.  To be considered the same they must be equal in the following
@@ -212,28 +212,7 @@ def hardlink_identical_files(directories, filename, options):
 
      Add the file info to the list of files that have the same hash value."""
 
-    for exclude in options.excludes:
-        if re.search(exclude, filename):
-            return
-    try:
-        stat_info = os.stat(filename)
-    except OSError as error:
-        print "Unable to get stat info for: %s: %s" % (filename, error)
-        return
-
-    # Is it a directory?
-    if stat.S_ISDIR(stat_info.st_mode):
-        # If it is a directory then add it to the list of directories.
-        directories.append(filename)
-    # Is it a regular file?
-    elif stat.S_ISREG(stat_info.st_mode):
-        if ((options.max_file_size and stat_info.st_size > options.max_file_size) or
-            (stat_info.st_size < options.min_file_size)):
-            return
-
-        if options.match:
-            if not fnmatch.fnmatch(filename, options.match):
-                return
+    if True: # Keep indentation temporarily for cleaner git diff
         # Create the hash for the file.
         file_hash = hash_value(stat_info.st_size, stat_info.st_mtime,
                                options.notimestamp or options.contentonly)
@@ -468,10 +447,15 @@ def parse_command_line():
     return options, args
 
 
+def found_excluded(name, excludes):
+    for exclude in excludes:
+        if re.search(exclude, name):
+            return True
+    return False
+
+
 # Start of global declarations
 OLD_VERBOSE_OPTION_ERROR = True
-debug1 = None
-
 MAX_HASHES = 128 * 1024
 
 gStats = None
@@ -497,7 +481,7 @@ def main():
     #       directories list as it finds them.
     while directories:
         # Get the last directory in the list
-        directory = directories.pop() + '/'
+        directory = directories.pop()
         assert os.path.isdir(directory)
 
         gStats.found_directory()
@@ -509,23 +493,44 @@ def main():
             continue
         for entry in dir_entries:
             pathname = os.path.normpath(os.path.join(directory, entry))
-            # Look at files/dirs beginning with "."
-            if entry[0] == ".":
-                # Ignore any mirror.pl files.  These are the files that
-                # start with ".in."
-                if MIRROR_PL_REGEX.match(entry):
-                    continue
-                # Ignore any RSYNC files.  These are files that have the
-                # format .FILENAME.??????
-                if RSYNC_TEMP_REGEX.match(entry):
-                    continue
-            if os.path.islink(pathname):
-                if debug1:
-                    print "%s: is a symbolic link, ignoring" % pathname
+            try:
+                stat_info = os.stat(pathname)
+            except OSError as error:
+                print "Unable to get stat info for: %s: %s" % (pathname, error)
                 continue
-            if debug1 and os.path.isdir(pathname):
-                print "%s is a directory!" % pathname
-            hardlink_identical_files(directories, pathname, options)
+
+            # Add non-excluded directories to the queue, skip symlinks, and
+            # proceed onto the hardlink consolidation with matched and
+            # non-excluded normal files.
+            if stat.S_ISDIR(stat_info.st_mode):
+                # Cull excluded directories (before converted to full pathname)
+                if not found_excluded(entry, options.excludes):
+                    directories.append(pathname)
+                continue
+            elif stat.S_ISLNK(stat_info.st_mode):
+                continue
+            elif stat.S_ISREG(stat_info.st_mode):
+                if ((options.max_file_size and
+                     stat_info.st_size > options.max_file_size) or
+                    (stat_info.st_size < options.min_file_size)):
+                    continue
+                if found_excluded(entry, options.excludes):
+                    continue
+                # Look at files beginning with "."
+                if entry.startswith("."):
+                    # Ignore any mirror.pl files.  These are the files that
+                    # start with ".in."
+                    if MIRROR_PL_REGEX.match(entry):
+                        continue
+                    # Ignore any RSYNC files.  These are files that have the
+                    # format .FILENAME.??????
+                    if RSYNC_TEMP_REGEX.match(entry):
+                        continue
+                if options.match:
+                    if not fnmatch.fnmatch(entry, options.match):
+                        continue
+                hardlink_identical_files(pathname, stat_info, options)
+
     if options.printstats:
         gStats.print_stats(options)
 
