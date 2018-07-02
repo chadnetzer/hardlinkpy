@@ -493,7 +493,7 @@ def main():
         for entry in dir_entries:
             pathname = os.path.normpath(os.path.join(directory, entry))
             try:
-                stat_info = os.stat(pathname)
+                stat_info = os.lstat(pathname)
             except OSError as error:
                 print "Unable to get stat info for: %s: %s" % (pathname, error)
                 continue
