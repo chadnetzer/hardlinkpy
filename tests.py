@@ -105,6 +105,23 @@ class TestHappy(unittest.TestCase):
 
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
+    def test_hardlink_tree_filenames_equal_reverse_iteration(self):
+        """Since os.listdir() can return items in arbitrary order, this test
+        confirms that if the iteration over the directories is reversed
+        (lexicographically), the --filenames-equal option still works."""
+
+        # This test confirms that the --filenames-equal option works whether
+        # dir1/name1.ext or dir2/name1.ext is found first.
+        os.unlink("dir1/link")
+        os.link("dir2/name1.ext", "dir1/link")
+
+        sys.argv = ["hardlink.py", "-v", "0", "--no-stats", "--filenames-equal", self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
+
     def test_hardlink_tree_exclude(self):
         sys.argv = ["hardlink.py", "--no-stats", "--exclude", ".*noext$", self.root]
         hardlink.main()
