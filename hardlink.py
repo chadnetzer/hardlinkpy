@@ -429,6 +429,12 @@ def parse_command_line():
             print
             print "Error: %s is NOT a directory" % dirname
             sys.exit(1)
+    if options.min_file_size < 0:
+        parser.error("--min_size cannot be negative")
+    if options.max_file_size < 0:
+        parser.error("--max_size cannot be negative")
+    if options.max_file_size and options.max_file_size < options.min_file_size:
+        parser.error("--max_size cannot be smaller than --min_size")
 
     if OLD_VERBOSE_OPTION_ERROR:
         # When old style verbose options (-v 1) are parsed using the new
