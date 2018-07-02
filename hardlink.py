@@ -453,6 +453,27 @@ def found_excluded(name, excludes):
     return False
 
 
+def found_excluded_dotfile(name):
+    # Look at files beginning with "."
+    if name.startswith("."):
+        # Ignore any mirror.pl files.  These are the files that
+        # start with ".in."
+        if MIRROR_PL_REGEX.match(name):
+            return True
+        # Ignore any RSYNC files.  These are files that have the
+        # format .FILENAME.??????
+        if RSYNC_TEMP_REGEX.match(name):
+            return True
+    return False
+
+
+def found_matched_filename(name, match):
+    """If match option is given, return False if name doesn't match pattern."""
+    if match and not fnmatch.fnmatch(name, match):
+        return False
+    return True
+
+
 # Start of global declarations
 OLD_VERBOSE_OPTION_ERROR = True
 MAX_HASHES = 128 * 1024
@@ -470,11 +491,13 @@ def main():
     gStats = Statistics()
     file_hashes = {}
 
-    # Parse our argument list and get our list of directories
-    options, directories = parse_command_line()
     # Compile up our regexes ahead of time
+    global MIRROR_PL_REGEX, RSYNC_TEMP_REGEX
     MIRROR_PL_REGEX = re.compile(r'^\.in\.')
     RSYNC_TEMP_REGEX = re.compile((r'^\..*\.\?{6,6}$'))
+
+    # Parse our argument list and get our list of directories
+    options, directories = parse_command_line()
     # Now go through all the directories that have been added.
     # NOTE: hardlink_identical_files() will add more directories to the
     #       directories list as it finds them.
@@ -515,19 +538,11 @@ def main():
                     continue
                 if found_excluded(entry, options.excludes):
                     continue
-                # Look at files beginning with "."
-                if entry.startswith("."):
-                    # Ignore any mirror.pl files.  These are the files that
-                    # start with ".in."
-                    if MIRROR_PL_REGEX.match(entry):
-                        continue
-                    # Ignore any RSYNC files.  These are files that have the
-                    # format .FILENAME.??????
-                    if RSYNC_TEMP_REGEX.match(entry):
-                        continue
-                if options.match:
-                    if not fnmatch.fnmatch(entry, options.match):
-                        continue
+                if found_excluded_dotfile(entry):
+                    continue
+                if not found_matched_filename(entry, options.match):
+                    continue
+
                 hardlink_identical_files(pathname, stat_info, options)
 
     if options.printstats:
