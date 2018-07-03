@@ -395,8 +395,8 @@ def parse_command_line():
                       action="store_true", dest="contentonly", default=False,)
 
     parser.add_option("-v", "--verbose",
-                      help="Verbosity level (default: %default)", metavar="LEVEL",
-                      action="store", dest="verbose", type="int", default=1,)
+                      help="Increase verbosity level (Repeatable up to 3 times)",
+                      action="count", dest="verbose")
 
     parser.add_option("-x", "--exclude", metavar="REGEX",
                       help="Regular expression used to exclude files/dirs (may specify multiple times)",
