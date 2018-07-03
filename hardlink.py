@@ -149,7 +149,7 @@ def are_files_hardlinkable((filename1, stat1), (filename2, stat2), options):
 
 # Hardlink two files together
 def hardlink_files(sourcefile, destfile, stat_info, options):
-    result = False
+    hardlink_succeeded = False
     if not options.dryrun:
         # rename the destination file to save it
         temp_name = destfile + ".$$$___cleanit___$$$"
@@ -172,8 +172,9 @@ def hardlink_files(sourcefile, destfile, stat_info, options):
                 # hard link succeeded
                 # Delete the renamed version since we don't need it.
                 os.unlink(temp_name)
-                result = True
-    if result or options.dryrun:
+                hardlink_succeeded = True
+
+    if hardlink_succeeded or options.dryrun:
         # update our stats
         gStats.did_hardlink(sourcefile, destfile, stat_info)
         if options.verbosity > 0:
@@ -189,7 +190,7 @@ def hardlink_files(sourcefile, destfile, stat_info, options):
             print "%sLinked: %s" % (preamble1, sourcefile)
             print "%s    to: %s, saved %s" % (preamble2, destfile, stat_info.st_size)
 
-    return result
+    return hardlink_succeeded
 
 
 def hardlink_identical_files(filename, stat_info, options):
