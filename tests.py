@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import os.path
 import sys
 import tempfile
 import time
@@ -19,6 +20,7 @@ def get_inode(filename):
 class TestHappy(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
+        self.pathnames = [] # Keep track of all files/dirs, for deleting later
         os.chdir(self.root)
 
         self.testfs = {
@@ -33,10 +35,12 @@ class TestHappy(unittest.TestCase):
 
         for dir in ("dir1", "dir2", "dir3", "dir4", "dir5"):
             os.mkdir(dir)
+            self.pathnames.append(dir)
 
         for filename, contents in self.testfs.items():
             with open(filename, "w") as f:
                 f.write(contents)
+                self.pathnames.append(filename)
 
         now = time.time()
         other = now - 2
@@ -51,8 +55,31 @@ class TestHappy(unittest.TestCase):
         # -c, --content-only    Only file contents have to match
 
         os.link("dir1/name1.ext", "dir1/link")
+        self.pathnames.append("dir1/link")
 
         self.verify_file_contents()
+
+    def tearDown(self):
+        os.chdir(self.root)
+        for pathname in self.pathnames:
+            assert not pathname.lstrip().startswith('/')
+            if os.path.isfile(pathname):
+                os.unlink(pathname)
+
+            if os.path.isdir(pathname):
+                try:
+                    os.rmdir(pathname)
+                except OSError:
+                    pass
+
+            if (os.path.dirname(pathname) and
+                    os.path.isdir(os.path.dirname(pathname))):
+                try:
+                    os.rmdir(os.path.dirname(pathname))
+                except OSError:
+                    pass
+
+        os.rmdir(self.root)
 
     def verify_file_contents(self):
         for filename, contents in self.testfs.items():
