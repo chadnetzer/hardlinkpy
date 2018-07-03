@@ -178,9 +178,17 @@ def hardlink_files(sourcefile, destfile, stat_info, options):
         gStats.did_hardlink(sourcefile, destfile, stat_info)
         if options.verbosity > 0:
             if options.dryrun:
-                print "Did NOT link.  Dry run"
-            print "Linked: %s" % sourcefile
-            print"     to: %s, saved %s" % (destfile, stat_info.st_size)
+                preamble1 = "(Dry run) NOT "
+                preamble2 = "              "
+            else:
+                preamble1 = ""
+                preamble2 = ""
+
+            # Note - "saved" amount is overoptimistic, since we don't track if
+            # the destination was already hardlinked to something else.
+            print "%sLinked: %s" % (preamble1, sourcefile)
+            print "%s    to: %s, saved %s" % (preamble2, destfile, stat_info.st_size)
+
     return result
 
 
