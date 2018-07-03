@@ -129,7 +129,7 @@ def eligible_for_hardlink(st1,        # first file's status
 
 def are_file_contents_equal(filename1, filename2, options):
     """Determine if the contents of two files are equal"""
-    if options.verbose > 1:
+    if options.verbosity > 1:
         print "Comparing: %s" % filename1
         print "     to  : %s" % filename2
     gStats.did_comparison()
@@ -177,7 +177,7 @@ def hardlink_files(sourcefile, destfile, stat_info, options):
                 os.unlink(temp_name)
             # update our stats
             gStats.did_hardlink(sourcefile, destfile, stat_info)
-            if options.verbose > 0:
+            if options.verbosity > 0:
                 if options.dryrun:
                     print "Did NOT link.  Dry run"
                 print "Linked: %s" % sourcefile
@@ -235,7 +235,7 @@ def hardlink_identical_files(directories, filename, options):
                                options.notimestamp or options.contentonly)
         # Bump statistics count of regular files found.
         gStats.found_regular_file()
-        if options.verbose > 2:
+        if options.verbosity > 2:
             print "File: %s" % filename
         work_file_info = (filename, stat_info)
         if file_hash in file_hashes:
@@ -396,7 +396,7 @@ def parse_command_line():
 
     parser.add_option("-v", "--verbose",
                       help="Increase verbosity level (Repeatable up to 3 times)",
-                      action="count", dest="verbose")
+                      action="count", dest="verbosity")
 
     parser.add_option("-x", "--exclude", metavar="REGEX",
                       help="Regular expression used to exclude files/dirs (may specify multiple times)",
