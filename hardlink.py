@@ -260,7 +260,7 @@ def hardlink_identical_files(filename, stat_info, options):
                     else:
                         hardlink_files(temp_filename, filename, update_stat_info, options)
                     # Update files hashes
-                    file_hashes[file_hash][index] = (filename, os.stat(filename))
+                    file_hashes[file_hash][index] = (temp_filename, os.stat(temp_filename))
                     break
             else:
                 # The file should NOT be hardlinked to any of the other
