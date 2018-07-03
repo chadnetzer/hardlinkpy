@@ -177,7 +177,7 @@ def hardlink_files(sourcefile, destfile, stat_info, options):
                 os.unlink(temp_name)
             # update our stats
             gStats.did_hardlink(sourcefile, destfile, stat_info)
-            if options.verbose >= 1:
+            if options.verbose > 0:
                 if options.dryrun:
                     print "Did NOT link.  Dry run"
                 print "Linked: %s" % sourcefile
@@ -235,7 +235,7 @@ def hardlink_identical_files(directories, filename, options):
                                options.notimestamp or options.contentonly)
         # Bump statistics count of regular files found.
         gStats.found_regular_file()
-        if options.verbose >= 3:
+        if options.verbose > 2:
             print "File: %s" % filename
         work_file_info = (filename, stat_info)
         if file_hash in file_hashes:
