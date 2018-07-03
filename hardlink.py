@@ -150,7 +150,7 @@ def are_files_hardlinkable(filestat1_pair, filestat2_pair, options):
 
 
 # Hardlink two files together
-def hardlink_files(sourcefile, destfile, stat_info, options):
+def hardlink_files(sourcefile, destfile, stat_info, options, update):
     hardlink_succeeded = False
     if not options.dryrun:
         # rename the destination file to save it
@@ -163,9 +163,6 @@ def hardlink_files(sourcefile, destfile, stat_info, options):
             # Now link the sourcefile to the destination file
             try:
                 os.link(sourcefile, destfile)
-                # Update destination to latest attributes
-                os.chown(destfile, stat_info.st_uid, stat_info.st_gid)
-                os.utime(destfile, (stat_info.st_atime, stat_info.st_mtime))
             except Exception as error:
                 print("Failed to hardlink: %s to %s: %s" % (sourcefile, destfile, error))
                 # Try to recover
@@ -175,6 +172,10 @@ def hardlink_files(sourcefile, destfile, stat_info, options):
                     print("BAD BAD - failed to rename back %s to %s: %s" % (temp_name, destfile, error))
             else:
                 # hard link succeeded
+                # Update destination to latest attributes
+                if update:
+                    os.chown(destfile, stat_info.st_uid, stat_info.st_gid)
+                    os.utime(destfile, (stat_info.st_atime, stat_info.st_mtime))
                 # Delete the renamed version since we don't need it.
                 os.unlink(temp_name)
                 hardlink_succeeded = True
@@ -252,13 +253,15 @@ def hardlink_identical_files(filename, stat_info, options):
                                           options):
                     # Find the attributes of the newest file
                     update_stat_info = temp_stat_info
+                    update = False
                     if stat_info.st_mtime > update_stat_info.st_mtime:
                         update_stat_info = stat_info
+                        update = True
                     # Always use the file with the most hardlinks as the source
                     if stat_info.st_nlink > temp_stat_info.st_nlink:
-                        hardlink_files(filename, temp_filename, update_stat_info, options)
+                        hardlink_files(filename, temp_filename, update_stat_info, options, update)
                     else:
-                        hardlink_files(temp_filename, filename, update_stat_info, options)
+                        hardlink_files(temp_filename, filename, update_stat_info, options, update)
                     # Update files hashes
                     file_hashes[file_hash][index] = (temp_filename, os.stat(temp_filename))
                     break
