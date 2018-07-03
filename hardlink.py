@@ -226,8 +226,11 @@ def hardlink_identical_files(directories, filename, options):
         # If it is a directory then add it to the list of directories.
         directories.append(filename)
     # Is it a regular file?
-    elif stat.S_ISREG(stat_info[stat.ST_MODE]) and (stat_info[stat.ST_SIZE] >= options.min_file_size) and (
-                (stat_info[stat.ST_SIZE] <= options.max_file_size) or (options.max_file_size == 0)):
+    elif stat.S_ISREG(stat_info.st_mode):
+        if ((options.max_file_size and stat_info.st_size > options.max_file_size) or
+            (stat_info.st_size < options.min_file_size)):
+            return
+
         if options.match:
             if not fnmatch.fnmatch(filename, options.match):
                 return
