@@ -462,6 +462,7 @@ def cull_excluded_directories(dirs, excludes):
 
 
 def found_excluded(name, excludes):
+    """If excludes option is given, return True if name matches any regex."""
     for exclude in excludes:
         if re.search(exclude, name):
             return True
@@ -469,6 +470,7 @@ def found_excluded(name, excludes):
 
 
 def found_excluded_dotfile(name):
+    """Return True if any excluded dotfile pattern is found."""
     # Look at files beginning with "."
     if name.startswith("."):
         # Ignore any mirror.pl files.  These are the files that
