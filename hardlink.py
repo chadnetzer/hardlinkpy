@@ -419,10 +419,39 @@ def parse_command_line():
             print
             print "Error: %s is NOT a directory" % dirname
             sys.exit(1)
+
+    if OLD_VERBOSE_OPTION_ERROR:
+        # When old style verbose options (-v 1) are parsed using the new
+        # verbosity option (as a counter), the numbers end up being interpreted
+        # as directories.  As long as the directories don't exist, the program
+        # will catch this and exit.  However, if there so happens to be a
+        # directory with a typical number value (ie. '0', '1', etc.), it could
+        # falsely be scanned for hardlinking.  So we directly check the
+        # sys.argv list and explicitly disallow this case.
+        #
+        # This could also reject a technically valid case where a new style
+        # verbosity argument is given, followed by a number-like directory name
+        # that is intentionally meant to be scanned.  Since it seems rare, we
+        # intentionally disallow it as protection against misinterpretation of
+        # the old style verbose option argument.  Eventually, when enough time
+        # has passed to assume that hardlinkpy users have switched over to the
+        # new verbosity argument, we can remove this safeguard.
+
+        # Iterate over a reversed argument list, looking for options pairs of
+        # type ['-v', '<num>']
+        for i,s in enumerate(sys.argv[::-1]):
+            if i == 0:
+                continue
+            n_str = sys.argv[-i]
+            if s in ('-v', '--verbose') and n_str.isdigit():
+                print "Error: Use of deprecated numeric verbosity option (%s)." % ('-v ' + n_str)
+                sys.exit(2)
+
     return options, args
 
 
 # Start of global declarations
+OLD_VERBOSE_OPTION_ERROR = True
 debug1 = None
 
 MAX_HASHES = 128 * 1024
