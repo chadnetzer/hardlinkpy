@@ -275,5 +275,87 @@ class TestHappy(unittest.TestCase):
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
 
 
+@unittest.skip("Max nlinks tests are slow.  Skipping...")
+class TestMaxNLinks(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        os.chdir(self.root)
+        try:
+            max_nlinks = os.pathconf(self.root, "PC_LINK_MAX")
+        except:
+            os.rmdir(self.root)
+            raise
+
+        self.max_nlinks = max_nlinks
+        self.filenames = []
+
+        self.make_hardlinkable_file("a")
+        self.make_hardlinkable_file("b")
+        for i in range(max_nlinks-1):
+            filename = "b"+str(i)
+            self.make_linked_file("b", filename)
+
+    def tearDown(self):
+        os.chdir(self.root)
+        for filename in self.filenames:
+            os.unlink(filename)
+        os.rmdir(self.root)
+
+    def make_hardlinkable_file(self, filename):
+        with open(filename, 'w') as f:
+            f.write(" ")
+        self.filenames.append(filename)
+
+    def make_linked_file(self, src, dst):
+        os.link(src, dst)
+        self.filenames.append(dst)
+
+    def remove_file(self, filename):
+        os.unlink(filename)
+        self.filenames.remove(filename)
+
+    def test_hardlink_max_nlinks_at_start(self):
+        self.assertEqual(os.lstat("a").st_nlink, 1)
+        self.assertEqual(os.lstat("b").st_nlink, self.max_nlinks)
+
+        sys.argv = ["hardlink.py", "--no-stats", "--content-only", self.root]
+        hardlink.main()
+
+        self.assertEqual(os.lstat("a").st_nlink, 1)
+        self.assertEqual(os.lstat("b").st_nlink, self.max_nlinks)
+
+        # Re-run hardlinker after some changes.  Saves on overhead of
+        # destroying and recreating the max_nlinks files.
+        self.remove_file("b")
+        hardlink.main()
+
+        self.assertEqual(os.lstat("a").st_nlink, self.max_nlinks)
+        self.assertEqual(os.lstat("b1").st_nlink, self.max_nlinks)
+
+        self.remove_file("a")
+        self.make_hardlinkable_file("a")
+        self.make_hardlinkable_file("b")
+        hardlink.main()
+
+        self.assertTrue(os.lstat("a").st_nlink == os.lstat("b").st_nlink or
+                        os.lstat("a").st_nlink == self.max_nlinks or
+                        os.lstat("b").st_nlink == self.max_nlinks)
+
+        self.remove_file("a")
+        self.remove_file("b")
+        self.make_hardlinkable_file("b")
+        hardlink.main()
+
+        num_c_links = 1000
+        for i in range(num_c_links):
+            filename = "c"+str(i)
+            self.make_hardlinkable_file(filename)
+        # Should link just the c's to each other
+        hardlink.main()
+
+        self.assertEqual(os.lstat("b").st_nlink, self.max_nlinks)
+        self.assertEqual(os.lstat("c0").st_nlink, num_c_links)
+
+
 if __name__ == '__main__':
     unittest.main()
