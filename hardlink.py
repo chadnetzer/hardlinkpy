@@ -431,7 +431,7 @@ gStats = None
 
 file_hashes = None
 
-VERSION = "0.05 - 2010-01-07 (07-Jan-2010)"
+VERSION = "0.06 alpha - 2018-07-04 (04-Jul-2018)"
 
 
 def main():
