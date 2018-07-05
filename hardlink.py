@@ -150,7 +150,7 @@ def are_files_hardlinkable(filestat1_pair, filestat2_pair, options):
 
 
 # Hardlink two files together
-def hardlink_files(source_file_info, dest_file_info, options, update):
+def hardlink_files(source_file_info, dest_file_info, options):
     sourcefile, source_stat_info = source_file_info
     destfile, dest_stat_info = dest_file_info
 
@@ -175,16 +175,17 @@ def hardlink_files(source_file_info, dest_file_info, options, update):
                     print("BAD BAD - failed to rename back %s to %s: %s" % (temp_name, destfile, error))
             else:
                 # hard link succeeded
-                # Update destination to latest attributes
-                if update:
+                # Delete the renamed version since we don't need it.
+                os.unlink(temp_name)
+                hardlink_succeeded = True
+
+                # Use the destination file attributes if it's most recently modified
+                if dest_stat_info.st_mtime > source_stat_info.st_mtime:
                     try:
                         os.chown(destfile, dest_stat_info.st_uid, dest_stat_info.st_gid)
                         os.utime(destfile, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
                     except Exception as error:
-                        print "Failed to update file attributes: %s" %(error)
-                # Delete the renamed version since we don't need it.
-                os.unlink(temp_name)
-                hardlink_succeeded = True
+                        print("Failed to update file attributes for %s: %s" % (sourcefile, error))
 
     if hardlink_succeeded or options.dryrun:
         # update our stats
@@ -258,19 +259,18 @@ def hardlink_identical_files(filename, stat_info, options):
             for i, cached_file_info in enumerate(file_hashes[file_hash]):
                 cached_filename, cached_stat_info = cached_file_info
                 if are_files_hardlinkable(file_info, cached_file_info, options):
-                    # Find the attributes of the newest file
-                    update_stat_info = cached_stat_info
-                    update = False
-                    if stat_info.st_mtime > update_stat_info.st_mtime:
-                        update_stat_info = stat_info
-                        update = True
                     # Always use the file with the most hardlinks as the source
                     if stat_info.st_nlink > cached_stat_info.st_nlink:
-                        hardlink_files(file_info, (cached_filename, update_stat_info), options, update)
+                        source_file_info, dest_file_info = file_info, cached_file_info
                     else:
-                        hardlink_files(cached_file_info, (filename, update_stat_info), options, update)
-                    # Update files hashes
-                    file_hashes[file_hash][i] = (cached_filename, os.stat(cached_filename))
+                        source_file_info, dest_file_info = cached_file_info, file_info
+
+                    if hardlink_files(source_file_info, dest_file_info, options):
+                        # Update file_hashes stat_info data to be current
+                        try:
+                            file_hashes[file_hash][i] = (cached_filename, os.stat(cached_filename))
+                        except OSError:
+                            pass # Keep old stat_info if os.stat() fails
                     break
             else:
                 # The file should NOT be hardlinked to any of the other
