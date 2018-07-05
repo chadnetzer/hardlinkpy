@@ -182,8 +182,8 @@ def hardlink_files(source_file_info, dest_file_info, options):
                 # Use the destination file attributes if it's most recently modified
                 if dest_stat_info.st_mtime > source_stat_info.st_mtime:
                     try:
-                        os.chown(destfile, dest_stat_info.st_uid, dest_stat_info.st_gid)
                         os.utime(destfile, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
+                        os.chown(destfile, dest_stat_info.st_uid, dest_stat_info.st_gid)
                     except Exception as error:
                         print("Failed to update file attributes for %s: %s" % (sourcefile, error))
 
