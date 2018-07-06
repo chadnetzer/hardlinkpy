@@ -159,18 +159,18 @@ def hardlink_files(source_file_info, dest_file_info, options):
         try:
             os.rename(destfile, temp_name)
         except OSError as error:
-            logging.error("Failed to rename: %s to %s: %s" % (destfile, temp_name, error))
+            logging.error("Failed to rename: %s to %s\n%s" % (destfile, temp_name, error))
         else:
             # Now link the sourcefile to the destination file
             try:
                 os.link(sourcefile, destfile)
             except Exception as error:
-                logging.error("Failed to hardlink: %s to %s: %s" % (sourcefile, destfile, error))
+                logging.error("Failed to hardlink: %s to %s\n%s" % (sourcefile, destfile, error))
                 # Try to recover
                 try:
                     os.rename(temp_name, destfile)
                 except Exception as error:
-                    logging.critical("BAD BAD - failed to rename back %s to %s: %s" % (temp_name, destfile, error))
+                    logging.critical("BAD BAD - failed to rename back %s to %s\n%s" % (temp_name, destfile, error))
             else:
                 # hard link succeeded
                 # Delete the renamed version since we don't need it.
@@ -183,7 +183,7 @@ def hardlink_files(source_file_info, dest_file_info, options):
                         os.utime(destfile, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
                         os.chown(destfile, dest_stat_info.st_uid, dest_stat_info.st_gid)
                     except Exception as error:
-                        logging.warning("Failed to update file attributes for %s: %s" % (sourcefile, error))
+                        logging.warning("Failed to update file attributes for %s\n%s" % (sourcefile, error))
 
     if hardlink_succeeded or options.dryrun:
         # update our stats (Note: dest_stat_info is from pre-link())
@@ -612,7 +612,7 @@ def main():
                 try:
                     stat_info = os.lstat(pathname)
                 except OSError as error:
-                    logging.warn("Unable to get stat info for: %s: %s" % (pathname, error))
+                    logging.warn("Unable to get stat info for: %s\n%s" % (pathname, error))
                     continue
 
                 # Is it a regular file?
