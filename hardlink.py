@@ -362,7 +362,7 @@ def parse_command_line():
                       action="store_true", dest="samename", default=False,)
 
     parser.add_option("-m", "--match", metavar="PATTERN",
-                      help="Shell patterns used to match files",
+                      help="Shell patterns used to match files (may specify multiple times)",
                       action="append", dest="matches", default=[],)
 
     parser.add_option("-n", "--dry-run", help="Do NOT actually hardlink files",
