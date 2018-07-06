@@ -207,10 +207,12 @@ def hardlink_files(source_file_info, dest_file_info, options):
                 preamble1 = ""
                 preamble2 = ""
 
-            # Note - "saved" amount is overoptimistic, since we don't track if
-            # the destination was already hardlinked to something else.
             print("%sLinked: %s" % (preamble1, sourcefile))
-            print("%s    to: %s, saved %s" % (preamble2, destfile, dest_stat_info.st_size))
+            if dest_stat_info.st_nlink == 1:
+                print("%s    to: %s, saved %s" % (preamble2, destfile, dest_stat_info.st_size))
+            else:
+                print("%s    to: %s" % (preamble2, destfile))
+
 
     return hardlink_succeeded
 
@@ -328,7 +330,10 @@ class Statistics:
     def did_hardlink(self, sourcefile, destfile, dest_stat_info):
         filesize = dest_stat_info.st_size
         self.hardlinked_thisrun = self.hardlinked_thisrun + 1
-        self.bytes_saved_thisrun = self.bytes_saved_thisrun + filesize
+        if dest_stat_info.st_nlink == 1:
+            # We only save bytes if the last destination link was actually
+            # removed.
+            self.bytes_saved_thisrun = self.bytes_saved_thisrun + filesize
         self.hardlinkstats.append((sourcefile, destfile))
 
     def print_stats(self, options):
