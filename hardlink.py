@@ -170,7 +170,8 @@ def hardlink_files(source_file_info, dest_file_info, options):
                 try:
                     os.rename(temp_name, destfile)
                 except Exception as error:
-                    logging.critical("BAD BAD - failed to rename back %s to %s\n%s" % (temp_name, destfile, error))
+                    logging.critical("Failed to rename temp filename %s back to %s\n%s" % (temp_name, destfile, error))
+                    sys.exit(3)
             else:
                 # hard link succeeded
                 # Delete the renamed version since we don't need it.
