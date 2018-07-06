@@ -464,16 +464,11 @@ including files becoming owned by another user.
     (options, args) = parser.parse_args()
     if not args:
         parser.print_help()
-        print("")
-        print("Error: Must supply one or more directories")
-        sys.exit(1)
+        parser.error("Must supply one or more directories")
     args = [os.path.abspath(os.path.expanduser(dirname)) for dirname in args]
     for dirname in args:
         if not os.path.isdir(dirname):
-            parser.print_help()
-            print("")
-            print("Error: %s is NOT a directory" % dirname)
-            sys.exit(1)
+            parser.error("%s is NOT a directory" % dirname)
     if options.min_file_size < 0:
         parser.error("--min_size cannot be negative")
     if options.max_file_size < 0:
@@ -505,8 +500,7 @@ including files becoming owned by another user.
                 continue
             n_str = sys.argv[-i]
             if s in ('-v', '--verbose') and n_str.isdigit():
-                print("Error: Use of deprecated numeric verbosity option (%s)." % ('-v ' + n_str))
-                sys.exit(2)
+                parser.error("Use of deprecated numeric verbosity option (%s)." % ('-v ' + n_str))
 
     return options, args
 
