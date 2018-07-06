@@ -302,6 +302,7 @@ class Statistics:
         self.regularfiles = 0               # how many regular files we find
         self.comparisons = 0                # how many file content comparisons
         self.hardlinked_thisrun = 0         # hardlinks done this run
+        self.nlinks_to_zero_thisrun = 0     # how man nlinks actually went to zero
         self.hardlinked_previously = 0      # hardlinks that are already existing
         self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run
         self.bytes_saved_previously = 0     # bytes saved by previous hardlinks
@@ -334,6 +335,7 @@ class Statistics:
             # We only save bytes if the last destination link was actually
             # removed.
             self.bytes_saved_thisrun = self.bytes_saved_thisrun + filesize
+            self.nlinks_to_zero_thisrun = self.nlinks_to_zero_thisrun + 1
         self.hardlinkstats.append((sourcefile, destfile))
 
     def print_stats(self, options):
@@ -363,6 +365,7 @@ class Statistics:
         print("Directories           : %s" % self.dircount)
         print("Regular files         : %s" % self.regularfiles)
         print("Comparisons           : %s" % self.comparisons)
+        print("Consolidated this run : %s" % self.nlinks_to_zero_thisrun)
         print("Hardlinked this run   : %s" % self.hardlinked_thisrun)
         print("Total hardlinks       : %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
         print("Bytes saved this run  : %s (%s)" % (self.bytes_saved_thisrun, humanize_number(self.bytes_saved_thisrun)))
