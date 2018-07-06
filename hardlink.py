@@ -320,7 +320,7 @@ class Statistics:
         filesize = stat_info.st_size
         self.hardlinked_previously = self.hardlinked_previously + 1
         self.bytes_saved_previously = self.bytes_saved_previously + filesize
-        if not sourcefile in self.previouslyhardlinked:
+        if sourcefile not in self.previouslyhardlinked:
             self.previouslyhardlinked[sourcefile] = (stat_info, [destfile])
         else:
             self.previouslyhardlinked[sourcefile][1].append(destfile)
