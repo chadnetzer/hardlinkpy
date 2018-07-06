@@ -197,7 +197,7 @@ def hardlink_files(source_file_info, dest_file_info, options):
                         print("Failed to update file attributes for %s: %s" % (sourcefile, error))
 
     if hardlink_succeeded or options.dryrun:
-        # update our stats
+        # update our stats (Note: dest_stat_info is from pre-link())
         gStats.did_hardlink(sourcefile, destfile, dest_stat_info)
         if options.verbosity > 0:
             if options.dryrun:
@@ -325,8 +325,8 @@ class Statistics:
         else:
             self.previouslyhardlinked[sourcefile][1].append(destfile)
 
-    def did_hardlink(self, sourcefile, destfile, stat_info):
-        filesize = stat_info.st_size
+    def did_hardlink(self, sourcefile, destfile, dest_stat_info):
+        filesize = dest_stat_info.st_size
         self.hardlinked_thisrun = self.hardlinked_thisrun + 1
         self.bytes_saved_thisrun = self.bytes_saved_thisrun + filesize
         self.hardlinkstats.append((sourcefile, destfile))
