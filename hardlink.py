@@ -260,6 +260,9 @@ def hardlink_identical_files(filename, stat_info, options):
             cached_filename, cached_stat_info = cached_file_info
             if is_already_hardlinked(stat_info, cached_stat_info):
                 if not options.samename or (base_filename == os.path.basename(cached_filename)):
+                    if options.verbosity > 1:
+                        print("Existing link: %s" % cached_filename)
+                        print("        with : %s" % filename)
                     gStats.found_hardlink(cached_filename, filename,
                                           cached_stat_info)
                     break
