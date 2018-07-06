@@ -357,5 +357,40 @@ class TestMaxNLinks(unittest.TestCase):
         self.assertEqual(os.lstat("c0").st_nlink, num_c_links)
 
 
+@unittest.skip("Forces filesystem permission errors to test logging and recovery")
+class TestErrorLogging(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.pathnames = [] # Keep track of all files/dirs, for deleting later
+        os.chdir(self.root)
+
+        for filename in ["a", "b"]:
+            with open(filename, "w") as f:
+                f.write("foobar")
+                self.pathnames.append(filename)
+
+    def test_no_parent_dir_write_permission(self):
+        # Remove write permission from tmp root dir, to deliberately cause the
+        # rename(), link(), and unlink() functions to fail, and forcing logging
+        # output.
+        os.chmod(self.root, stat.S_IRUSR | stat.S_IXUSR)
+
+        sys.argv = ["hardlink.py", "--no-stats", self.root]
+        # This should log an error message when the rename() fails
+        hardlink.main()
+
+        self.assertEqual(os.lstat("a").st_nlink, 1)
+        self.assertEqual(os.lstat("b").st_nlink, 1)
+
+        os.chmod(self.root, stat.S_IRWXU)
+
+    def tearDown(self):
+        for pathname in self.pathnames:
+            assert not pathname.lstrip().startswith('/')
+            if os.path.isfile(pathname):
+                os.unlink(pathname)
+        os.rmdir(self.root)
+
+
 if __name__ == '__main__':
     unittest.main()
