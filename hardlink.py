@@ -384,7 +384,7 @@ def humanize_number(number):
         return ("%.3f MiB" % (number / (1024.0 ** 2)))
     if number > 1024:
         return ("%.3f KiB" % (number / 1024.0))
-    return ("%d B" % number)
+    return ("%d bytes" % number)
 
 
 def printversion(self):
