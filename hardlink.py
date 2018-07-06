@@ -321,7 +321,7 @@ class Statistics:
         self.hardlinked_previously = self.hardlinked_previously + 1
         self.bytes_saved_previously = self.bytes_saved_previously + filesize
         if sourcefile not in self.previouslyhardlinked:
-            self.previouslyhardlinked[sourcefile] = (stat_info, [destfile])
+            self.previouslyhardlinked[sourcefile] = (filesize, [destfile])
         else:
             self.previouslyhardlinked[sourcefile][1].append(destfile)
 
@@ -340,8 +340,7 @@ class Statistics:
             keys.sort()  # Could use sorted() once we only support >= Python 2.4
             print("Files Previously Hardlinked:")
             for key in keys:
-                stat_info, file_list = self.previouslyhardlinked[key]
-                size = stat_info.st_size
+                size, file_list = self.previouslyhardlinked[key]
                 print("Hardlinked together: %s" % key)
                 for filename in file_list:
                     print("                   : %s" % filename)
