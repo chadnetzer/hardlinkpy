@@ -354,8 +354,8 @@ class Statistics:
                 print("Hardlinked together: %s" % key)
                 for pathname in file_list:
                     print("                   : %s" % pathname)
-                print("Size per file: %s  Total saved: %s" % (size,
-                                                              size * len(file_list)))
+                print("Size per file: %s  Total saved: %s" % (humanize_number(size),
+                                                              humanize_number(size * len(file_list))))
             print("")
         if self.hardlinkstats:
             if options.dryrun:
