@@ -268,9 +268,9 @@ def hardlink_identical_files(filename, stat_info, options):
                     if hardlink_files(source_file_info, dest_file_info, options):
                         # Update file_hashes stat_info data to be current
                         try:
-                            file_hashes[file_hash][i] = (cached_filename, os.stat(cached_filename))
+                            file_hashes[file_hash][i] = (cached_filename, os.lstat(cached_filename))
                         except OSError:
-                            pass # Keep old stat_info if os.stat() fails
+                            pass # Keep old stat_info if os.lstat() fails
                     break
             else:
                 # The file should NOT be hardlinked to any of the other
