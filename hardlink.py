@@ -209,10 +209,10 @@ def hardlink_files(source_file_info, dest_file_info, options):
 
             print("%sLinked: %s" % (preamble1, sourcefile))
             if dest_stat_info.st_nlink == 1:
-                print("%s    to: %s, saved %s" % (preamble2, destfile, dest_stat_info.st_size))
+                print("%s    to: %s, saved %s" % (preamble2, destfile,
+                                                  humanize_number(stat_info.st_size)))
             else:
                 print("%s    to: %s" % (preamble2, destfile))
-
 
     return hardlink_succeeded
 
@@ -354,8 +354,8 @@ class Statistics:
                 print("Hardlinked together: %s" % key)
                 for pathname in file_list:
                     print("                   : %s" % pathname)
-                print("Size per file: %s  Total saved: %s" % (size,
-                                                              size * len(file_list)))
+                print("Size per file: %s  Total saved: %s" % (humanize_number(size),
+                                                              humanize_number(size * len(file_list))))
             print("")
         if self.hardlinkstats:
             if options.dryrun:
@@ -379,9 +379,9 @@ class Statistics:
 
 def humanize_number(number):
     if number > 1024 ** 3:
-        return ("%.3f gibibytes" % (number / (1024.0 ** 3)))
+        return ("%.3f GiB" % (number / (1024.0 ** 3)))
     if number > 1024 ** 2:
-        return ("%.3f mebibytes" % (number / (1024.0 ** 2)))
+        return ("%.3f MiB" % (number / (1024.0 ** 2)))
     if number > 1024:
         return ("%.3f KiB" % (number / 1024.0))
     return ("%d bytes" % number)
