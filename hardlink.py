@@ -54,7 +54,7 @@ import stat
 import sys
 import time
 
-from optparse import OptionParser, OptionGroup
+from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
 
 
 # Hash functions
@@ -448,8 +448,13 @@ including files becoming owned by another user.
                      help="Maximum file size",
                      action="store", default=0,)
 
-    group.add_option("-t", "--timestamp-ignore", dest="notimestamp",
+    group.add_option("-t", "--ignore-timestamp", dest="notimestamp",
                      help="File modification times do NOT have to be identical",
+                     action="store_true", default=False,)
+
+    group.add_option("--timestamp-ignore",
+                     dest="deprecated_timestamp_option_name",
+                     help=SUPPRESS_HELP,
                      action="store_true", default=False,)
 
     group = OptionGroup(parser, title="Name Matching",)
@@ -477,6 +482,13 @@ including files becoming owned by another user.
         parser.error("--max_size cannot be negative")
     if options.max_file_size and options.max_file_size < options.min_file_size:
         parser.error("--max_size cannot be smaller than --min_size")
+
+    # Accept --timestamp-ignore for backwards compatibility
+    if options.deprecated_timestamp_option_name:
+        logging.warning("Enabling --ignore-timestamp. "
+                        "Option name --timestamp-ignore is deprecated.")
+        options.notimestamp = True
+        del options.deprecated_timestamp_option_name
 
     if OLD_VERBOSE_OPTION_ERROR:
         # When old style verbose options (-v 1) are parsed using the new
