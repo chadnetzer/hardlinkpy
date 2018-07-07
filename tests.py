@@ -358,43 +358,23 @@ class TestHappy(unittest.TestCase):
 
 
 @unittest.skip("Max nlinks tests are slow.  Skipping...")
-class TestMaxNLinks(unittest.TestCase):
+class TestMaxNLinks(BaseTests):
     def setUp(self):
-        self.root = tempfile.mkdtemp()
-        os.chdir(self.root)
+        self.setup_tempdir()
         try:
-            max_nlinks = os.pathconf(self.root, "PC_LINK_MAX")
+            self.max_nlinks = os.pathconf(self.root, "PC_LINK_MAX")
         except:
             os.rmdir(self.root)
             raise
 
-        self.max_nlinks = max_nlinks
-        self.filenames = []
-
-        self.make_hardlinkable_file("a")
-        self.make_hardlinkable_file("b")
-        for i in range(max_nlinks-1):
+        self.make_hardlinkable_file("a", testdata1)
+        self.make_hardlinkable_file("b", testdata1)
+        for i in range(self.max_nlinks-1):
             filename = "b"+str(i)
             self.make_linked_file("b", filename)
 
     def tearDown(self):
-        os.chdir(self.root)
-        for filename in self.filenames:
-            os.unlink(filename)
-        os.rmdir(self.root)
-
-    def make_hardlinkable_file(self, filename):
-        with open(filename, 'w') as f:
-            f.write(" ")
-        self.filenames.append(filename)
-
-    def make_linked_file(self, src, dst):
-        os.link(src, dst)
-        self.filenames.append(dst)
-
-    def remove_file(self, filename):
-        os.unlink(filename)
-        self.filenames.remove(filename)
+        self.remove_tempdir()
 
     def test_hardlink_max_nlinks_at_start(self):
         self.assertEqual(os.lstat("a").st_nlink, 1)
@@ -415,8 +395,8 @@ class TestMaxNLinks(unittest.TestCase):
         self.assertEqual(os.lstat("b1").st_nlink, self.max_nlinks)
 
         self.remove_file("a")
-        self.make_hardlinkable_file("a")
-        self.make_hardlinkable_file("b")
+        self.make_hardlinkable_file("a", testdata1)
+        self.make_hardlinkable_file("b", testdata1)
         hardlink.main()
 
         self.assertTrue(os.lstat("a").st_nlink == os.lstat("b").st_nlink or
@@ -425,13 +405,13 @@ class TestMaxNLinks(unittest.TestCase):
 
         self.remove_file("a")
         self.remove_file("b")
-        self.make_hardlinkable_file("b")
+        self.make_hardlinkable_file("b", testdata1)
         hardlink.main()
 
         num_c_links = 1000
         for i in range(num_c_links):
             filename = "c"+str(i)
-            self.make_hardlinkable_file(filename)
+            self.make_hardlinkable_file(filename, testdata1)
         # Should link just the c's to each other
         hardlink.main()
 
@@ -440,16 +420,12 @@ class TestMaxNLinks(unittest.TestCase):
 
 
 @unittest.skip("Forces filesystem permission errors to test logging and recovery")
-class TestErrorLogging(unittest.TestCase):
+class TestErrorLogging(BaseTests):
     def setUp(self):
-        self.root = tempfile.mkdtemp()
-        self.pathnames = [] # Keep track of all files/dirs, for deleting later
-        os.chdir(self.root)
+        self.setup_tempdir()
 
         for filename in ["a", "b"]:
-            with open(filename, "w") as f:
-                f.write("foobar")
-                self.pathnames.append(filename)
+            self.make_hardlinkable_file(filename, testdata1)
 
     def test_no_parent_dir_write_permission(self):
         # Remove write permission from tmp root dir, to deliberately cause the
@@ -467,11 +443,7 @@ class TestErrorLogging(unittest.TestCase):
         os.chmod(self.root, stat.S_IRWXU)
 
     def tearDown(self):
-        for pathname in self.pathnames:
-            assert not pathname.lstrip().startswith('/')
-            if os.path.isfile(pathname):
-                os.unlink(pathname)
-        os.rmdir(self.root)
+        self.remove_tempdir()
 
 
 if __name__ == '__main__':
