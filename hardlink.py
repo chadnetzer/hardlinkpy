@@ -227,6 +227,10 @@ def hardlink_identical_files(directories, filename, options):
         directories.append(filename)
     # Is it a regular file?
     elif stat.S_ISREG(stat_info.st_mode):
+        if ((options.max_file_size and stat_info.st_size > options.max_file_size) or
+            (stat_info.st_size < options.min_file_size)):
+            return
+
         if options.match:
             if not fnmatch.fnmatch(filename, options.match):
                 return
@@ -386,6 +390,12 @@ def parse_command_line():
     parser.add_option("-q", "--no-stats", help="Do not print the statistics",
                       action="store_false", dest="printstats", default=True,)
 
+    parser.add_option("-s", "--min-size", type="int", help="Minimum file size",
+                      action="store", dest="min_file_size", default=0,)
+
+    parser.add_option("-S", "--max-size", type="int", help="Maximum file size",
+                      action="store", dest="max_file_size", default=0,)
+
     parser.add_option("-t", "--timestamp-ignore",
                       help="File modification times do NOT have to be identical",
                       action="store_true", dest="notimestamp", default=False,)
@@ -419,6 +429,12 @@ def parse_command_line():
             print
             print "Error: %s is NOT a directory" % dirname
             sys.exit(1)
+    if options.min_file_size < 0:
+        parser.error("--min_size cannot be negative")
+    if options.max_file_size < 0:
+        parser.error("--max_size cannot be negative")
+    if options.max_file_size and options.max_file_size < options.min_file_size:
+        parser.error("--max_size cannot be smaller than --min_size")
 
     if OLD_VERBOSE_OPTION_ERROR:
         # When old style verbose options (-v 1) are parsed using the new

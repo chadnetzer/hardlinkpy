@@ -147,6 +147,41 @@ class TestHappy(unittest.TestCase):
 
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
+    def test_hardlink_tree_minsize(self):
+        """Set a minimum size larger than the test data, inhibiting linking"""
+        sys.argv = ["hardlink.py", "--no-stats", "--min-size",
+                    str(len(testdata1) + 1), self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(os.lstat("dir1/name1.ext").st_nlink, 2)  # Existing link
+        self.assertEqual(os.lstat("dir1/name2.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir1/name3.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir2/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir3/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir3/name1.noext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir4/name1.ext").st_nlink, 1)
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/link"))
+
+
+    def test_hardlink_tree_maxsize(self):
+        """Set a maximum size smaller than the test data, inhibiting linking"""
+        sys.argv = ["hardlink.py", "--no-stats", "--max-size",
+                    str(len(testdata1) - 1), self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(os.lstat("dir1/name1.ext").st_nlink, 2)  # Existing link
+        self.assertEqual(os.lstat("dir1/name2.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir1/name3.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir2/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir3/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir3/name1.noext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir4/name1.ext").st_nlink, 1)
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/link"))
+
 
 if __name__ == '__main__':
     unittest.main()
