@@ -246,11 +246,13 @@ def hardlink_identical_files(directories, filename, options):
             # We have file(s) that have the same hash as our current file.
             # Let's go through the list of files with the same hash and see if
             # we are already hardlinked to any of them.
+            base_filename = os.path.basename(filename)
             for (temp_filename, temp_stat_info) in file_hashes[file_hash]:
                 if is_already_hardlinked(stat_info, temp_stat_info):
-                    gStats.found_hardlink(temp_filename, filename,
-                                          temp_stat_info)
-                    break
+                    if not options.samename or (base_filename == os.path.basename(temp_filename)):
+                        gStats.found_hardlink(temp_filename, filename,
+                                              temp_stat_info)
+                        break
             else:
                 # We did not find this file as hardlinked to any other file
                 # yet.  So now lets see if our file should be hardlinked to any
