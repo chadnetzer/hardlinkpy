@@ -114,30 +114,32 @@ def eligible_for_hardlink(st1,        # first file's status
     )
     if None:
     # if not result:
-        print "\n***\n", st1
-        print st2
-        print "Already hardlinked: %s" % (not is_already_hardlinked(st1, st2))
-        print "Modes:", st1.st_mode, st2.st_mode
-        print "UIDs:", st1.st_uid, st2.st_uid
-        print "GIDs:", st1.st_gid, st2.st_gid
-        print "SIZE:", st1.st_size, st2.st_size
-        print "MTIME:", st1.st_mtime, st2.st_mtime
-        print "Ignore date:", options.notimestamp
-        print "Device:", st1.st_dev, st2.st_dev
+        print("\n***\n", st1)
+        print(st2)
+        print("Already hardlinked: %s" % (not is_already_hardlinked(st1, st2)))
+        print("Modes:", st1.st_mode, st2.st_mode)
+        print("UIDs:", st1.st_uid, st2.st_uid)
+        print("GIDs:", st1.st_gid, st2.st_gid)
+        print("SIZE:", st1.st_size, st2.st_size)
+        print("MTIME:", st1.st_mtime, st2.st_mtime)
+        print("Ignore date:", options.notimestamp)
+        print("Device:", st1.st_dev, st2.st_dev)
     return result
 
 
 def are_file_contents_equal(filename1, filename2, options):
     """Determine if the contents of two files are equal"""
     if options.verbosity > 1:
-        print "Comparing: %s" % filename1
-        print "     to  : %s" % filename2
+        print("Comparing: %s" % filename1)
+        print("     to  : %s" % filename2)
     gStats.did_comparison()
     return filecmp.cmp(filename1, filename2, shallow=False)
 
 
 # Determines if two files should be hard linked together.
-def are_files_hardlinkable((filename1, stat1), (filename2, stat2), options):
+def are_files_hardlinkable(filestat1_pair, filestat2_pair, options):
+    filename1,stat1 = filestat1_pair
+    filename2,stat2 = filestat2_pair
     if options.samename and os.path.basename(filename1) != os.path.basename(filename2):
         result = False
     elif not eligible_for_hardlink(stat1, stat2, options):
@@ -156,18 +158,18 @@ def hardlink_files(sourcefile, destfile, stat_info, options):
         try:
             os.rename(destfile, temp_name)
         except OSError as error:
-            print "Failed to rename: %s to %s: %s" % (destfile, temp_name, error)
+            print("Failed to rename: %s to %s: %s" % (destfile, temp_name, error))
         else:
             # Now link the sourcefile to the destination file
             try:
                 os.link(sourcefile, destfile)
             except Exception as error:
-                print "Failed to hardlink: %s to %s: %s" % (sourcefile, destfile, error)
+                print("Failed to hardlink: %s to %s: %s" % (sourcefile, destfile, error))
                 # Try to recover
                 try:
                     os.rename(temp_name, destfile)
                 except Exception as error:
-                    print "BAD BAD - failed to rename back %s to %s: %s" % (temp_name, destfile, error)
+                    print("BAD BAD - failed to rename back %s to %s: %s" % (temp_name, destfile, error))
             else:
                 # hard link succeeded
                 # Delete the renamed version since we don't need it.
@@ -187,8 +189,8 @@ def hardlink_files(sourcefile, destfile, stat_info, options):
 
             # Note - "saved" amount is overoptimistic, since we don't track if
             # the destination was already hardlinked to something else.
-            print "%sLinked: %s" % (preamble1, sourcefile)
-            print "%s    to: %s, saved %s" % (preamble2, destfile, stat_info.st_size)
+            print("%sLinked: %s" % (preamble1, sourcefile))
+            print("%s    to: %s, saved %s" % (preamble2, destfile, stat_info.st_size))
 
     return hardlink_succeeded
 
@@ -225,7 +227,7 @@ def hardlink_identical_files(filename, stat_info, options):
     # Bump statistics count of regular files found.
     gStats.found_regular_file()
     if options.verbosity > 2:
-        print "File: %s" % filename
+        print("File: %s" % filename)
     work_file_info = (filename, stat_info)
     if file_hash in file_hashes:
         # We have file(s) that have the same hash as our current file.
@@ -260,13 +262,13 @@ def hardlink_identical_files(filename, stat_info, options):
 
 class Statistics:
     def __init__(self):
-        self.dircount = 0L                  # how many directories we find
-        self.regularfiles = 0L              # how many regular files we find
-        self.comparisons = 0L               # how many file content comparisons
-        self.hardlinked_thisrun = 0L        # hardlinks done this run
-        self.hardlinked_previously = 0L     # hardlinks that are already existing
-        self.bytes_saved_thisrun = 0L       # bytes saved by hardlinking this run
-        self.bytes_saved_previously = 0L    # bytes saved by previous hardlinks
+        self.dircount = 0                   # how many directories we find
+        self.regularfiles = 0               # how many regular files we find
+        self.comparisons = 0                # how many file content comparisons
+        self.hardlinked_thisrun = 0         # hardlinks done this run
+        self.hardlinked_previously = 0      # hardlinks that are already existing
+        self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run
+        self.bytes_saved_previously = 0     # bytes saved by previous hardlinks
         self.hardlinkstats = []             # list of files hardlinked this run
         self.starttime = time.time()        # track how long it takes
         self.previouslyhardlinked = {}      # list of files hardlinked previously
@@ -296,39 +298,39 @@ class Statistics:
         self.hardlinkstats.append((sourcefile, destfile))
 
     def print_stats(self, options):
-        print "\n"
-        print "Hard linking Statistics:"
+        print("\n")
+        print("Hard linking Statistics:")
         # Print out the stats for the files we hardlinked, if any
         if self.previouslyhardlinked and options.printprevious:
-            keys = self.previouslyhardlinked.keys()
-            keys.sort()
-            print "Files Previously Hardlinked:"
+            keys = list(self.previouslyhardlinked.keys())
+            keys.sort()  # Could use sorted() once we only support >= Python 2.4
+            print("Files Previously Hardlinked:")
             for key in keys:
                 stat_info, file_list = self.previouslyhardlinked[key]
                 size = stat_info.st_size
-                print "Hardlinked together: %s" % key
+                print("Hardlinked together: %s" % key)
                 for filename in file_list:
-                    print "                   : %s" % filename
-                print "Size per file: %s  Total saved: %s" % (size,
-                                                              size * len(file_list))
-            print
+                    print("                   : %s" % filename)
+                print("Size per file: %s  Total saved: %s" % (size,
+                                                              size * len(file_list)))
+            print("")
         if self.hardlinkstats:
             if options.dryrun:
-                print "Statistics reflect what would have happened if not a dry run"
-            print "Files Hardlinked this run:"
+                print("Statistics reflect what would have happened if not a dry run")
+            print("Files Hardlinked this run:")
             for (source, dest) in self.hardlinkstats:
-                print"Hardlinked: %s" % source
-                print"        to: %s" % dest
-            print
-        print "Directories           : %s" % self.dircount
-        print "Regular files         : %s" % self.regularfiles
-        print "Comparisons           : %s" % self.comparisons
-        print "Hardlinked this run   : %s" % self.hardlinked_thisrun
-        print "Total hardlinks       : %s" % (self.hardlinked_previously + self.hardlinked_thisrun)
-        print "Bytes saved this run  : %s (%s)" % (self.bytes_saved_thisrun, humanize_number(self.bytes_saved_thisrun))
+                print("Hardlinked: %s" % source)
+                print("        to: %s" % dest)
+            print("")
+        print("Directories           : %s" % self.dircount)
+        print("Regular files         : %s" % self.regularfiles)
+        print("Comparisons           : %s" % self.comparisons)
+        print("Hardlinked this run   : %s" % self.hardlinked_thisrun)
+        print("Total hardlinks       : %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
+        print("Bytes saved this run  : %s (%s)" % (self.bytes_saved_thisrun, humanize_number(self.bytes_saved_thisrun)))
         totalbytes = self.bytes_saved_thisrun + self.bytes_saved_previously
-        print "Total bytes saved     : %s (%s)" % (totalbytes, humanize_number(totalbytes))
-        print "Total run time        : %s seconds" % (time.time() - self.starttime)
+        print("Total bytes saved     : %s (%s)" % (totalbytes, humanize_number(totalbytes)))
+        print("Total run time        : %s seconds" % (time.time() - self.starttime))
 
 
 def humanize_number(number):
@@ -342,11 +344,11 @@ def humanize_number(number):
 
 
 def printversion(self):
-    print "hardlink.py, Version %s" % VERSION
-    print "Copyright (C) 2003 - 2010 John L. Villalovos."
-    print "email: software@sodarock.com"
-    print "web: http://www.sodarock.com/"
-    print """
+    print("hardlink.py, Version %s" % VERSION)
+    print("Copyright (C) 2003 - 2010 John L. Villalovos.")
+    print("email: software@sodarock.com")
+    print("web: http://www.sodarock.com/")
+    print("""
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
 Foundation; version 2 of the License.
@@ -358,7 +360,7 @@ PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc., 59 Temple
 Place, Suite 330, Boston, MA  02111-1307, USA.
-"""
+""")
 
 
 def parse_command_line():
@@ -406,15 +408,15 @@ def parse_command_line():
     (options, args) = parser.parse_args()
     if not args:
         parser.print_help()
-        print
-        print "Error: Must supply one or more directories"
+        print("")
+        print("Error: Must supply one or more directories")
         sys.exit(1)
     args = [os.path.abspath(os.path.expanduser(dirname)) for dirname in args]
     for dirname in args:
         if not os.path.isdir(dirname):
             parser.print_help()
-            print
-            print "Error: %s is NOT a directory" % dirname
+            print("")
+            print("Error: %s is NOT a directory" % dirname)
             sys.exit(1)
     if options.min_file_size < 0:
         parser.error("--min_size cannot be negative")
@@ -447,7 +449,7 @@ def parse_command_line():
                 continue
             n_str = sys.argv[-i]
             if s in ('-v', '--verbose') and n_str.isdigit():
-                print "Error: Use of deprecated numeric verbosity option (%s)." % ('-v ' + n_str)
+                print("Error: Use of deprecated numeric verbosity option (%s)." % ('-v ' + n_str))
                 sys.exit(2)
 
     return options, args
@@ -555,7 +557,7 @@ def main():
                 try:
                     stat_info = os.lstat(pathname)
                 except OSError as error:
-                    print "Unable to get stat info for: %s: %s" % (pathname, error)
+                    print("Unable to get stat info for: %s: %s" % (pathname, error))
                     continue
 
                 # Is it a regular file?
