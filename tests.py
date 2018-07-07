@@ -100,31 +100,18 @@ class TestTester(BaseTests):
         self.verify_file_contents()
 
 
-class TestHappy(unittest.TestCase):
+class TestHappy(BaseTests):
     def setUp(self):
-        self.root = tempfile.mkdtemp()
-        self.pathnames = [] # Keep track of all files/dirs, for deleting later
-        os.chdir(self.root)
+        self.setup_tempdir()
 
-        self.testfs = {
-            "dir1/name1.ext": testdata1,
-            "dir1/name2.ext": testdata1,
-            "dir1/name3.ext": testdata2,
-            "dir2/name1.ext": testdata1,
-            "dir3/name1.ext": testdata2,
-            "dir3/name1.noext": testdata1,
-            "dir4/name1.ext": testdata1,
-            "dir5/name1.ext": testdata2,
-        }
-
-        for dir in ("dir1", "dir2", "dir3", "dir4", "dir5"):
-            os.mkdir(dir)
-            self.pathnames.append(dir)
-
-        for filename, contents in self.testfs.items():
-            with open(filename, "w") as f:
-                f.write(contents)
-                self.pathnames.append(filename)
+        self.make_hardlinkable_file("dir1/name1.ext", testdata1)
+        self.make_hardlinkable_file("dir1/name2.ext", testdata1)
+        self.make_hardlinkable_file("dir1/name3.ext", testdata2)
+        self.make_hardlinkable_file("dir2/name1.ext", testdata1)
+        self.make_hardlinkable_file("dir3/name1.ext", testdata2)
+        self.make_hardlinkable_file("dir3/name1.noext", testdata1)
+        self.make_hardlinkable_file("dir4/name1.ext", testdata1)
+        self.make_hardlinkable_file("dir5/name1.ext", testdata2)
 
         now = time.time()
         other = now - 2
@@ -140,41 +127,12 @@ class TestHappy(unittest.TestCase):
         # tests that rely on this file's chmod value.
         os.chmod("dir5/name1.ext", stat.S_IRUSR)
 
-        os.link("dir1/name1.ext", "dir1/link")
-        self.pathnames.append("dir1/link")
+        self.make_linked_file("dir1/name1.ext", "dir1/link")
 
         self.verify_file_contents()
 
     def tearDown(self):
-        os.chdir(self.root)
-        for pathname in self.pathnames:
-            assert not pathname.lstrip().startswith('/')
-            if os.path.isfile(pathname):
-                os.unlink(pathname)
-
-            if os.path.isdir(pathname):
-                try:
-                    os.rmdir(pathname)
-                except OSError:
-                    pass
-
-            if (os.path.dirname(pathname) and
-                    os.path.isdir(os.path.dirname(pathname))):
-                try:
-                    os.rmdir(os.path.dirname(pathname))
-                except OSError:
-                    pass
-
-        os.rmdir(self.root)
-
-    def verify_file_contents(self):
-        for filename, contents in self.testfs.items():
-            with open(filename, "r") as f:
-                actual = f.read()
-                self.assertEqual(actual, contents)
-
-        # Bug?  Should hardlink to the file with most existing links?
-        # self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/link"))
+        self.remove_tempdir()
 
     def test_hardlink_tree_dryrun(self):
         sys.argv = ["hardlink.py", "--no-stats", "--dry-run", self.root]
@@ -211,8 +169,9 @@ class TestHappy(unittest.TestCase):
 
         self.verify_file_contents()
 
-        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
+
+        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
 
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
@@ -226,8 +185,8 @@ class TestHappy(unittest.TestCase):
 
         # This test confirms that the --filenames-equal option works whether
         # dir1/name1.ext or dir2/name1.ext is found first.
-        os.unlink("dir1/link")
-        os.link("dir2/name1.ext", "dir1/link")
+        self.remove_file("dir1/link")
+        self.make_linked_file("dir2/name1.ext", "dir1/link")
 
         sys.argv = ["hardlink.py", "--no-stats", "--filenames-equal", self.root]
         hardlink.main()
@@ -244,10 +203,9 @@ class TestHappy(unittest.TestCase):
 
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
-        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
-
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
 
+        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_timestamp_ignore(self):
@@ -308,10 +266,9 @@ class TestHappy(unittest.TestCase):
 
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
-        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
-
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
 
+        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_match_prefix(self):
