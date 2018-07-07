@@ -169,7 +169,7 @@ class TestHappy(unittest.TestCase):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_timestamp_ignore(self):
-        sys.argv = ["hardlink.py", "--no-stats", "--timestamp-ignore", self.root]
+        sys.argv = ["hardlink.py", "--no-stats", "--ignore-timestamp", self.root]
         hardlink.main()
 
         self.verify_file_contents()
