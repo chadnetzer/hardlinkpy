@@ -150,7 +150,12 @@ def are_files_hardlinkable(filestat1_pair, filestat2_pair, options):
 
 
 # Hardlink two files together
-def hardlink_files(sourcefile, destfile, stat_info, options):
+def hardlink_files(source_file_info, dest_file_info, options):
+    sourcefile, source_stat_info = source_file_info
+    destfile, dest_stat_info = dest_file_info
+
+    assert source_stat_info.st_nlink >= dest_stat_info.st_nlink
+
     hardlink_succeeded = False
     if not options.dryrun:
         # rename the destination file to save it
@@ -176,9 +181,17 @@ def hardlink_files(sourcefile, destfile, stat_info, options):
                 os.unlink(temp_name)
                 hardlink_succeeded = True
 
+                # Use the destination file attributes if it's most recently modified
+                if dest_stat_info.st_mtime > source_stat_info.st_mtime:
+                    try:
+                        os.utime(destfile, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
+                        os.chown(destfile, dest_stat_info.st_uid, dest_stat_info.st_gid)
+                    except Exception as error:
+                        print("Failed to update file attributes for %s: %s" % (sourcefile, error))
+
     if hardlink_succeeded or options.dryrun:
         # update our stats
-        gStats.did_hardlink(sourcefile, destfile, stat_info)
+        gStats.did_hardlink(sourcefile, destfile, dest_stat_info)
         if options.verbosity > 0:
             if options.dryrun:
                 preamble1 = "(Dry run) NOT "
@@ -190,7 +203,7 @@ def hardlink_files(sourcefile, destfile, stat_info, options):
             # Note - "saved" amount is overoptimistic, since we don't track if
             # the destination was already hardlinked to something else.
             print("%sLinked: %s" % (preamble1, sourcefile))
-            print("%s    to: %s, saved %s" % (preamble2, destfile, stat_info.st_size))
+            print("%s    to: %s, saved %s" % (preamble2, destfile, dest_stat_info.st_size))
 
     return hardlink_succeeded
 
@@ -228,36 +241,50 @@ def hardlink_identical_files(filename, stat_info, options):
     gStats.found_regular_file()
     if options.verbosity > 2:
         print("File: %s" % filename)
-    work_file_info = (filename, stat_info)
+    file_info = (filename, stat_info)
     if file_hash in file_hashes:
         # We have file(s) that have the same hash as our current file.
         # Let's go through the list of files with the same hash and see if
         # we are already hardlinked to any of them.
         base_filename = os.path.basename(filename)
-        for (temp_filename, temp_stat_info) in file_hashes[file_hash]:
-            if is_already_hardlinked(stat_info, temp_stat_info):
-                if not options.samename or (base_filename == os.path.basename(temp_filename)):
-                    gStats.found_hardlink(temp_filename, filename,
-                                          temp_stat_info)
+        for cached_file_info in file_hashes[file_hash]:
+            cached_filename, cached_stat_info = cached_file_info
+            if is_already_hardlinked(stat_info, cached_stat_info):
+                if not options.samename or (base_filename == os.path.basename(cached_filename)):
+                    gStats.found_hardlink(cached_filename, filename,
+                                          cached_stat_info)
                     break
         else:
             # We did not find this file as hardlinked to any other file
             # yet.  So now lets see if our file should be hardlinked to any
             # of the other files with the same hash.
-            for (temp_filename, temp_stat_info) in file_hashes[file_hash]:
-                if are_files_hardlinkable(work_file_info, (temp_filename, temp_stat_info),
-                                          options):
-                    hardlink_files(temp_filename, filename, temp_stat_info, options)
+            for i, cached_file_info in enumerate(file_hashes[file_hash]):
+                cached_filename, cached_stat_info = cached_file_info
+                if are_files_hardlinkable(file_info, cached_file_info, options):
+                    # Always use the file with the most hardlinks as the source
+                    if stat_info.st_nlink > cached_stat_info.st_nlink:
+                        source_file_info, dest_file_info = file_info, cached_file_info
+                    else:
+                        source_file_info, dest_file_info = cached_file_info, file_info
+
+                    if hardlink_files(source_file_info, dest_file_info, options):
+                        updated_stat_info = os.lstat(cached_filename)
+
+                        # A cached file's st_nlink should only ever increase
+                        assert updated_stat_info.st_nlink > file_hashes[file_hash][i][1].st_nlink
+
+                        # Update file_hashes stat_info data to be current
+                        file_hashes[file_hash][i] = (cached_filename, updated_stat_info)
                     break
             else:
                 # The file should NOT be hardlinked to any of the other
                 # files with the same hash.  So we will add it to the list
                 # of files.
-                file_hashes[file_hash].append(work_file_info)
+                file_hashes[file_hash].append(file_info)
     else:
         # There weren't any other files with the same hash value so we will
         # create a new entry and store our file.
-        file_hashes[file_hash] = [work_file_info]
+        file_hashes[file_hash] = [file_info]
 
 
 class Statistics:
