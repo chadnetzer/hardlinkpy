@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import errno
 import os
 import os.path
 import stat
@@ -7,6 +8,8 @@ import sys
 import tempfile
 import time
 import unittest
+
+from shutil import rmtree
 
 import hardlink
 
@@ -16,6 +19,85 @@ testdata2 = "1234" * 1024 + "xyz"
 
 def get_inode(filename):
     return os.lstat(filename).st_ino
+
+
+class BaseTests(unittest.TestCase):
+    # self.file_contents = { name: data }
+
+    def setup_tempdir(self):
+        self.root = tempfile.mkdtemp()
+        os.chdir(self.root)
+
+        # Keep track of all files, and their content, for deleting later
+        self.file_contents = {}
+
+    def remove_tempdir(self):
+        rmtree(self.root)
+
+    def verify_file_contents(self):
+        for pathname, contents in self.file_contents.items():
+            if contents is not None:
+                with open(pathname, "r") as f:
+                    actual = f.read()
+                    self.assertEqual(actual, contents)
+
+    def make_hardlinkable_file(self, pathname, contents):
+        assert pathname not in self.file_contents
+        assert not pathname.lstrip().startswith('/')
+        if contents is None:
+            dirname = pathname
+            os.makedirs(dirname)
+        else:
+            dirname = os.path.dirname(pathname)
+            if dirname:
+                try:
+                    os.makedirs(dirname)
+                except OSError as exc:
+                    if exc.errno == errno.EEXIST and os.path.isdir(dirname):
+                        pass
+                    else:
+                        raise
+            with open(pathname, 'w') as f:
+                f.write(contents)
+
+            self.file_contents[pathname] = contents
+
+    def make_linked_file(self, src, dst):
+        assert dst not in self.file_contents
+        os.link(src, dst)
+        self.file_contents[dst] = self.file_contents[src]
+
+    def remove_file(self, pathname):
+        assert pathname in self.file_contents
+        os.unlink(pathname)
+        del self.file_contents[pathname]
+
+
+class TestTester(BaseTests):
+    def setUp(self):
+        self.setup_tempdir()
+
+    def tearDown(self):
+        self.remove_tempdir()
+
+    def test_setup(self):
+        self.make_hardlinkable_file('dir1', None)
+        self.make_hardlinkable_file('dir3', None)
+        self.make_hardlinkable_file('dir2/name1.ext', testdata1)
+        self.assertTrue(os.path.isdir('dir1'))
+        self.assertTrue(os.path.isdir('dir3'))
+        self.assertTrue(os.path.isfile('dir2/name1.ext'))
+        self.assertEqual(os.lstat('dir2/name1.ext').st_nlink, 1)
+
+        self.make_linked_file('dir2/name1.ext', 'dir3/name2.ext')
+        self.assertEqual(os.lstat('dir2/name1.ext').st_nlink, 2)
+        self.assertEqual(os.lstat('dir3/name2.ext').st_nlink, 2)
+
+        self.remove_file('dir2/name1.ext')
+        self.assertFalse(os.path.exists('dir2/name1.ext'))
+        self.assertEqual(os.lstat('dir3/name2.ext').st_nlink, 1)
+
+        self.verify_file_contents()
 
 
 class TestHappy(unittest.TestCase):
