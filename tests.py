@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import errno
 import os
 import os.path
 import stat
@@ -7,6 +8,8 @@ import sys
 import tempfile
 import time
 import unittest
+
+from shutil import rmtree
 
 import hardlink
 
@@ -18,31 +21,97 @@ def get_inode(filename):
     return os.lstat(filename).st_ino
 
 
-class TestHappy(unittest.TestCase):
-    def setUp(self):
+class BaseTests(unittest.TestCase):
+    # self.file_contents = { name: data }
+
+    def setup_tempdir(self):
         self.root = tempfile.mkdtemp()
-        self.pathnames = [] # Keep track of all files/dirs, for deleting later
         os.chdir(self.root)
 
-        self.testfs = {
-            "dir1/name1.ext": testdata1,
-            "dir1/name2.ext": testdata1,
-            "dir1/name3.ext": testdata2,
-            "dir2/name1.ext": testdata1,
-            "dir3/name1.ext": testdata2,
-            "dir3/name1.noext": testdata1,
-            "dir4/name1.ext": testdata1,
-            "dir5/name1.ext": testdata2,
-        }
+        # Keep track of all files, and their content, for deleting later
+        self.file_contents = {}
 
-        for dir in ("dir1", "dir2", "dir3", "dir4", "dir5"):
-            os.mkdir(dir)
-            self.pathnames.append(dir)
+    def remove_tempdir(self):
+        rmtree(self.root)
 
-        for filename, contents in self.testfs.items():
-            with open(filename, "w") as f:
+    def verify_file_contents(self):
+        for pathname, contents in self.file_contents.items():
+            if contents is not None:
+                with open(pathname, "r") as f:
+                    actual = f.read()
+                    self.assertEqual(actual, contents)
+
+    def make_hardlinkable_file(self, pathname, contents):
+        assert pathname not in self.file_contents
+        assert not pathname.lstrip().startswith('/')
+        if contents is None:
+            dirname = pathname
+            os.makedirs(dirname)
+        else:
+            dirname = os.path.dirname(pathname)
+            if dirname:
+                try:
+                    os.makedirs(dirname)
+                except OSError as exc:
+                    if exc.errno == errno.EEXIST and os.path.isdir(dirname):
+                        pass
+                    else:
+                        raise
+            with open(pathname, 'w') as f:
                 f.write(contents)
-                self.pathnames.append(filename)
+
+            self.file_contents[pathname] = contents
+
+    def make_linked_file(self, src, dst):
+        assert dst not in self.file_contents
+        os.link(src, dst)
+        self.file_contents[dst] = self.file_contents[src]
+
+    def remove_file(self, pathname):
+        assert pathname in self.file_contents
+        os.unlink(pathname)
+        del self.file_contents[pathname]
+
+
+class TestTester(BaseTests):
+    def setUp(self):
+        self.setup_tempdir()
+
+    def tearDown(self):
+        self.remove_tempdir()
+
+    def test_setup(self):
+        self.make_hardlinkable_file('dir1', None)
+        self.make_hardlinkable_file('dir3', None)
+        self.make_hardlinkable_file('dir2/name1.ext', testdata1)
+        self.assertTrue(os.path.isdir('dir1'))
+        self.assertTrue(os.path.isdir('dir3'))
+        self.assertTrue(os.path.isfile('dir2/name1.ext'))
+        self.assertEqual(os.lstat('dir2/name1.ext').st_nlink, 1)
+
+        self.make_linked_file('dir2/name1.ext', 'dir3/name2.ext')
+        self.assertEqual(os.lstat('dir2/name1.ext').st_nlink, 2)
+        self.assertEqual(os.lstat('dir3/name2.ext').st_nlink, 2)
+
+        self.remove_file('dir2/name1.ext')
+        self.assertFalse(os.path.exists('dir2/name1.ext'))
+        self.assertEqual(os.lstat('dir3/name2.ext').st_nlink, 1)
+
+        self.verify_file_contents()
+
+
+class TestHappy(BaseTests):
+    def setUp(self):
+        self.setup_tempdir()
+
+        self.make_hardlinkable_file("dir1/name1.ext", testdata1)
+        self.make_hardlinkable_file("dir1/name2.ext", testdata1)
+        self.make_hardlinkable_file("dir1/name3.ext", testdata2)
+        self.make_hardlinkable_file("dir2/name1.ext", testdata1)
+        self.make_hardlinkable_file("dir3/name1.ext", testdata2)
+        self.make_hardlinkable_file("dir3/name1.noext", testdata1)
+        self.make_hardlinkable_file("dir4/name1.ext", testdata1)
+        self.make_hardlinkable_file("dir5/name1.ext", testdata2)
 
         now = time.time()
         other = now - 2
@@ -58,41 +127,12 @@ class TestHappy(unittest.TestCase):
         # tests that rely on this file's chmod value.
         os.chmod("dir5/name1.ext", stat.S_IRUSR)
 
-        os.link("dir1/name1.ext", "dir1/link")
-        self.pathnames.append("dir1/link")
+        self.make_linked_file("dir1/name1.ext", "dir1/link")
 
         self.verify_file_contents()
 
     def tearDown(self):
-        os.chdir(self.root)
-        for pathname in self.pathnames:
-            assert not pathname.lstrip().startswith('/')
-            if os.path.isfile(pathname):
-                os.unlink(pathname)
-
-            if os.path.isdir(pathname):
-                try:
-                    os.rmdir(pathname)
-                except OSError:
-                    pass
-
-            if (os.path.dirname(pathname) and
-                    os.path.isdir(os.path.dirname(pathname))):
-                try:
-                    os.rmdir(os.path.dirname(pathname))
-                except OSError:
-                    pass
-
-        os.rmdir(self.root)
-
-    def verify_file_contents(self):
-        for filename, contents in self.testfs.items():
-            with open(filename, "r") as f:
-                actual = f.read()
-                self.assertEqual(actual, contents)
-
-        # Bug?  Should hardlink to the file with most existing links?
-        # self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/link"))
+        self.remove_tempdir()
 
     def test_hardlink_tree_dryrun(self):
         sys.argv = ["hardlink.py", "--no-stats", "--dry-run", self.root]
@@ -117,7 +157,6 @@ class TestHappy(unittest.TestCase):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
-
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
 
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
@@ -129,12 +168,11 @@ class TestHappy(unittest.TestCase):
 
         self.verify_file_contents()
 
-        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
+
+        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
-
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
-
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_filenames_equal_reverse_iteration(self):
@@ -144,8 +182,8 @@ class TestHappy(unittest.TestCase):
 
         # This test confirms that the --filenames-equal option works whether
         # dir1/name1.ext or dir2/name1.ext is found first.
-        os.unlink("dir1/link")
-        os.link("dir2/name1.ext", "dir1/link")
+        self.remove_file("dir1/link")
+        self.make_linked_file("dir2/name1.ext", "dir1/link")
 
         sys.argv = ["hardlink.py", "--no-stats", "--filenames-equal", self.root]
         hardlink.main()
@@ -162,10 +200,9 @@ class TestHappy(unittest.TestCase):
 
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
-        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
-
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
 
+        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_timestamp_ignore(self):
@@ -177,9 +214,7 @@ class TestHappy(unittest.TestCase):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
-
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
-
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
@@ -226,10 +261,9 @@ class TestHappy(unittest.TestCase):
 
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
-        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
-
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
 
+        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_match_prefix(self):
@@ -270,49 +304,28 @@ class TestHappy(unittest.TestCase):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
-
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
 
 
 @unittest.skip("Max nlinks tests are slow.  Skipping...")
-class TestMaxNLinks(unittest.TestCase):
+class TestMaxNLinks(BaseTests):
     def setUp(self):
-        self.root = tempfile.mkdtemp()
-        os.chdir(self.root)
+        self.setup_tempdir()
         try:
-            max_nlinks = os.pathconf(self.root, "PC_LINK_MAX")
+            self.max_nlinks = os.pathconf(self.root, "PC_LINK_MAX")
         except:
             os.rmdir(self.root)
             raise
 
-        self.max_nlinks = max_nlinks
-        self.filenames = []
-
-        self.make_hardlinkable_file("a")
-        self.make_hardlinkable_file("b")
-        for i in range(max_nlinks-1):
+        self.make_hardlinkable_file("a", testdata1)
+        self.make_hardlinkable_file("b", testdata1)
+        for i in range(self.max_nlinks-1):
             filename = "b"+str(i)
             self.make_linked_file("b", filename)
 
     def tearDown(self):
-        os.chdir(self.root)
-        for filename in self.filenames:
-            os.unlink(filename)
-        os.rmdir(self.root)
-
-    def make_hardlinkable_file(self, filename):
-        with open(filename, 'w') as f:
-            f.write(" ")
-        self.filenames.append(filename)
-
-    def make_linked_file(self, src, dst):
-        os.link(src, dst)
-        self.filenames.append(dst)
-
-    def remove_file(self, filename):
-        os.unlink(filename)
-        self.filenames.remove(filename)
+        self.remove_tempdir()
 
     def test_hardlink_max_nlinks_at_start(self):
         self.assertEqual(os.lstat("a").st_nlink, 1)
@@ -333,8 +346,8 @@ class TestMaxNLinks(unittest.TestCase):
         self.assertEqual(os.lstat("b1").st_nlink, self.max_nlinks)
 
         self.remove_file("a")
-        self.make_hardlinkable_file("a")
-        self.make_hardlinkable_file("b")
+        self.make_hardlinkable_file("a", testdata1)
+        self.make_hardlinkable_file("b", testdata1)
         hardlink.main()
 
         self.assertTrue(os.lstat("a").st_nlink == os.lstat("b").st_nlink or
@@ -343,13 +356,13 @@ class TestMaxNLinks(unittest.TestCase):
 
         self.remove_file("a")
         self.remove_file("b")
-        self.make_hardlinkable_file("b")
+        self.make_hardlinkable_file("b", testdata1)
         hardlink.main()
 
         num_c_links = 1000
         for i in range(num_c_links):
             filename = "c"+str(i)
-            self.make_hardlinkable_file(filename)
+            self.make_hardlinkable_file(filename, testdata1)
         # Should link just the c's to each other
         hardlink.main()
 
@@ -358,16 +371,12 @@ class TestMaxNLinks(unittest.TestCase):
 
 
 @unittest.skip("Forces filesystem permission errors to test logging and recovery")
-class TestErrorLogging(unittest.TestCase):
+class TestErrorLogging(BaseTests):
     def setUp(self):
-        self.root = tempfile.mkdtemp()
-        self.pathnames = [] # Keep track of all files/dirs, for deleting later
-        os.chdir(self.root)
+        self.setup_tempdir()
 
         for filename in ["a", "b"]:
-            with open(filename, "w") as f:
-                f.write("foobar")
-                self.pathnames.append(filename)
+            self.make_hardlinkable_file(filename, testdata1)
 
     def test_no_parent_dir_write_permission(self):
         # Remove write permission from tmp root dir, to deliberately cause the
@@ -385,11 +394,7 @@ class TestErrorLogging(unittest.TestCase):
         os.chmod(self.root, stat.S_IRWXU)
 
     def tearDown(self):
-        for pathname in self.pathnames:
-            assert not pathname.lstrip().startswith('/')
-            if os.path.isfile(pathname):
-                os.unlink(pathname)
-        os.rmdir(self.root)
+        self.remove_tempdir()
 
 
 if __name__ == '__main__':
