@@ -240,5 +240,18 @@ class TestHappy(unittest.TestCase):
         # utime mismatch despite name match
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
+    def test_hardlink_tree_multiple_matches(self):
+        sys.argv = ["hardlink.py", "--no-stats", "-m", "name2*", "-m", "*.noext", self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(get_inode("dir1/name2.ext"), get_inode("dir3/name1.noext"))
+
+        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
+        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
+        self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
+        self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
+
 if __name__ == '__main__':
     unittest.main()

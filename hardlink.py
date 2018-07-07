@@ -361,6 +361,10 @@ def parse_command_line():
     parser.add_option("-f", "--filenames-equal", help="Filenames have to be identical",
                       action="store_true", dest="samename", default=False,)
 
+    parser.add_option("-m", "--match", metavar="PATTERN",
+                      help="Shell patterns used to match files (may specify multiple times)",
+                      action="append", dest="matches", default=[],)
+
     parser.add_option("-n", "--dry-run", help="Do NOT actually hardlink files",
                       action="store_true", dest="dryrun", default=False,)
 
@@ -391,10 +395,6 @@ def parse_command_line():
     parser.add_option("-x", "--exclude", metavar="REGEX",
                       help="Regular expression used to exclude files/dirs (may specify multiple times)",
                       action="append", dest="excludes", default=[],)
-
-    parser.add_option("-m", "--match",
-        help="Shell pattern used to match files", metavar="PATTERN",
-        action="store", dest="match", default=None,)
 
     (options, args) = parser.parse_args()
     if not args:
@@ -462,6 +462,7 @@ def cull_excluded_directories(dirs, excludes):
 
 
 def found_excluded(name, excludes):
+    """If excludes option is given, return True if name matches any regex."""
     for exclude in excludes:
         if re.search(exclude, name):
             return True
@@ -469,6 +470,7 @@ def found_excluded(name, excludes):
 
 
 def found_excluded_dotfile(name):
+    """Return True if any excluded dotfile pattern is found."""
     # Look at files beginning with "."
     if name.startswith("."):
         # Ignore any mirror.pl files.  These are the files that
@@ -482,11 +484,15 @@ def found_excluded_dotfile(name):
     return False
 
 
-def found_matched_filename(name, match):
-    """If match option is given, return False if name doesn't match pattern."""
-    if match and not fnmatch.fnmatch(name, match):
-        return False
-    return True
+def found_matched_filename(name, matches):
+    """If matches option is given, return False if name doesn't match any
+    patterns.  If no matches are given, return True."""
+    if not matches:
+        return True
+    for match in matches:
+        if fnmatch.fnmatch(name, match):
+            return True
+    return False
 
 
 # Start of global declarations
@@ -535,7 +541,7 @@ def main():
                     continue
                 if found_excluded_dotfile(filename):
                     continue
-                if not found_matched_filename(filename, options.match):
+                if not found_matched_filename(filename, options.matches):
                     continue
 
                 pathname = os.path.normpath(os.path.join(dirpath, filename))
