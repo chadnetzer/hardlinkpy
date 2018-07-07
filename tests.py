@@ -157,7 +157,6 @@ class TestHappy(BaseTests):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
-
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
 
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
@@ -173,9 +172,7 @@ class TestHappy(BaseTests):
 
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
-
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
-
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_filenames_equal_reverse_iteration(self):
@@ -217,9 +214,7 @@ class TestHappy(BaseTests):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
-
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
-
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
@@ -309,7 +304,6 @@ class TestHappy(BaseTests):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
-
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
 
