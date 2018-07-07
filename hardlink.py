@@ -446,6 +446,21 @@ def parse_command_line():
     return options, args
 
 
+def cull_excluded_directories(dirs, excludes):
+    """Remove any excluded directories from dirs.
+
+    Note that it modifies dirs in place, as required by os.walk()
+    """
+    for dirname in dirs[:]:
+        if found_excluded(dirname, excludes):
+            try:
+                dirs.remove(dirname)
+            except ValueError:
+                break
+            # os.walk() will ensure no repeated dirnames
+            assert dirname not in dirs
+
+
 def found_excluded(name, excludes):
     for exclude in excludes:
         if re.search(exclude, name):
@@ -501,46 +516,43 @@ def main():
     # Now go through all the directories that have been added.
     # NOTE: hardlink_identical_files() will add more directories to the
     #       directories list as it finds them.
-    while directories:
-        # Get the last directory in the list
-        directory = directories.pop()
-        assert os.path.isdir(directory)
+    for top_dir in directories:
+        # Use topdown=True for directory search pruning. followlinks is False
+        for dirpath, dirs, filenames in os.walk(top_dir, topdown=True):
 
-        gStats.found_directory()
-        # Loop through all the files in the directory
-        try:
-            dir_entries = os.listdir(directory)
-        except OSError:
-            print "Error: Unable to do an os.listdir on: %s  Skipping..." % directory
-            continue
-        for entry in dir_entries:
-            pathname = os.path.normpath(os.path.join(directory, entry))
-            try:
-                stat_info = os.lstat(pathname)
-            except OSError as error:
-                print "Unable to get stat info for: %s: %s" % (pathname, error)
+            # If excludes match any of the subdirs (or the current dir), skip
+            # them.
+            cull_excluded_directories(dirs, options.excludes)
+            cur_dir = os.path.basename(dirpath)
+            if cur_dir and found_excluded(cur_dir, options.excludes):
                 continue
 
-            # Add non-excluded directories to the queue, skip symlinks, and
-            # proceed onto the hardlink consolidation with matched and
-            # non-excluded normal files.
-            if stat.S_ISDIR(stat_info.st_mode):
-                # Cull excluded directories (before converted to full pathname)
-                if not found_excluded(entry, options.excludes):
-                    directories.append(pathname)
-                continue
-            elif stat.S_ISLNK(stat_info.st_mode):
-                continue
-            elif stat.S_ISREG(stat_info.st_mode):
+            gStats.found_directory()
+
+            # Loop through all the files in the directory
+            for filename in filenames:
+                if found_excluded(filename, options.excludes):
+                    continue
+                if found_excluded_dotfile(filename):
+                    continue
+                if not found_matched_filename(filename, options.match):
+                    continue
+
+                pathname = os.path.normpath(os.path.join(dirpath, filename))
+                try:
+                    stat_info = os.lstat(pathname)
+                except OSError as error:
+                    print "Unable to get stat info for: %s: %s" % (pathname, error)
+                    continue
+
+                # Is it a regular file?
+                assert not stat.S_ISDIR(stat_info.st_mode)
+                if not stat.S_ISREG(stat_info.st_mode):
+                    continue
+
                 if ((options.max_file_size and
                      stat_info.st_size > options.max_file_size) or
                     (stat_info.st_size < options.min_file_size)):
-                    continue
-                if found_excluded(entry, options.excludes):
-                    continue
-                if found_excluded_dotfile(entry):
-                    continue
-                if not found_matched_filename(entry, options.match):
                     continue
 
                 hardlink_identical_files(pathname, stat_info, options)
