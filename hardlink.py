@@ -112,6 +112,13 @@ def eligible_for_hardlink(st1,        # first file's status
 
         st1.st_dev == st2.st_dev                 # device is the same
     )
+    max_nlinks = max_nlinks_per_dev[st1.st_dev]
+    if result and (max_nlinks is not None):
+        # The justification for not linking a pair of files if their nlinks sum
+        # to more than the device maximum, is that linking them won't change
+        # the overall link count, meaning no space saving is possible overall
+        # even when all their filenames are found and re-linked.
+        result = ((st1.st_nlink + st2.st_nlink) <= max_nlinks)
     if None:
     # if not result:
         print("\n***\n", st1)
@@ -538,15 +545,17 @@ MAX_HASHES = 128 * 1024
 gStats = None
 
 file_hashes = None
+max_nlinks_per_dev = None
 
 VERSION = "0.06 alpha - 2018-07-04 (04-Jul-2018)"
 
 
 def main():
-    global gStats, file_hashes
+    global gStats, file_hashes, max_nlinks_per_dev
 
     gStats = Statistics()
     file_hashes = {}
+    max_nlinks_per_dev = {}
 
     # Compile up our regexes ahead of time
     global MIRROR_PL_REGEX, RSYNC_TEMP_REGEX
@@ -596,6 +605,16 @@ def main():
                      stat_info.st_size > options.max_file_size) or
                     (stat_info.st_size < options.min_file_size)):
                     continue
+
+                if stat_info.st_dev not in max_nlinks_per_dev:
+                    # Try to discover the maximum number of nlinks possible for
+                    # each new device.
+                    try:
+                        max_nlinks = os.pathconf(pathname, "PC_LINK_MAX")
+                    except:
+                        # Avoid retrying if PC_LINK_MAX fails for a device
+                        max_nlinks = None
+                    max_nlinks_per_dev[stat_info.st_dev] = max_nlinks
 
                 hardlink_identical_files(pathname, stat_info, options)
 
