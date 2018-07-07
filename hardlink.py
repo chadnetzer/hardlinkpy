@@ -98,8 +98,9 @@ def eligible_for_hardlink(st1,        # first file's status
 
         st1.st_size != 0 and                     # size is not zero
 
-        (st1.st_mode == st2.st_mode or
-         options.contentonly) and                # file mode is the same
+        (st1.st_mode == st2.st_mode or           # file mode is the same
+         options.nosameperm or                   # OR we are ignoring file mode
+         options.contentonly) and                # OR we are comparing content only
 
         (st1.st_uid == st2.st_uid or             # owner user id is the same
          options.contentonly) and                # OR we are comparing content only
@@ -455,6 +456,11 @@ including files becoming owned by another user.
     group.add_option("--timestamp-ignore",
                      dest="deprecated_timestamp_option_name",
                      help=SUPPRESS_HELP,
+                     action="store_true", default=False,)
+
+    # Can't think of a good short option.  Should be used rarely anyway.
+    group.add_option("--ignore-permissions", dest="nosameperm",
+                     help="File permissions do not need to match",
                      action="store_true", default=False,)
 
     group = OptionGroup(parser, title="Name Matching",)
