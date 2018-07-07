@@ -186,7 +186,7 @@ def hardlink_files(sourcefile, destfile, stat_info, options):
     return result
 
 
-def hardlink_identical_files(directories, filename, options):
+def hardlink_identical_files(filename, stat_info, options):
     """
     The purpose of this function is to hardlink files together if the files are
     the same.  To be considered the same they must be equal in the following
@@ -212,65 +212,43 @@ def hardlink_identical_files(directories, filename, options):
 
      Add the file info to the list of files that have the same hash value."""
 
-    for exclude in options.excludes:
-        if re.search(exclude, filename):
-            return
-    try:
-        stat_info = os.stat(filename)
-    except OSError as error:
-        print "Unable to get stat info for: %s: %s" % (filename, error)
-        return
-
-    # Is it a directory?
-    if stat.S_ISDIR(stat_info.st_mode):
-        # If it is a directory then add it to the list of directories.
-        directories.append(filename)
-    # Is it a regular file?
-    elif stat.S_ISREG(stat_info.st_mode):
-        if ((options.max_file_size and stat_info.st_size > options.max_file_size) or
-            (stat_info.st_size < options.min_file_size)):
-            return
-
-        if options.match:
-            if not fnmatch.fnmatch(filename, options.match):
-                return
-        # Create the hash for the file.
-        file_hash = hash_value(stat_info.st_size, stat_info.st_mtime,
-                               options.notimestamp or options.contentonly)
-        # Bump statistics count of regular files found.
-        gStats.found_regular_file()
-        if options.verbosity > 2:
-            print "File: %s" % filename
-        work_file_info = (filename, stat_info)
-        if file_hash in file_hashes:
-            # We have file(s) that have the same hash as our current file.
-            # Let's go through the list of files with the same hash and see if
-            # we are already hardlinked to any of them.
-            base_filename = os.path.basename(filename)
-            for (temp_filename, temp_stat_info) in file_hashes[file_hash]:
-                if is_already_hardlinked(stat_info, temp_stat_info):
-                    if not options.samename or (base_filename == os.path.basename(temp_filename)):
-                        gStats.found_hardlink(temp_filename, filename,
-                                              temp_stat_info)
-                        break
-            else:
-                # We did not find this file as hardlinked to any other file
-                # yet.  So now lets see if our file should be hardlinked to any
-                # of the other files with the same hash.
-                for (temp_filename, temp_stat_info) in file_hashes[file_hash]:
-                    if are_files_hardlinkable(work_file_info, (temp_filename, temp_stat_info),
-                                              options):
-                        hardlink_files(temp_filename, filename, temp_stat_info, options)
-                        break
-                else:
-                    # The file should NOT be hardlinked to any of the other
-                    # files with the same hash.  So we will add it to the list
-                    # of files.
-                    file_hashes[file_hash].append(work_file_info)
+    # Create the hash for the file.
+    file_hash = hash_value(stat_info.st_size, stat_info.st_mtime,
+                           options.notimestamp or options.contentonly)
+    # Bump statistics count of regular files found.
+    gStats.found_regular_file()
+    if options.verbosity > 2:
+        print "File: %s" % filename
+    work_file_info = (filename, stat_info)
+    if file_hash in file_hashes:
+        # We have file(s) that have the same hash as our current file.
+        # Let's go through the list of files with the same hash and see if
+        # we are already hardlinked to any of them.
+        base_filename = os.path.basename(filename)
+        for (temp_filename, temp_stat_info) in file_hashes[file_hash]:
+            if is_already_hardlinked(stat_info, temp_stat_info):
+                if not options.samename or (base_filename == os.path.basename(temp_filename)):
+                    gStats.found_hardlink(temp_filename, filename,
+                                          temp_stat_info)
+                    break
         else:
-            # There weren't any other files with the same hash value so we will
-            # create a new entry and store our file.
-            file_hashes[file_hash] = [work_file_info]
+            # We did not find this file as hardlinked to any other file
+            # yet.  So now lets see if our file should be hardlinked to any
+            # of the other files with the same hash.
+            for (temp_filename, temp_stat_info) in file_hashes[file_hash]:
+                if are_files_hardlinkable(work_file_info, (temp_filename, temp_stat_info),
+                                          options):
+                    hardlink_files(temp_filename, filename, temp_stat_info, options)
+                    break
+            else:
+                # The file should NOT be hardlinked to any of the other
+                # files with the same hash.  So we will add it to the list
+                # of files.
+                file_hashes[file_hash].append(work_file_info)
+    else:
+        # There weren't any other files with the same hash value so we will
+        # create a new entry and store our file.
+        file_hashes[file_hash] = [work_file_info]
 
 
 class Statistics:
@@ -468,10 +446,36 @@ def parse_command_line():
     return options, args
 
 
+def found_excluded(name, excludes):
+    for exclude in excludes:
+        if re.search(exclude, name):
+            return True
+    return False
+
+
+def found_excluded_dotfile(name):
+    # Look at files beginning with "."
+    if name.startswith("."):
+        # Ignore any mirror.pl files.  These are the files that
+        # start with ".in."
+        if MIRROR_PL_REGEX.match(name):
+            return True
+        # Ignore any RSYNC files.  These are files that have the
+        # format .FILENAME.??????
+        if RSYNC_TEMP_REGEX.match(name):
+            return True
+    return False
+
+
+def found_matched_filename(name, match):
+    """If match option is given, return False if name doesn't match pattern."""
+    if match and not fnmatch.fnmatch(name, match):
+        return False
+    return True
+
+
 # Start of global declarations
 OLD_VERBOSE_OPTION_ERROR = True
-debug1 = None
-
 MAX_HASHES = 128 * 1024
 
 gStats = None
@@ -487,17 +491,19 @@ def main():
     gStats = Statistics()
     file_hashes = {}
 
-    # Parse our argument list and get our list of directories
-    options, directories = parse_command_line()
     # Compile up our regexes ahead of time
+    global MIRROR_PL_REGEX, RSYNC_TEMP_REGEX
     MIRROR_PL_REGEX = re.compile(r'^\.in\.')
     RSYNC_TEMP_REGEX = re.compile((r'^\..*\.\?{6,6}$'))
+
+    # Parse our argument list and get our list of directories
+    options, directories = parse_command_line()
     # Now go through all the directories that have been added.
     # NOTE: hardlink_identical_files() will add more directories to the
     #       directories list as it finds them.
     while directories:
         # Get the last directory in the list
-        directory = directories.pop() + '/'
+        directory = directories.pop()
         assert os.path.isdir(directory)
 
         gStats.found_directory()
@@ -509,23 +515,36 @@ def main():
             continue
         for entry in dir_entries:
             pathname = os.path.normpath(os.path.join(directory, entry))
-            # Look at files/dirs beginning with "."
-            if entry[0] == ".":
-                # Ignore any mirror.pl files.  These are the files that
-                # start with ".in."
-                if MIRROR_PL_REGEX.match(entry):
-                    continue
-                # Ignore any RSYNC files.  These are files that have the
-                # format .FILENAME.??????
-                if RSYNC_TEMP_REGEX.match(entry):
-                    continue
-            if os.path.islink(pathname):
-                if debug1:
-                    print "%s: is a symbolic link, ignoring" % pathname
+            try:
+                stat_info = os.lstat(pathname)
+            except OSError as error:
+                print "Unable to get stat info for: %s: %s" % (pathname, error)
                 continue
-            if debug1 and os.path.isdir(pathname):
-                print "%s is a directory!" % pathname
-            hardlink_identical_files(directories, pathname, options)
+
+            # Add non-excluded directories to the queue, skip symlinks, and
+            # proceed onto the hardlink consolidation with matched and
+            # non-excluded normal files.
+            if stat.S_ISDIR(stat_info.st_mode):
+                # Cull excluded directories (before converted to full pathname)
+                if not found_excluded(entry, options.excludes):
+                    directories.append(pathname)
+                continue
+            elif stat.S_ISLNK(stat_info.st_mode):
+                continue
+            elif stat.S_ISREG(stat_info.st_mode):
+                if ((options.max_file_size and
+                     stat_info.st_size > options.max_file_size) or
+                    (stat_info.st_size < options.min_file_size)):
+                    continue
+                if found_excluded(entry, options.excludes):
+                    continue
+                if found_excluded_dotfile(entry):
+                    continue
+                if not found_matched_filename(entry, options.match):
+                    continue
+
+                hardlink_identical_files(pathname, stat_info, options)
+
     if options.printstats:
         gStats.print_stats(options)
 
