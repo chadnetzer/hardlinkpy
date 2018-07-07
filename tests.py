@@ -2,6 +2,7 @@
 
 import os
 import os.path
+import stat
 import sys
 import tempfile
 import time
@@ -31,6 +32,7 @@ class TestHappy(unittest.TestCase):
             "dir3/name1.ext": testdata2,
             "dir3/name1.noext": testdata1,
             "dir4/name1.ext": testdata1,
+            "dir5/name1.ext": testdata2,
         }
 
         for dir in ("dir1", "dir2", "dir3", "dir4", "dir5"):
@@ -51,8 +53,10 @@ class TestHappy(unittest.TestCase):
 
         os.utime("dir4/name1.ext", (other, other))
 
-        # os.chown("dir5/name1.ext", os.getuid(), ...)
         # -c, --content-only    Only file contents have to match
+        # It's possible for a umask setting of 0466 or 0577 to confuse the
+        # tests that rely on this file's chmod value.
+        os.chmod("dir5/name1.ext", stat.S_IRUSR)
 
         os.link("dir1/name1.ext", "dir1/link")
         self.pathnames.append("dir1/link")
@@ -117,6 +121,7 @@ class TestHappy(unittest.TestCase):
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
 
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
+        self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
 
     def test_hardlink_tree_filenames_equal(self):
         sys.argv = ["hardlink.py", "--no-stats", "--filenames-equal", self.root]
@@ -176,6 +181,8 @@ class TestHappy(unittest.TestCase):
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
 
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
+
+        self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
 
     def test_hardlink_tree_minsize(self):
         """Set a minimum size larger than the test data, inhibiting linking"""
@@ -252,6 +259,21 @@ class TestHappy(unittest.TestCase):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
+
+    def test_hardlink_tree_content_only(self):
+        sys.argv = ["hardlink.py", "--no-stats", "--content-only", self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
+
+        self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
+        self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
+
 
 if __name__ == '__main__':
     unittest.main()
