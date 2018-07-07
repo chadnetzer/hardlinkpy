@@ -613,7 +613,7 @@ def main():
                 try:
                     stat_info = os.lstat(pathname)
                 except OSError as error:
-                    logging.warn("Unable to get stat info for: %s\n%s" % (pathname, error))
+                    logging.warning("Unable to get stat info for: %s\n%s" % (pathname, error))
                     continue
 
                 # Is it a regular file?
