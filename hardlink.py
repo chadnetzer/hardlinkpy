@@ -129,7 +129,7 @@ def eligible_for_hardlink(st1,        # first file's status
 
 def are_file_contents_equal(filename1, filename2, options):
     """Determine if the contents of two files are equal"""
-    if options.verbose:
+    if options.verbosity > 1:
         print "Comparing: %s" % filename1
         print "     to  : %s" % filename2
     gStats.did_comparison()
@@ -177,7 +177,7 @@ def hardlink_files(sourcefile, destfile, stat_info, options):
                 os.unlink(temp_name)
             # update our stats
             gStats.did_hardlink(sourcefile, destfile, stat_info)
-            if options.verbose >= 1:
+            if options.verbosity > 0:
                 if options.dryrun:
                     print "Did NOT link.  Dry run"
                 print "Linked: %s" % sourcefile
@@ -235,7 +235,7 @@ def hardlink_identical_files(directories, filename, options):
                                options.notimestamp or options.contentonly)
         # Bump statistics count of regular files found.
         gStats.found_regular_file()
-        if options.verbose >= 2:
+        if options.verbosity > 2:
             print "File: %s" % filename
         work_file_info = (filename, stat_info)
         if file_hash in file_hashes:
@@ -395,8 +395,8 @@ def parse_command_line():
                       action="store_true", dest="contentonly", default=False,)
 
     parser.add_option("-v", "--verbose",
-                      help="Verbosity level (default: %default)", metavar="LEVEL",
-                      action="store", dest="verbose", type="int", default=1,)
+                      help="Increase verbosity level (Repeatable up to 3 times)",
+                      action="count", dest="verbosity", default=0)
 
     parser.add_option("-x", "--exclude", metavar="REGEX",
                       help="Regular expression used to exclude files/dirs (may specify multiple times)",
@@ -419,10 +419,39 @@ def parse_command_line():
             print
             print "Error: %s is NOT a directory" % dirname
             sys.exit(1)
+
+    if OLD_VERBOSE_OPTION_ERROR:
+        # When old style verbose options (-v 1) are parsed using the new
+        # verbosity option (as a counter), the numbers end up being interpreted
+        # as directories.  As long as the directories don't exist, the program
+        # will catch this and exit.  However, if there so happens to be a
+        # directory with a typical number value (ie. '0', '1', etc.), it could
+        # falsely be scanned for hardlinking.  So we directly check the
+        # sys.argv list and explicitly disallow this case.
+        #
+        # This could also reject a technically valid case where a new style
+        # verbosity argument is given, followed by a number-like directory name
+        # that is intentionally meant to be scanned.  Since it seems rare, we
+        # intentionally disallow it as protection against misinterpretation of
+        # the old style verbose option argument.  Eventually, when enough time
+        # has passed to assume that hardlinkpy users have switched over to the
+        # new verbosity argument, we can remove this safeguard.
+
+        # Iterate over a reversed argument list, looking for options pairs of
+        # type ['-v', '<num>']
+        for i,s in enumerate(sys.argv[::-1]):
+            if i == 0:
+                continue
+            n_str = sys.argv[-i]
+            if s in ('-v', '--verbose') and n_str.isdigit():
+                print "Error: Use of deprecated numeric verbosity option (%s)." % ('-v ' + n_str)
+                sys.exit(2)
+
     return options, args
 
 
 # Start of global declarations
+OLD_VERBOSE_OPTION_ERROR = True
 debug1 = None
 
 MAX_HASHES = 128 * 1024

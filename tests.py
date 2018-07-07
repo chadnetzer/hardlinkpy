@@ -64,7 +64,7 @@ class TestHappy(unittest.TestCase):
         # self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/link"))
 
     def test_hardlink_tree_dryrun(self):
-        sys.argv = ["hardlink.py", "-v", "0", "--no-stats", "--dry-run", self.root]
+        sys.argv = ["hardlink.py", "--no-stats", "--dry-run", self.root]
         hardlink.main()
 
         self.verify_file_contents()
@@ -78,7 +78,7 @@ class TestHappy(unittest.TestCase):
         self.assertEqual(os.lstat("dir4/name1.ext").st_nlink, 1)
 
     def test_hardlink_tree(self):
-        sys.argv = ["hardlink.py", "-v", "0", "--no-stats", self.root]
+        sys.argv = ["hardlink.py", "--no-stats", self.root]
         hardlink.main()
 
         self.verify_file_contents()
@@ -92,7 +92,7 @@ class TestHappy(unittest.TestCase):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_filenames_equal(self):
-        sys.argv = ["hardlink.py", "-v", "0", "--no-stats", "--filenames-equal", self.root]
+        sys.argv = ["hardlink.py", "--no-stats", "--filenames-equal", self.root]
         hardlink.main()
 
         self.verify_file_contents()
@@ -106,7 +106,7 @@ class TestHappy(unittest.TestCase):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_exclude(self):
-        sys.argv = ["hardlink.py", "-v", "0", "--no-stats", "--exclude", ".*noext$", self.root]
+        sys.argv = ["hardlink.py", "--no-stats", "--exclude", ".*noext$", self.root]
         hardlink.main()
 
         self.verify_file_contents()
@@ -120,7 +120,7 @@ class TestHappy(unittest.TestCase):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_timestamp_ignore(self):
-        sys.argv = ["hardlink.py", "-v", "0", "--no-stats", "--timestamp-ignore", self.root]
+        sys.argv = ["hardlink.py", "--no-stats", "--timestamp-ignore", self.root]
         hardlink.main()
 
         self.verify_file_contents()
@@ -134,7 +134,7 @@ class TestHappy(unittest.TestCase):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_match(self):
-        sys.argv = ["hardlink.py", "-v", "0", "--no-stats", "--match", "*.ext", self.root]
+        sys.argv = ["hardlink.py", "--no-stats", "--match", "*.ext", self.root]
         hardlink.main()
 
         self.verify_file_contents()
