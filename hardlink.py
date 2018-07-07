@@ -53,7 +53,7 @@ import time
 import filecmp
 import fnmatch
 
-from optparse import OptionParser
+from optparse import OptionParser, OptionGroup
 
 
 # Hash functions
@@ -410,44 +410,68 @@ Place, Suite 330, Boston, MA  02111-1307, USA.
 def parse_command_line():
     usage = "usage: %prog [options] directory [ directory ... ]"
     version = "%prog: " + VERSION
-    parser = OptionParser(usage=usage, version=version)
-    parser.add_option("-f", "--filenames-equal", help="Filenames have to be identical",
-                      action="store_true", dest="samename", default=False,)
+    description = """\
+This is a tool to hard-link together identical files in order to save space.
+The tool scans the provided directories looking for identical files.  Linked
+files can save space, but a change to one hardlinked file changes them all."""
 
-    parser.add_option("-m", "--match", metavar="PATTERN",
-                      help="Shell patterns used to match files (may specify multiple times)",
-                      action="append", dest="matches", default=[],)
+    parser = OptionParser(usage=usage, version=version, description=description)
+    parser.add_option("-n", "--dry-run", dest="dryrun",
+                      help="Do NOT actually hardlink files",
+                      action="store_true", default=False,)
 
-    parser.add_option("-n", "--dry-run", help="Do NOT actually hardlink files",
-                      action="store_true", dest="dryrun", default=False,)
+    parser.add_option("-p", "--print-previous", dest="printprevious",
+                      help="Print previously created hardlinks",
+                      action="store_true", default=False,)
 
-    parser.add_option("-p", "--print-previous", help="Print previously created hardlinks",
-                      action="store_true", dest="printprevious", default=False,)
+    parser.add_option("-q", "--no-stats", dest="printstats",
+                      help="Do not print the statistics",
+                      action="store_false", default=True,)
 
-    parser.add_option("-q", "--no-stats", help="Do not print the statistics",
-                      action="store_false", dest="printstats", default=True,)
-
-    parser.add_option("-s", "--min-size", type="int", help="Minimum file size",
-                      action="store", dest="min_file_size", default=0,)
-
-    parser.add_option("-S", "--max-size", type="int", help="Maximum file size",
-                      action="store", dest="max_file_size", default=0,)
-
-    parser.add_option("-t", "--timestamp-ignore",
-                      help="File modification times do NOT have to be identical",
-                      action="store_true", dest="notimestamp", default=False,)
-
-    parser.add_option("-c", "--content-only",
-                      help="Only file contents have to match",
-                      action="store_true", dest="contentonly", default=False,)
-
-    parser.add_option("-v", "--verbose",
+    parser.add_option("-v", "--verbose", dest="verbosity",
                       help="Increase verbosity level (Repeatable up to 3 times)",
-                      action="count", dest="verbosity", default=0)
+                      action="count", default=0,)
 
-    parser.add_option("-x", "--exclude", metavar="REGEX",
-                      help="Regular expression used to exclude files/dirs (may specify multiple times)",
-                      action="append", dest="excludes", default=[],)
+    properties_description= """
+File content must always match exactly.  By default, ownership, permissions,
+and mtime must also match.
+Use --content-only with caution, as it can lead to surprising results,
+including files becoming owned by another user.
+"""
+    group = OptionGroup(parser, title="File Matching",
+            description=properties_description,)
+    parser.add_option_group(group)
+
+    group.add_option("-c", "--content-only", dest="contentonly",
+                     help="Only file contents have to match",
+                     action="store_true", default=False,)
+
+    group.add_option("-f", "--filenames-equal", dest="samename",
+                     help="Filenames have to be identical",
+                     action="store_true", default=False,)
+
+    group.add_option("-s", "--min-size", dest="min_file_size", type="int",
+                     help="Minimum file size",
+                     action="store", default=0,)
+
+    group.add_option("-S", "--max-size", dest="max_file_size", type="int",
+                     help="Maximum file size",
+                     action="store", default=0,)
+
+    group.add_option("-t", "--timestamp-ignore", dest="notimestamp",
+                     help="File modification times do NOT have to be identical",
+                     action="store_true", default=False,)
+
+    group = OptionGroup(parser, title="Name Matching",)
+    parser.add_option_group(group)
+
+    group.add_option("-m", "--match", dest="matches", metavar="PATTERN",
+                     help="Shell patterns used to match files (may specify multiple times)",
+                     action="append", default=[],)
+
+    group.add_option("-x", "--exclude", dest="excludes", metavar="REGEX",
+                     help="Regular expression used to exclude files/dirs (may specify multiple times)",
+                     action="append", default=[],)
 
     (options, args) = parser.parse_args()
     if not args:
