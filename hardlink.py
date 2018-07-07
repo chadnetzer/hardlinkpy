@@ -45,13 +45,14 @@
 #       and then do a comparison.  If they are identical then hardlink
 #       everything at once.
 
+import filecmp
+import fnmatch
+import logging
 import os
 import re
 import stat
 import sys
 import time
-import filecmp
-import fnmatch
 
 from optparse import OptionParser, OptionGroup
 
@@ -119,18 +120,6 @@ def eligible_for_hardlink(st1,        # first file's status
         # the overall link count, meaning no space saving is possible overall
         # even when all their filenames are found and re-linked.
         result = ((st1.st_nlink + st2.st_nlink) <= max_nlinks)
-    if None:
-    # if not result:
-        print("\n***\n", st1)
-        print(st2)
-        print("Already hardlinked: %s" % (not is_already_hardlinked(st1, st2)))
-        print("Modes:", st1.st_mode, st2.st_mode)
-        print("UIDs:", st1.st_uid, st2.st_uid)
-        print("GIDs:", st1.st_gid, st2.st_gid)
-        print("SIZE:", st1.st_size, st2.st_size)
-        print("MTIME:", st1.st_mtime, st2.st_mtime)
-        print("Ignore date:", options.notimestamp)
-        print("Device:", st1.st_dev, st2.st_dev)
     return result
 
 
@@ -170,18 +159,19 @@ def hardlink_files(source_file_info, dest_file_info, options):
         try:
             os.rename(destfile, temp_name)
         except OSError as error:
-            print("Failed to rename: %s to %s: %s" % (destfile, temp_name, error))
+            logging.error("Failed to rename: %s to %s\n%s" % (destfile, temp_name, error))
         else:
             # Now link the sourcefile to the destination file
             try:
                 os.link(sourcefile, destfile)
             except Exception as error:
-                print("Failed to hardlink: %s to %s: %s" % (sourcefile, destfile, error))
+                logging.error("Failed to hardlink: %s to %s\n%s" % (sourcefile, destfile, error))
                 # Try to recover
                 try:
                     os.rename(temp_name, destfile)
                 except Exception as error:
-                    print("BAD BAD - failed to rename back %s to %s: %s" % (temp_name, destfile, error))
+                    logging.critical("Failed to rename temp filename %s back to %s\n%s" % (temp_name, destfile, error))
+                    sys.exit(3)
             else:
                 # hard link succeeded
                 # Delete the renamed version since we don't need it.
@@ -194,7 +184,7 @@ def hardlink_files(source_file_info, dest_file_info, options):
                         os.utime(destfile, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
                         os.chown(destfile, dest_stat_info.st_uid, dest_stat_info.st_gid)
                     except Exception as error:
-                        print("Failed to update file attributes for %s: %s" % (sourcefile, error))
+                        logging.warning("Failed to update file attributes for %s\n%s" % (sourcefile, error))
 
     if hardlink_succeeded or options.dryrun:
         # update our stats (Note: dest_stat_info is from pre-link())
@@ -476,16 +466,11 @@ including files becoming owned by another user.
     (options, args) = parser.parse_args()
     if not args:
         parser.print_help()
-        print("")
-        print("Error: Must supply one or more directories")
-        sys.exit(1)
+        parser.error("Must supply one or more directories")
     args = [os.path.abspath(os.path.expanduser(dirname)) for dirname in args]
     for dirname in args:
         if not os.path.isdir(dirname):
-            parser.print_help()
-            print("")
-            print("Error: %s is NOT a directory" % dirname)
-            sys.exit(1)
+            parser.error("%s is NOT a directory" % dirname)
     if options.min_file_size < 0:
         parser.error("--min_size cannot be negative")
     if options.max_file_size < 0:
@@ -517,8 +502,7 @@ including files becoming owned by another user.
                 continue
             n_str = sys.argv[-i]
             if s in ('-v', '--verbose') and n_str.isdigit():
-                print("Error: Use of deprecated numeric verbosity option (%s)." % ('-v ' + n_str))
-                sys.exit(2)
+                parser.error("Use of deprecated numeric verbosity option (%s)." % ('-v ' + n_str))
 
     return options, args
 
@@ -587,6 +571,8 @@ VERSION = "0.06 alpha - 2018-07-04 (04-Jul-2018)"
 def main():
     global gStats, file_hashes, max_nlinks_per_dev
 
+    logging.basicConfig(format='%(levelname)s:%(message)s')
+
     gStats = Statistics()
     file_hashes = {}
     max_nlinks_per_dev = {}
@@ -627,7 +613,7 @@ def main():
                 try:
                     stat_info = os.lstat(pathname)
                 except OSError as error:
-                    print("Unable to get stat info for: %s: %s" % (pathname, error))
+                    logging.warning("Unable to get stat info for: %s\n%s" % (pathname, error))
                     continue
 
                 # Is it a regular file?
