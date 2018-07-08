@@ -313,7 +313,7 @@ class TestHappy(BaseTests):
     def test_hardlink_tree_maxsize(self):
         """Set a maximum size smaller than the test data, inhibiting linking"""
         sys.argv = ["hardlink.py", "--no-stats", "--max-size",
-                    str(len(testdata1) - 1), self.root]
+                    str(len(testdata0) - 1), self.root]
         hardlink.main()
 
         self.verify_file_contents()
@@ -326,6 +326,54 @@ class TestHappy(BaseTests):
         self.assertEqual(os.lstat("dir3/name1.noext").st_nlink, 1)
         self.assertEqual(os.lstat("dir4/name1.ext").st_nlink, 1)
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/link"))
+        self.assertEqual(os.lstat("dir6/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir6/name2.ext").st_nlink, 1)
+
+        self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
+
+        sys.argv = ["hardlink.py", "--no-stats", "--max-size",
+                    str(len(testdata1) - 1), self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
+
+    def test_hardlink_tree_minsize_maxsize(self):
+        """Test using both min and max size restrictions"""
+        sys.argv = ["hardlink.py", "--no-stats",
+                    "--min-size", str(len(testdata0) + 1),
+                    "--max-size", str(len(testdata1) - 1),
+                    self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(os.lstat("dir1/name1.ext").st_nlink, 2)  # Existing link
+        self.assertEqual(os.lstat("dir1/name2.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir1/name3.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir2/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir3/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir3/name1.noext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir4/name1.ext").st_nlink, 1)
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/link"))
+        self.assertEqual(os.lstat("dir6/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir6/name2.ext").st_nlink, 1)
+
+        self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
+
+        sys.argv = ["hardlink.py", "--no-stats",
+                    "--min-size", str(len(testdata0) - 1),
+                    "--max-size", str(len(testdata1) + 1),
+                    self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
+        self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
         self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
         self.assertEqual(os.lstat("dir6/name1.ext").st_nlink, 2)
         self.assertEqual(os.lstat("dir6/name2.ext").st_nlink, 2)
