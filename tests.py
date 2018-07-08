@@ -476,5 +476,125 @@ class TestErrorLogging(BaseTests):
         self.remove_tempdir()
 
 
+@unittest.skip("Differing device tests require manual setup")
+class TestDifferentDevices(BaseTests):
+    def setUp(self):
+        self.dev1_root = None
+        self.dev2_root = None
+
+        # These two variable need to be set to point to directories on
+        # different devices (ie. different filesystems).  Best to make empty
+        # 'tmp' directories on each device, and put their full paths here.
+        DEVICE1_DIR_PATH = None  # requires manual setup
+        DEVICE2_DIR_PATH = None  # set to a different filesystem than above
+
+        assert DEVICE1_DIR_PATH
+        assert DEVICE2_DIR_PATH
+
+        self.dev1_root = tempfile.mkdtemp(dir=DEVICE1_DIR_PATH)
+        self.dev2_root = tempfile.mkdtemp(dir=DEVICE2_DIR_PATH)
+
+        # Provide pre-made paths to the test filenames
+        self.path_a = os.path.join(self.dev1_root, 'a')
+        self.path_b = os.path.join(self.dev1_root, 'b')
+        self.path_c = os.path.join(self.dev2_root, 'c')
+        self.path_d = os.path.join(self.dev2_root, 'd')
+
+        # Helper functions require file_contents dict
+        self.file_contents = {}
+
+    def tearDown(self):
+        if self.dev1_root is not None:
+            os.unlink(self.path_a)
+            os.unlink(self.path_b)
+            os.rmdir(self.dev1_root)
+        if self.dev2_root is not None:
+            os.unlink(self.path_c)
+            os.unlink(self.path_d)
+            os.rmdir(self.dev2_root)
+
+    def test_differing_devices_no_link(self):
+        assert self.dev1_root is not None
+        assert self.dev2_root is not None
+
+        os.chdir(self.dev1_root)
+        self.make_hardlinkable_file('a', testdata0)
+        self.make_hardlinkable_file('b', testdata1)
+        os.chdir(self.dev2_root)
+        self.make_hardlinkable_file('c', testdata0)
+        self.make_hardlinkable_file('d', testdata1)
+
+        stat_a = os.lstat(self.path_a)
+        stat_b = os.lstat(self.path_b)
+        stat_c = os.lstat(self.path_c)
+        stat_d = os.lstat(self.path_d)
+
+        self.assertEqual(stat_a.st_nlink, 1)
+        self.assertEqual(stat_b.st_nlink, 1)
+        self.assertEqual(stat_c.st_nlink, 1)
+        self.assertEqual(stat_d.st_nlink, 1)
+
+        sys.argv = ["hardlink.py", "--no-stats", "--content-only",
+                    self.dev1_root, self.dev2_root,
+                    ]
+        hardlink.main()
+
+        # Ideally we would be able to check the statistics directly to ensure
+        # that no links were attempted.
+        #
+        # Basically just ensure that the files haven't been deleted, and that
+        # the program didn't crash.
+        #
+        # The atimes of the files should be the same, since the files
+        # themselves shouldn't be read (it should skip comparing content by the
+        # device equality check).  So we can compare before and after stat
+        # values.
+        self.assertEqual(stat_a, os.lstat(self.path_a))
+        self.assertEqual(stat_b, os.lstat(self.path_b))
+        self.assertEqual(stat_c, os.lstat(self.path_c))
+        self.assertEqual(stat_d, os.lstat(self.path_d))
+
+
+    def test_differing_devices_with_link(self):
+        assert self.dev1_root is not None
+        assert self.dev2_root is not None
+
+        os.chdir(self.dev1_root)
+        self.make_hardlinkable_file('a', testdata1)
+        self.make_hardlinkable_file('b', testdata1)
+        os.chdir(self.dev2_root)
+        self.make_hardlinkable_file('c', testdata2)
+        self.make_hardlinkable_file('d', testdata2)
+
+        sys.argv = ["hardlink.py", "--no-stats", "--content-only",
+                    self.dev1_root, self.dev2_root,
+                    ]
+        hardlink.main()
+
+        # Check that linking on the same devices occurred
+        self.assertEqual(get_inode(self.path_a), get_inode(self.path_b))
+        self.assertEqual(get_inode(self.path_c), get_inode(self.path_d))
+
+        # And that no cross-device migration occurred
+        self.assertNotEqual(os.lstat(self.path_a).st_dev, os.lstat(self.path_c).st_dev)
+        self.assertNotEqual(os.lstat(self.path_b).st_dev, os.lstat(self.path_d).st_dev)
+
+        # And that content is correct
+        f1 = open(self.path_a)
+        f2 = open(self.path_b)
+        f3 = open(self.path_c)
+        f4 = open(self.path_d)
+
+        self.assertEqual(f1.read(), testdata1)
+        self.assertEqual(f2.read(), testdata1)
+        self.assertEqual(f3.read(), testdata2)
+        self.assertEqual(f4.read(), testdata2)
+
+        f1.close()
+        f2.close()
+        f3.close()
+        f4.close()
+
+
 if __name__ == '__main__':
     unittest.main()
