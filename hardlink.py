@@ -201,7 +201,7 @@ def hardlink_files(source_file_info, dest_file_info, options):
             print("%sLinked: %s" % (preamble1, sourcefile))
             if dest_stat_info.st_nlink == 1:
                 print("%s    to: %s, saved %s" % (preamble2, destfile,
-                                                  humanize_number(stat_info.st_size)))
+                                                  humanize_number(dest_stat_info.st_size)))
             else:
                 print("%s    to: %s" % (preamble2, destfile))
 
