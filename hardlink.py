@@ -249,11 +249,13 @@ def hardlink_identical_files(pathname, stat_info, options):
         print("File: %s" % pathname)
     file_info = (pathname, stat_info)
     if file_hash in file_hashes:
+        gStats.found_hash()
         # We have file(s) that have the same hash as our current file.
         # Let's go through the list of files with the same hash and see if
         # we are already hardlinked to any of them.
         filename = os.path.basename(pathname)
         for cached_file_info in file_hashes[file_hash]:
+            gStats.inc_hash_list_iteration()
             cached_pathname, cached_stat_info = cached_file_info
             if is_already_hardlinked(stat_info, cached_stat_info):
                 if not options.samename or (filename == os.path.basename(cached_pathname)):
@@ -268,6 +270,7 @@ def hardlink_identical_files(pathname, stat_info, options):
             # yet.  So now lets see if our file should be hardlinked to any
             # of the other files with the same hash.
             for i, cached_file_info in enumerate(file_hashes[file_hash]):
+                gStats.inc_hash_list_iteration()
                 cached_pathname, cached_stat_info = cached_file_info
                 if are_files_hardlinkable(file_info, cached_file_info, options):
                     # Always use the file with the most hardlinks as the source
@@ -290,10 +293,12 @@ def hardlink_identical_files(pathname, stat_info, options):
                 # files with the same hash.  So we will add it to the list
                 # of files.
                 file_hashes[file_hash].append(file_info)
+                gStats.no_hash_match()
     else:
         # There weren't any other files with the same hash value so we will
         # create a new entry and store our file.
         file_hashes[file_hash] = [file_info]
+        gStats.missed_hash()
 
 
 class Statistics:
@@ -309,6 +314,12 @@ class Statistics:
         self.hardlinkstats = []             # list of files hardlinked this run
         self.starttime = time.time()        # track how long it takes
         self.previouslyhardlinked = {}      # list of files hardlinked previously
+
+        # Debugging stats
+        self.num_hash_hits = 0              # Amount of times a hash is found in file_hashes
+        self.num_hash_misses = 0            # Amount of times a hash is not found in file_hashes
+        self.num_hash_mismatches = 0        # Times a hash is found, but is not a file match
+        self.num_list_iterations = 0        # Number of iterations over a list in file_hashes
 
     def found_directory(self):
         self.dircount = self.dircount + 1
@@ -337,6 +348,20 @@ class Statistics:
             self.bytes_saved_thisrun = self.bytes_saved_thisrun + filesize
             self.nlinks_to_zero_thisrun = self.nlinks_to_zero_thisrun + 1
         self.hardlinkstats.append((sourcefile, destfile))
+
+    def found_hash(self):
+        self.num_hash_hits += 1
+
+    def missed_hash(self):
+        """When a hash lookup isn't found"""
+        self.num_hash_misses += 1
+
+    def no_hash_match(self):
+        """When a hash lookup succeeds, but no matching value found"""
+        self.num_hash_mismatches += 1
+
+    def inc_hash_list_iteration(self):
+        self.num_list_iterations += 1
 
     def print_stats(self, options):
         print("\n")
@@ -372,6 +397,16 @@ class Statistics:
         totalbytes = self.bytes_saved_thisrun + self.bytes_saved_previously
         print("Total bytes saved     : %s (%s)" % (totalbytes, humanize_number(totalbytes)))
         print("Total run time        : %s seconds" % (time.time() - self.starttime))
+        if options.debug:
+            print("Total file hash hits       : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
+                                                                                  self.num_hash_misses,
+                                                                                  (self.num_hash_hits +
+                                                                                   self.num_hash_misses)))
+            print("Total hash mismatches      : %s  (+ total hardlinks): %s" % (self.num_hash_mismatches,
+                                                                                    (self.num_hash_mismatches +
+                                                                                     self.hardlinked_previously +
+                                                                                     self.hardlinked_thisrun)))
+            print("Total hash list iterations : %s" % self.num_list_iterations)
 
 
 def humanize_number(number):
@@ -427,6 +462,11 @@ files can save space, but a change to one hardlinked file changes them all."""
 
     parser.add_option("-v", "--verbose", dest="verbosity",
                       help="Increase verbosity level (Repeatable up to 3 times)",
+                      action="count", default=0,)
+
+    # hidden debug option, each repeat increases debug level (long option only)
+    parser.add_option("--debug", dest="debug",
+                      help=SUPPRESS_HELP,
                       action="count", default=0,)
 
     properties_description= """
