@@ -57,21 +57,17 @@ import time
 from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
 
 
-# Hash functions
-# Create a hash from a file's size and time values
-def hash_size_time(size, time):
-    return (size ^ time)
-
-
-def hash_size(size):
-    return (size)
-
-
-def hash_value(size, time, notimestamp):
-    if notimestamp:
-        return hash_size(size)
+def hash_value(stat_info, options):
+    """Return a value appropriate for a python dict or shelve key, which can
+    differentiate files which cannot be hardlinked."""
+    size = stat_info.st_size
+    if options.notimestamp or options.contentonly:
+        value = size
     else:
-        return hash_size_time(size, int(time))
+        mtime = int(stat_info.st_mtime)
+        value = size ^ mtime
+
+    return value
 
 
 # If two files have the same inode and are on the same device then they are
@@ -244,8 +240,7 @@ def hardlink_identical_files(pathname, filename, stat_info, options):
      Add the file info to the list of files that have the same hash value."""
 
     # Create the hash for the file.
-    file_hash = hash_value(stat_info.st_size, stat_info.st_mtime,
-                           options.notimestamp or options.contentonly)
+    file_hash = hash_value(stat_info, options)
     # Bump statistics count of regular files found.
     gStats.found_regular_file()
     if options.verbosity > 2:
