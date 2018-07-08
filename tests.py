@@ -302,6 +302,14 @@ class TestHappy(BaseTests):
 
         self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
 
+        sys.argv = ["hardlink.py", "--no-stats", "--min-size",
+                    str(len(testdata0) - 1), self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
+
     def test_hardlink_tree_maxsize(self):
         """Set a maximum size smaller than the test data, inhibiting linking"""
         sys.argv = ["hardlink.py", "--no-stats", "--max-size",
