@@ -174,10 +174,16 @@ def hardlink_files(source_file_info, dest_file_info, options):
                     logging.critical("Failed to rename temp filename %s back to %s\n%s" % (temp_name, destfile, error))
                     sys.exit(3)
             else:
-                # hard link succeeded
-                # Delete the renamed version since we don't need it.
-                os.unlink(temp_name)
                 hardlink_succeeded = True
+
+                # Delete the renamed version since we don't need it.
+                try:
+                    os.unlink(temp_name)
+                except Exception as error:
+                    # Failing to remove the temp file could lead to endless
+                    # attempts to link to it in the future.
+                    logging.critical("Failed to remove temp filename: %s\n%s" % (temp_name, error))
+                    sys.exit(3)
 
                 # Use the destination file attributes if it's most recently modified
                 if dest_stat_info.st_mtime > source_stat_info.st_mtime:
