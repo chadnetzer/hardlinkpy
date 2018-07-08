@@ -60,11 +60,11 @@ from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
 # Hash functions
 # Create a hash from a file's size and time values
 def hash_size_time(size, time):
-    return (size ^ time) & (MAX_HASHES - 1)
+    return (size ^ time)
 
 
 def hash_size(size):
-    return (size) & (MAX_HASHES - 1)
+    return (size)
 
 
 def hash_value(size, time, notimestamp):
@@ -629,7 +629,6 @@ def found_matched_filename(name, matches):
 
 # Start of global declarations
 OLD_VERBOSE_OPTION_ERROR = True
-MAX_HASHES = 128 * 1024
 
 gStats = None
 
