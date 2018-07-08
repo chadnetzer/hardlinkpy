@@ -13,6 +13,7 @@ from shutil import rmtree
 
 import hardlink
 
+testdata0 = "foo"  # Short so that filesystems may back into inodes
 testdata1 = "1234" * 1024 + "abc"
 testdata2 = "1234" * 1024 + "xyz"
 
@@ -71,6 +72,21 @@ class BaseTests(unittest.TestCase):
         assert pathname in self.file_contents
         os.unlink(pathname)
         del self.file_contents[pathname]
+
+    def count_nlinks(self):
+        """Return a dictionary of the nlink count for each tracked file."""
+        nlink_counts = {}
+        for pathname in self.file_contents:
+            nlink_counts[pathname] = os.lstat(pathname).st_nlink
+        return nlink_counts
+
+    def find_nlinks(self, nlink):
+        """Return a dictionary of the nlink count for each tracked file."""
+        pathnames = []
+        for pathname in self.file_contents:
+            if os.lstat(pathname).st_nlink == nlink:
+                pathnames.append(pathname)
+        return pathnames
 
 
 class TestTester(BaseTests):
@@ -332,51 +348,100 @@ class TestMaxNLinks(BaseTests):
             os.rmdir(self.root)
             raise
 
-        self.make_hardlinkable_file("a", testdata1)
-        self.make_hardlinkable_file("b", testdata1)
-        for i in range(self.max_nlinks-1):
+        # Start off with an amount of "b"-prefixed files 1-greater than the max
+        # nlinks.
+        self.make_hardlinkable_file("b", testdata0)
+        for i in range(self.max_nlinks):
             filename = "b"+str(i)
-            self.make_linked_file("b", filename)
+            self.make_hardlinkable_file(filename, testdata0)
 
     def tearDown(self):
         self.remove_tempdir()
 
     def test_hardlink_max_nlinks_at_start(self):
-        self.assertEqual(os.lstat("a").st_nlink, 1)
-        self.assertEqual(os.lstat("b").st_nlink, self.max_nlinks)
-
+        # Note that we re-run the hardlinker multiple times after making some
+        # changes.  Saves on overhead of destroying and recreating the
+        # max_nlinks files.  But makes tests very sensitive to ordering and
+        # edits.
         sys.argv = ["hardlink.py", "--no-stats", "--content-only", self.root]
         hardlink.main()
 
-        self.assertEqual(os.lstat("a").st_nlink, 1)
-        self.assertEqual(os.lstat("b").st_nlink, self.max_nlinks)
+        # Since the directory traversal can occur in arbitrary order, we test
+        # the final st_nlink counts regardless of which files they are.
+        #
+        # Confirm that all but one of the identical 'b' files were linked
+        # together.
+        count_list = list(self.count_nlinks().values())
+        self.assertTrue(set(count_list) == set([1, self.max_nlinks]))
 
-        # Re-run hardlinker after some changes.  Saves on overhead of
-        # destroying and recreating the max_nlinks files.
+        # There should be only one inode with an nlink count of 1 (ie. a
+        # cluster, and a leftover)
+        N_1 = len(self.find_nlinks(1))
+        N_max_nlinks = len(self.find_nlinks(self.max_nlinks))
+        self.assertEqual(N_1, 1)
+        self.assertEqual(N_max_nlinks, self.max_nlinks)
+
+        # Make a new 'a' file, and confirm it gets linked to the leftover file
+        # (which could be any of the original 'b' files)
+        self.make_hardlinkable_file("a", testdata0)
+        hardlink.main()
+
+        self.assertEqual(len(self.find_nlinks(2)), 2)
+        self.assertEqual(os.lstat("a").st_nlink, 2)
+
+        # Remove 'a' and two of the 'b' files and consolidate any leftovers.
+        self.remove_file("a")
         self.remove_file("b")
+        self.remove_file("b1")
+        hardlink.main()
+
+        self.assertEqual(len(self.find_nlinks(1)), 0)
+        self.assertEqual(len(self.find_nlinks(2)), 0)
+        self.assertEqual(len(self.find_nlinks(self.max_nlinks)), 0)
+
+        # Now make an 'a' that should be linked to the remaining files as a
+        # cluster (at max link count)
+        self.make_hardlinkable_file("a", testdata0)
         hardlink.main()
 
         self.assertEqual(os.lstat("a").st_nlink, self.max_nlinks)
-        self.assertEqual(os.lstat("b1").st_nlink, self.max_nlinks)
+        self.assertEqual(len(self.find_nlinks(1)), 0)
+        self.assertEqual(len(self.find_nlinks(2)), 0)
 
+        # Make two new files which may be linked to the max_nlinks cluster, or
+        # to each other.
         self.remove_file("a")
-        self.make_hardlinkable_file("a", testdata1)
-        self.make_hardlinkable_file("b", testdata1)
+        self.make_hardlinkable_file("b", testdata0)
+        self.make_hardlinkable_file("c", testdata0)
         hardlink.main()
 
-        self.assertTrue(os.lstat("a").st_nlink == os.lstat("b").st_nlink or
-                        os.lstat("a").st_nlink == self.max_nlinks or
-                        os.lstat("b").st_nlink == self.max_nlinks)
+        self.assertTrue(os.lstat("b").st_nlink in [1, 2, self.max_nlinks])
+        self.assertTrue(os.lstat("c").st_nlink in [1, 2, self.max_nlinks])
+        if os.lstat("b") == 1:
+            self.assertEqual(os.lstat("c").st_nlink, self.max_nlinks)
+        if os.lstat("c") == 1:
+            self.assertEqual(os.lstat("b").st_nlink, self.max_nlinks)
+        if os.lstat("b") == 2:
+            self.assertEqual(os.lstat("c").st_nlink, 2)
 
-        self.remove_file("a")
+        # Remove our work files, and make a "b" that will link up with the
+        # cluster and maximize the nlink count again
         self.remove_file("b")
-        self.make_hardlinkable_file("b", testdata1)
+        self.remove_file("c")
+        hardlink.main()
+        self.make_hardlinkable_file("b", testdata0)
         hardlink.main()
 
+        self.assertEqual(os.lstat("b").st_nlink, self.max_nlinks)
+        self.assertEqual(len(self.find_nlinks(1)), 0)
+        self.assertEqual(len(self.find_nlinks(2)), 0)
+
+        # Make a bunch of new files, which should all link together (since 'b'
+        # cluster is full)
         num_c_links = 1000
         for i in range(num_c_links):
             filename = "c"+str(i)
-            self.make_hardlinkable_file(filename, testdata1)
+            self.make_hardlinkable_file(filename, testdata0)
         # Should link just the c's to each other
         hardlink.main()
 
