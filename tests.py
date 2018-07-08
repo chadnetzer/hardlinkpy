@@ -178,6 +178,25 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
 
+    def test_hardlink_multiple_dir_args(self):
+        sys.argv = ["hardlink.py", "--no-stats",
+                os.path.join(self.root, 'dir1'),
+                os.path.join(self.root, 'dir2'),
+                ]
+        hardlink.main()
+
+        # remove unused directories from content check dictionary
+        for pathname in self.file_contents.copy():
+            if (pathname.startswith('dir1') or pathname.startswith('dir2')):
+                continue
+            else:
+                del self.file_contents[pathname]
+
+        self.verify_file_contents()
+
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
+
     def test_hardlink_tree_filenames_equal(self):
         sys.argv = ["hardlink.py", "--no-stats", "--filenames-equal", self.root]
         hardlink.main()
