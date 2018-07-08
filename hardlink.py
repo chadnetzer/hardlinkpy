@@ -214,7 +214,10 @@ def hardlink_files(source_file_info, dest_file_info, options):
     return hardlink_succeeded
 
 
-def hardlink_identical_files(pathname, stat_info, options):
+# pathname is the full path to a file, filename is just the file name component
+# (ie. the basename) without the path.  The tree walking provides this, so we
+# don't have to extract it with os.basename()
+def hardlink_identical_files(pathname, filename, stat_info, options):
     """
     The purpose of this function is to hardlink files together if the files are
     the same.  To be considered the same they must be equal in the following
@@ -253,7 +256,6 @@ def hardlink_identical_files(pathname, stat_info, options):
         # We have file(s) that have the same hash as our current file.
         # Let's go through the list of files with the same hash and see if
         # we are already hardlinked to any of them.
-        filename = os.path.basename(pathname)
         for cached_file_info in file_hashes[file_hash]:
             gStats.inc_hash_list_iteration()
             cached_pathname, cached_stat_info = cached_file_info
@@ -706,7 +708,7 @@ def main():
                         max_nlinks = None
                     max_nlinks_per_dev[stat_info.st_dev] = max_nlinks
 
-                hardlink_identical_files(pathname, stat_info, options)
+                hardlink_identical_files(pathname, filename, stat_info, options)
 
     if options.printstats:
         gStats.print_stats(options)
