@@ -72,6 +72,21 @@ class BaseTests(unittest.TestCase):
         os.unlink(pathname)
         del self.file_contents[pathname]
 
+    def count_nlinks(self):
+        """Return a dictionary of the nlink count for each tracked file."""
+        nlink_counts = {}
+        for pathname in self.file_contents:
+            nlink_counts[pathname] = os.lstat(pathname).st_nlink
+        return nlink_counts
+
+    def find_nlinks(self, nlink):
+        """Return a dictionary of the nlink count for each tracked file."""
+        pathnames = []
+        for pathname in self.file_contents:
+            if os.lstat(pathname).st_nlink == nlink:
+                pathnames.append(pathname)
+        return pathnames
+
 
 class TestTester(BaseTests):
     def setUp(self):
