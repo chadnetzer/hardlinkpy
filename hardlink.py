@@ -495,6 +495,13 @@ including files becoming owned by another user.
     if options.max_file_size and options.max_file_size < options.min_file_size:
         parser.error("--max_size cannot be smaller than --min_size")
 
+    # If dry-run is specified, output a message early to indicate what is
+    # happening in case the program is set to zero verbosity and is taking a
+    # long time doing comparisons with no output.  It's helpful to know
+    # definitively that the program is in dry-run mode.
+    if options.dryrun:
+        print("--- This is a DRY RUN, actual file hard-linking is disabled ---")
+
     # Accept --timestamp-ignore for backwards compatibility
     if options.deprecated_timestamp_option_name:
         logging.warning("Enabling --ignore-timestamp. "
