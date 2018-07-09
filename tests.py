@@ -128,12 +128,16 @@ class TestHappy(BaseTests):
         self.make_hardlinkable_file("dir3/name1.noext", testdata1)
         self.make_hardlinkable_file("dir4/name1.ext", testdata1)
         self.make_hardlinkable_file("dir5/name1.ext", testdata2)
+        self.make_hardlinkable_file("dir6/name1.ext", testdata0)
+        self.make_hardlinkable_file("dir6/name2.ext", testdata0)
 
         now = time.time()
         other = now - 2
 
         for filename in ("dir1/name1.ext", "dir1/name2.ext", "dir1/name3.ext",
-                         "dir2/name1.ext", "dir3/name1.ext", "dir3/name1.noext"):
+                         "dir2/name1.ext", "dir3/name1.ext", "dir3/name1.noext",
+                         "dir5/name1.ext", "dir6/name1.ext", "dir6/name2.ext",
+                         ):
             os.utime(filename, (now, now))
 
         os.utime("dir4/name1.ext", (other, other))
@@ -163,6 +167,8 @@ class TestHappy(BaseTests):
         self.assertEqual(os.lstat("dir3/name1.ext").st_nlink, 1)
         self.assertEqual(os.lstat("dir3/name1.noext").st_nlink, 1)
         self.assertEqual(os.lstat("dir4/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir5/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir6/name1.ext").st_nlink, 1)
 
     def test_hardlink_tree(self):
         sys.argv = ["hardlink.py", "--no-stats", self.root]
@@ -174,6 +180,9 @@ class TestHappy(BaseTests):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
+        self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
+        self.assertEqual(os.lstat("dir4/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir5/name1.ext").st_nlink, 1)
 
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
@@ -209,6 +218,9 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
+        self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
+        self.assertEqual(os.lstat("dir6/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir6/name2.ext").st_nlink, 1)
 
     def test_hardlink_tree_filenames_equal_reverse_iteration(self):
         """Since os.listdir() can return items in arbitrary order, this test
@@ -236,6 +248,7 @@ class TestHappy(BaseTests):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
+        self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
 
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
@@ -251,6 +264,7 @@ class TestHappy(BaseTests):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
+        self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
 
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
 
@@ -265,6 +279,7 @@ class TestHappy(BaseTests):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
+        self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
 
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
@@ -285,10 +300,20 @@ class TestHappy(BaseTests):
         self.assertEqual(os.lstat("dir4/name1.ext").st_nlink, 1)
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/link"))
 
+        self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
+
+        sys.argv = ["hardlink.py", "--no-stats", "--min-size",
+                    str(len(testdata0) - 1), self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
+
     def test_hardlink_tree_maxsize(self):
         """Set a maximum size smaller than the test data, inhibiting linking"""
         sys.argv = ["hardlink.py", "--no-stats", "--max-size",
-                    str(len(testdata1) - 1), self.root]
+                    str(len(testdata0) - 1), self.root]
         hardlink.main()
 
         self.verify_file_contents()
@@ -301,6 +326,57 @@ class TestHappy(BaseTests):
         self.assertEqual(os.lstat("dir3/name1.noext").st_nlink, 1)
         self.assertEqual(os.lstat("dir4/name1.ext").st_nlink, 1)
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/link"))
+        self.assertEqual(os.lstat("dir6/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir6/name2.ext").st_nlink, 1)
+
+        self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
+
+        sys.argv = ["hardlink.py", "--no-stats", "--max-size",
+                    str(len(testdata1) - 1), self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
+
+    def test_hardlink_tree_minsize_maxsize(self):
+        """Test using both min and max size restrictions"""
+        sys.argv = ["hardlink.py", "--no-stats",
+                    "--min-size", str(len(testdata0) + 1),
+                    "--max-size", str(len(testdata1) - 1),
+                    self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(os.lstat("dir1/name1.ext").st_nlink, 2)  # Existing link
+        self.assertEqual(os.lstat("dir1/name2.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir1/name3.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir2/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir3/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir3/name1.noext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir4/name1.ext").st_nlink, 1)
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/link"))
+        self.assertEqual(os.lstat("dir6/name1.ext").st_nlink, 1)
+        self.assertEqual(os.lstat("dir6/name2.ext").st_nlink, 1)
+
+        self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
+
+        sys.argv = ["hardlink.py", "--no-stats",
+                    "--min-size", str(len(testdata0) - 1),
+                    "--max-size", str(len(testdata1) + 1),
+                    self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
+        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
+        self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
+        self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
+        self.assertEqual(os.lstat("dir6/name1.ext").st_nlink, 2)
+        self.assertEqual(os.lstat("dir6/name2.ext").st_nlink, 2)
 
     def test_hardlink_tree_match_extension(self):
         sys.argv = ["hardlink.py", "--no-stats", "--match", "*.ext", self.root]
@@ -311,6 +387,7 @@ class TestHappy(BaseTests):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
+        self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
 
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
@@ -326,6 +403,7 @@ class TestHappy(BaseTests):
 
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
+        self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
 
         # utime mismatch despite name match
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
@@ -342,6 +420,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
+        self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
 
     def test_hardlink_tree_content_only(self):
         sys.argv = ["hardlink.py", "--no-stats", "--content-only", self.root]
@@ -355,6 +434,9 @@ class TestHappy(BaseTests):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
         self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
+        self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
+        self.assertEqual(os.lstat("dir6/name1.ext").st_nlink, 2)
+        self.assertEqual(os.lstat("dir6/name2.ext").st_nlink, 2)
 
 
 @unittest.skip("Max nlinks tests are slow.  Skipping...")
