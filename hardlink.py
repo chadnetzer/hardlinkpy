@@ -643,6 +643,9 @@ VERSION = "0.06 alpha - 2018-07-04 (04-Jul-2018)"
 def main():
     global gStats, file_hashes, max_nlinks_per_dev
 
+    # 'logging' package forces at least Python 2.3
+    assert sys.version_info >= (2,3), ("%s requires at least Python 2.3" % sys.argv[0])
+
     logging.basicConfig(format='%(levelname)s:%(message)s')
 
     gStats = Statistics()
