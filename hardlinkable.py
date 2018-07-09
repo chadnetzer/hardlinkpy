@@ -1,7 +1,8 @@
 #!/usr/bin/python
 
-# hardlink - Goes through a directory structure and creates hardlinks for
-# files which are identical.
+# hardlinkable - Goes through a directory structure and reports files which are
+# identical and could be hard-linked together.  Optionally performs the
+# hardlinking.
 #
 # Copyright     2007 - 2018  Chad Netzer and contributors
 # Copyright (C) 2003 - 2018  John L. Villalovos, Hillsboro, Oregon
