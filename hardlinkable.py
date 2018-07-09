@@ -193,7 +193,7 @@ def hardlink_files(source_file_info, dest_file_info, options):
 # pathname is the full path to a file, filename is just the file name component
 # (ie. the basename) without the path.  The tree walking provides this, so we
 # don't have to extract it with os.basename()
-def hardlink_identical_files(pathname, filename, stat_info, options):
+def hardlink_identical_files(pathname, filename, stat_info, options, file_hashes):
     """
     The purpose of this function is to hardlink files together if the files are
     the same.  To be considered the same they must be equal in the following
@@ -604,6 +604,13 @@ def main():
 
     # Parse our argument list and get our list of directories
     options, directories = parse_command_line()
+
+    linkify(directories, options, file_hashes)
+
+
+def linkify(directories, options, file_hashes):
+    global gStats, max_nlinks_per_dev
+
     # Now go through all the directories that have been added.
     # NOTE: hardlink_identical_files() will add more directories to the
     #       directories list as it finds them.
@@ -657,10 +664,11 @@ def main():
                         max_nlinks = None
                     max_nlinks_per_dev[stat_info.st_dev] = max_nlinks
 
-                hardlink_identical_files(pathname, filename, stat_info, options)
+                hardlink_identical_files(pathname, filename, stat_info, options, file_hashes)
 
     if options.printstats:
         gStats.print_stats(options)
+
 
 if __name__ == '__main__':
     main()
