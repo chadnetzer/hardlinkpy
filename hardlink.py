@@ -155,18 +155,21 @@ def hardlink_files(source_file_info, dest_file_info, options):
         temp_name = destfile + ".$$$___cleanit___$$$"
         try:
             os.rename(destfile, temp_name)
-        except OSError as error:
+        except OSError:
+            error = sys.exc_info()[1]
             logging.error("Failed to rename: %s to %s\n%s" % (destfile, temp_name, error))
         else:
             # Now link the sourcefile to the destination file
             try:
                 os.link(sourcefile, destfile)
-            except Exception as error:
+            except Exception:
+                error = sys.exc_info()[1]
                 logging.error("Failed to hardlink: %s to %s\n%s" % (sourcefile, destfile, error))
                 # Try to recover
                 try:
                     os.rename(temp_name, destfile)
-                except Exception as error:
+                except Exception:
+                    error = sys.exc_info()[1]
                     logging.critical("Failed to rename temp filename %s back to %s\n%s" % (temp_name, destfile, error))
                     sys.exit(3)
             else:
@@ -175,7 +178,8 @@ def hardlink_files(source_file_info, dest_file_info, options):
                 # Delete the renamed version since we don't need it.
                 try:
                     os.unlink(temp_name)
-                except Exception as error:
+                except Exception:
+                    error = sys.exc_info()[1]
                     # Failing to remove the temp file could lead to endless
                     # attempts to link to it in the future.
                     logging.critical("Failed to remove temp filename: %s\n%s" % (temp_name, error))
@@ -186,7 +190,8 @@ def hardlink_files(source_file_info, dest_file_info, options):
                     try:
                         os.utime(destfile, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
                         os.chown(destfile, dest_stat_info.st_uid, dest_stat_info.st_gid)
-                    except Exception as error:
+                    except Exception:
+                        error = sys.exc_info()[1]
                         logging.warning("Failed to update file attributes for %s\n%s" % (sourcefile, error))
 
     if hardlink_succeeded or options.dryrun:
@@ -638,7 +643,13 @@ VERSION = "0.06 alpha - 2018-07-04 (04-Jul-2018)"
 def main():
     global gStats, file_hashes, max_nlinks_per_dev
 
-    logging.basicConfig(format='%(levelname)s:%(message)s')
+    # 'logging' package forces at least Python 2.3
+    assert sys.version_info >= (2,3), ("%s requires at least Python 2.3" % sys.argv[0])
+
+    if sys.version_info >= (2,4):
+        # logging.basicConfig in Python 2.3 accepted no args
+        # Remove user from logging output
+        logging.basicConfig(format='%(levelname)s:%(message)s')
 
     gStats = Statistics()
     file_hashes = {}
@@ -679,7 +690,8 @@ def main():
                 pathname = os.path.normpath(os.path.join(dirpath, filename))
                 try:
                     stat_info = os.lstat(pathname)
-                except OSError as error:
+                except OSError:
+                    error = sys.exc_info()[1]
                     logging.warning("Unable to get stat info for: %s\n%s" % (pathname, error))
                     continue
 

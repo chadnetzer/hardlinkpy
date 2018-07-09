@@ -53,8 +53,9 @@ class BaseTests(unittest.TestCase):
             if dirname:
                 try:
                     os.makedirs(dirname)
-                except OSError as exc:
-                    if exc.errno == errno.EEXIST and os.path.isdir(dirname):
+                except OSError:
+                    error = sys.exc_info()[1]
+                    if error.errno == errno.EEXIST and os.path.isdir(dirname):
                         pass
                     else:
                         raise
@@ -565,7 +566,8 @@ class TestErrorLogging(BaseTests):
         os.chmod(self.root, stat.S_IRUSR | stat.S_IXUSR)
 
         sys.argv = ["hardlink.py", "--no-stats", self.root]
-        # This should log an error message when the rename() fails
+        # This should log an error message when the rename() fails (check
+        # buffering option to unittests is set to False)
         hardlink.main()
 
         self.assertEqual(os.lstat("a").st_nlink, 1)
@@ -698,4 +700,8 @@ class TestDifferentDevices(BaseTests):
 
 
 if __name__ == '__main__':
+    # Although the program currently runs on older Python 2, the test suite
+    # doesn't work that far back.
+    assert sys.version_info >= (2,7), "Running tests requires at least Python 2.7+"
+
     unittest.main(buffer=True)
