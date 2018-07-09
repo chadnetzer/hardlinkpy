@@ -579,7 +579,7 @@ gStats = None
 file_hashes = None
 max_nlinks_per_dev = None
 
-VERSION = "0.06 alpha - 2018-07-04 (04-Jul-2018)"
+VERSION = "0.8 alpha - 2018-07-09 (09-Jul-2018)"
 
 
 def main():
