@@ -507,8 +507,8 @@ including files becoming owned by another user.
         # that is intentionally meant to be scanned.  Since it seems rare, we
         # intentionally disallow it as protection against misinterpretation of
         # the old style verbose option argument.  Eventually, when enough time
-        # has passed to assume that hardlinkpy users have switched over to the
-        # new verbosity argument, we can remove this safeguard.
+        # has passed to assume that hardlinkable users have switched over to
+        # the new verbosity argument, we can remove this safeguard.
 
         # Iterate over a reversed argument list, looking for options pairs of
         # type ['-v', '<num>']
