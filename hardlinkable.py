@@ -406,14 +406,14 @@ def parse_command_line():
     usage = "usage: %prog [options] directory [ directory ... ]"
     version = "%prog: " + VERSION
     description = """\
-This is a tool to hard-link together identical files in order to save space.
-The tool scans the provided directories looking for identical files.  Linked
-files can save space, but a change to one hardlinked file changes them all."""
+This is a tool to scan directories and report identical files that could be
+hard-linked together in order to save space.  Linked files can save space, but
+a change to one hardlinked file changes them all."""
 
     parser = OptionParser(usage=usage, version=version, description=description)
-    parser.add_option("-n", "--dry-run", dest="dryrun",
-                      help="Do NOT actually hardlink files",
-                      action="store_true", default=False,)
+    parser.add_option("--enable-linking", dest="dryrun",
+                      help="Perform the actual hardlinking",
+                      action="store_false", default=True,)
 
     parser.add_option("-p", "--print-previous", dest="printprevious",
                       help="Print previously created hardlinks",
