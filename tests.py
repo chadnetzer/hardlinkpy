@@ -700,4 +700,8 @@ class TestDifferentDevices(BaseTests):
 
 
 if __name__ == '__main__':
+    # Although the program currently runs on older Python 2, the test suite
+    # doesn't work that far back.
+    assert sys.version_info >= (2,7), "Running tests requires at least Python 2.7+"
+
     unittest.main(buffer=True)
