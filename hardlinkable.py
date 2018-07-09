@@ -33,6 +33,16 @@ import time
 from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
 
 
+# global declarations
+OLD_VERBOSE_OPTION_ERROR = True
+
+VERSION = "0.8 alpha - 2018-07-09 (09-Jul-2018)"
+
+# Compile up our regexes ahead of time
+MIRROR_PL_REGEX = re.compile(r'^\.in\.')
+RSYNC_TEMP_REGEX = re.compile((r'^\..*\.\?{6,6}$'))
+
+
 def hash_value(stat_info, options):
     """Return a value appropriate for a python dict or shelve key, which can
     differentiate files which cannot be hardlinked."""
@@ -571,20 +581,12 @@ def found_matched_filename(name, matches):
     return False
 
 
-# Start of global declarations
-OLD_VERBOSE_OPTION_ERROR = True
 
-gStats = None
 
-file_hashes = None
-max_nlinks_per_dev = None
 
-VERSION = "0.8 alpha - 2018-07-09 (09-Jul-2018)"
 
 
 def main():
-    global gStats, file_hashes, max_nlinks_per_dev
-
     # 'logging' package forces at least Python 2.3
     assert sys.version_info >= (2,3), ("%s requires at least Python 2.3" % sys.argv[0])
 
@@ -592,15 +594,6 @@ def main():
         # logging.basicConfig in Python 2.3 accepted no args
         # Remove user from logging output
         logging.basicConfig(format='%(levelname)s:%(message)s')
-
-    gStats = Statistics()
-    file_hashes = {}
-    max_nlinks_per_dev = {}
-
-    # Compile up our regexes ahead of time
-    global MIRROR_PL_REGEX, RSYNC_TEMP_REGEX
-    MIRROR_PL_REGEX = re.compile(r'^\.in\.')
-    RSYNC_TEMP_REGEX = re.compile((r'^\..*\.\?{6,6}$'))
 
     # Parse our argument list and get our list of directories
     options, directories = parse_command_line()
