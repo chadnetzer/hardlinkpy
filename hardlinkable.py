@@ -3,7 +3,8 @@
 # hardlink - Goes through a directory structure and creates hardlinks for
 # files which are identical.
 #
-# Copyright (C) 2003 - 2010  John L. Villalovos, Hillsboro, Oregon
+# Copyright     2007 - 2018  Chad Netzer and contributors
+# Copyright (C) 2003 - 2018  John L. Villalovos, Hillsboro, Oregon
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -383,13 +384,13 @@ def humanize_number(number):
 
 def printversion(self):
     print("hardlink.py, Version %s" % VERSION)
-    print("Copyright (C) 2003 - 2010 John L. Villalovos.")
-    print("email: software@sodarock.com")
-    print("web: http://www.sodarock.com/")
+    print("Copyright 2007 - 2018  Chad Netzer and contributors")
+    print("Copyright 2003 - 2018  John L. Villalovos.")
     print("""
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+Foundation; either version 2 of the License, or (at your option) any later
+version.
 
 This program is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
