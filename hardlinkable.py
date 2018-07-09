@@ -136,9 +136,9 @@ hard-linked together in order to save space.  Linked files can save space, but
 a change to one hardlinked file changes them all."""
 
     parser = OptionParser(usage=usage, version=version, description=description)
-    parser.add_option("--enable-linking", dest="dryrun",
+    parser.add_option("--enable-linking", dest="linking_enabled",
                       help="Perform the actual hardlinking",
-                      action="store_false", default=True,)
+                      action="store_true", default=False,)
 
     parser.add_option("-p", "--print-previous", dest="printprevious",
                       help="Print previously created hardlinks",
@@ -223,12 +223,12 @@ including files becoming owned by another user.
     if options.max_file_size and options.max_file_size < options.min_file_size:
         parser.error("--max_size cannot be smaller than --min_size")
 
-    # If dry-run is specified, output a message early to indicate what is
+    # If linking is enabled, output a message early to indicate what is
     # happening in case the program is set to zero verbosity and is taking a
     # long time doing comparisons with no output.  It's helpful to know
-    # definitively that the program is in dry-run mode.
-    if options.dryrun:
-        print("--- This is a DRY RUN, actual file hard-linking is disabled ---")
+    # definitively that the program is set to modify the filesystem.
+    if options.linking_enabled:
+        print("----- Hardlinking enabled.  The filesystem will be modified -----")
 
     # Accept --timestamp-ignore for backwards compatibility
     if options.deprecated_timestamp_option_name:
@@ -394,8 +394,8 @@ class Statistics:
                                                               humanize_number(size * len(file_list))))
             print("")
         if self.hardlinkstats:
-            if options.dryrun:
-                print("Statistics reflect what would have happened if not a dry run")
+            if options.linking_enabled:
+                print("Statistics reflect what would have happened if linking were enabled")
             print("Files Hardlinked this run:")
             for (source, dest) in self.hardlinkstats:
                 print("Hardlinked: %s" % source)
@@ -560,7 +560,7 @@ class Hardlinkable:
                     gStats.inc_hash_list_iteration()
                     cached_pathname, cached_stat_info = cached_file_info
                     if self._are_files_hardlinkable(file_info, cached_file_info):
-                        if not options.dryrun:
+                        if options.linking_enabled:
                             # DO NOT call hardlink_files() unless link creation
                             # is selected. It unconditionally performs links.
                             hardlink_files(cached_file_info, file_info)
@@ -656,9 +656,9 @@ class Hardlinkable:
         # update our stats (Note: dest_stat_info is from pre-link())
         gStats.did_hardlink(sourcefile, destfile, dest_stat_info)
         if options.verbosity > 0:
-            if options.dryrun:
-                preamble1 = "(Dry run) NOT "
-                preamble2 = "              "
+            if not options.linking_enabled:
+                preamble1 = "Can be "
+                preamble2 = "       "
             else:
                 preamble1 = ""
                 preamble2 = ""
