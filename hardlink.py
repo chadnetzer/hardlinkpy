@@ -646,7 +646,10 @@ def main():
     # 'logging' package forces at least Python 2.3
     assert sys.version_info >= (2,3), ("%s requires at least Python 2.3" % sys.argv[0])
 
-    logging.basicConfig(format='%(levelname)s:%(message)s')
+    if sys.version_info >= (2,4):
+        # logging.basicConfig in Python 2.3 accepted no args
+        # Remove user from logging output
+        logging.basicConfig(format='%(levelname)s:%(message)s')
 
     gStats = Statistics()
     file_hashes = {}
