@@ -490,6 +490,11 @@ class Hardlinkable:
                             max_nlinks = None
                         self.max_nlinks_per_dev[stat_info.st_dev] = max_nlinks
 
+                    # Bump statistics count of regular files found.
+                    gStats.found_regular_file()
+                    if options.verbosity > 2:
+                        print("File: %s" % pathname)
+
                     self._hardlink_identical_files(pathname, filename, stat_info)
 
         if options.printstats:
@@ -531,10 +536,6 @@ class Hardlinkable:
 
         # Create the hash for the file.
         file_hash = hash_value(stat_info, options)
-        # Bump statistics count of regular files found.
-        gStats.found_regular_file()
-        if options.verbosity > 2:
-            print("File: %s" % pathname)
         file_info = (pathname, stat_info)
         if file_hash in file_hashes:
             gStats.found_hash()
