@@ -186,7 +186,8 @@ def hardlink_files(source_file_info, dest_file_info, options):
                     sys.exit(3)
 
                 # Use the destination file attributes if it's most recently modified
-                if dest_stat_info.st_mtime > source_stat_info.st_mtime:
+                if ((options.notimestamp or options.contentonly) and
+                    dest_stat_info.st_mtime > source_stat_info.st_mtime):
                     try:
                         os.utime(destfile, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
                         os.chown(destfile, dest_stat_info.st_uid, dest_stat_info.st_gid)
