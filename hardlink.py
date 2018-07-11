@@ -147,8 +147,6 @@ def hardlink_files(source_file_info, dest_file_info, options):
     sourcefile, source_stat_info = source_file_info
     destfile, dest_stat_info = dest_file_info
 
-    assert source_stat_info.st_nlink >= dest_stat_info.st_nlink
-
     hardlink_succeeded = False
     if not options.dryrun:
         # rename the destination file to save it
@@ -272,24 +270,11 @@ def hardlink_identical_files(pathname, filename, stat_info, options):
             # We did not find this file as hardlinked to any other file
             # yet.  So now lets see if our file should be hardlinked to any
             # of the other files with the same hash.
-            for i, cached_file_info in enumerate(file_hashes[file_hash]):
+            for cached_file_info in file_hashes[file_hash]:
                 gStats.inc_hash_list_iteration()
                 cached_pathname, cached_stat_info = cached_file_info
                 if are_files_hardlinkable(file_info, cached_file_info, options):
-                    # Always use the file with the most hardlinks as the source
-                    if stat_info.st_nlink > cached_stat_info.st_nlink:
-                        source_file_info, dest_file_info = file_info, cached_file_info
-                    else:
-                        source_file_info, dest_file_info = cached_file_info, file_info
-
-                    if hardlink_files(source_file_info, dest_file_info, options):
-                        updated_stat_info = os.lstat(cached_pathname)
-
-                        # A cached file's st_nlink should only ever increase
-                        assert updated_stat_info.st_nlink > file_hashes[file_hash][i][1].st_nlink
-
-                        # Update file_hashes stat_info data to be current
-                        file_hashes[file_hash][i] = (cached_pathname, updated_stat_info)
+                    hardlink_files(cached_file_info, file_info, options)
                     break
             else:
                 # The file should NOT be hardlinked to any of the other
