@@ -346,16 +346,20 @@ class Statistics:
     def did_comparison(self):
         self.comparisons = self.comparisons + 1
 
-    def found_hardlink(self, sourcepath, destpath, stat_info):
+    def found_hardlink(self, source_namepair, dest_namepair, stat_info):
+        assert len(source_namepair) == 2
+        assert len(dest_namepair) == 2
         filesize = stat_info.st_size
         self.hardlinked_previously = self.hardlinked_previously + 1
         self.bytes_saved_previously = self.bytes_saved_previously + filesize
-        if sourcepath not in self.previouslyhardlinked:
-            self.previouslyhardlinked[sourcepath] = (filesize, [destpath])
+        if source_namepair not in self.previouslyhardlinked:
+            self.previouslyhardlinked[source_namepair] = (filesize, [dest_namepair])
         else:
-            self.previouslyhardlinked[sourcepath][1].append(destpath)
+            self.previouslyhardlinked[source_namepair][1].append(dest_namepair)
 
-    def did_hardlink(self, sourcepath, destpath, dest_stat_info):
+    def did_hardlink(self, source_namepair, dest_namepair, dest_stat_info):
+        assert len(source_namepair) == 2
+        assert len(dest_namepair) == 2
         filesize = dest_stat_info.st_size
         self.hardlinked_thisrun = self.hardlinked_thisrun + 1
         if dest_stat_info.st_nlink == 1:
@@ -363,7 +367,7 @@ class Statistics:
             # removed.
             self.bytes_saved_thisrun = self.bytes_saved_thisrun + filesize
             self.nlinks_to_zero_thisrun = self.nlinks_to_zero_thisrun + 1
-        self.hardlinkstats.append((sourcepath, destpath))
+        self.hardlinkstats.append((source_namepair, dest_namepair))
 
     def found_hash(self):
         self.num_hash_hits += 1
@@ -389,8 +393,9 @@ class Statistics:
             print("Files Previously Hardlinked:")
             for key in keys:
                 size, file_list = self.previouslyhardlinked[key]
-                print("Hardlinked together: %s" % key)
-                for pathname in file_list:
+                print("Hardlinked together: %s" % os.path.join(*key))
+                for namepair in file_list:
+                    pathname = os.path.join(*namepair)
                     print("                   : %s" % pathname)
                 print("Size per file: %s  Total saved: %s" % (humanize_number(size),
                                                               humanize_number(size * len(file_list))))
@@ -400,8 +405,8 @@ class Statistics:
                 print("Statistics reflect what would have happened if linking were enabled")
             print("Files Hardlinked this run:")
             for (source, dest) in self.hardlinkstats:
-                print("Hardlinked: %s" % source)
-                print("        to: %s" % dest)
+                print("Hardlinked: %s" % os.path.join(*source))
+                print("        to: %s" % os.path.join(*dest))
             print("")
         print("Directories           : %s" % self.dircount)
         print("Regular files         : %s" % self.regularfiles)
@@ -557,7 +562,8 @@ class Hardlinkable:
                         if options.verbosity > 1:
                             print("Existing link: %s" % cached_pathname)
                             print("        with : %s" % pathname)
-                        gStats.found_hardlink(cached_pathname, pathname,
+                        gStats.found_hardlink((cached_dirname, cached_filename),
+                                              (dirname, pathname),
                                               cached_stat_info)
                         break
             else:
@@ -664,7 +670,9 @@ class Hardlinkable:
         gStats = self.stats
 
         # update our stats (Note: dest_stat_info is from pre-link())
-        gStats.did_hardlink(source_pathname, dest_pathname, dest_stat_info)
+        gStats.did_hardlink((source_dirname, source_filename),
+                            (dest_dirname, dest_filename),
+                             dest_stat_info)
         if options.verbosity > 0:
             if not options.linking_enabled:
                 preamble1 = "Can be "
