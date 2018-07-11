@@ -67,8 +67,10 @@ def is_already_hardlinked(st1,     # first file's status
 
 # Hardlink two files together
 def hardlink_files(source_file_info, dest_file_info):
-    sourcefile, source_stat_info = source_file_info
-    destfile, dest_stat_info = dest_file_info
+    source_dirname, source_filename, source_stat_info = source_file_info
+    dest_dirname, dest_filename, dest_stat_info = dest_file_info
+    sourcefile = os.path.join(source_dirname, source_filename)
+    destfile = os.path.join(dest_dirname, dest_filename)
 
     hardlink_succeeded = False
     # rename the destination file to save it
@@ -495,16 +497,18 @@ class Hardlinkable:
                     if options.verbosity > 2:
                         print("File: %s" % pathname)
 
-                    self._hardlink_identical_files(pathname, filename, stat_info)
+                    # Extract the normalized path directory name
+                    dirname = os.path.dirname(pathname)
+                    self._hardlink_identical_files(dirname, filename, stat_info)
 
         if options.printstats:
             gStats.print_stats(options)
 
 
-    # pathname is the full path to a file, filename is just the file name
+    # dirname is the directory component and filename is just the file name
     # component (ie. the basename) without the path.  The tree walking provides
-    # this, so we don't have to extract it with os.basename()
-    def _hardlink_identical_files(self, pathname, filename, stat_info):
+    # this, so we don't have to extract it with os.path.split()
+    def _hardlink_identical_files(self, dirname, filename, stat_info):
         """
         The purpose of this function is to hardlink files together if the files are
         the same.  To be considered the same they must be equal in the following
@@ -534,9 +538,10 @@ class Hardlinkable:
         file_hashes = self.file_hashes
         gStats = self.stats
 
+        file_info = (dirname, filename, stat_info)
+
         # Create the hash for the file.
         file_hash = hash_value(stat_info, options)
-        file_info = (pathname, stat_info)
         if file_hash in file_hashes:
             gStats.found_hash()
             # We have file(s) that have the same hash as our current file.
@@ -544,9 +549,11 @@ class Hardlinkable:
             # we are already hardlinked to any of them.
             for cached_file_info in file_hashes[file_hash]:
                 gStats.inc_hash_list_iteration()
-                cached_pathname, cached_stat_info = cached_file_info
+                cached_dirname, cached_filename, cached_stat_info = cached_file_info
                 if is_already_hardlinked(stat_info, cached_stat_info):
-                    if not options.samename or (filename == os.path.basename(cached_pathname)):
+                    if not options.samename or filename == cached_filename:
+                        cached_pathname = os.path.join(cached_dirname, cached_filename)
+                        pathname = os.path.join(dirname, filename)
                         if options.verbosity > 1:
                             print("Existing link: %s" % cached_pathname)
                             print("        with : %s" % pathname)
@@ -559,7 +566,6 @@ class Hardlinkable:
                 # of the other files with the same hash.
                 for cached_file_info in file_hashes[file_hash]:
                     gStats.inc_hash_list_iteration()
-                    cached_pathname, cached_stat_info = cached_file_info
                     if self._are_files_hardlinkable(file_info, cached_file_info):
                         if options.linking_enabled:
                             # DO NOT call hardlink_files() unless link creation
@@ -632,30 +638,33 @@ class Hardlinkable:
 
 
     # Determines if two files should be hard linked together.
-    def _are_files_hardlinkable(self, filestat1_pair, filestat2_pair):
+    def _are_files_hardlinkable(self, file_info1, file_info2):
         options = self.options
         gStats = self.stats
 
-        pathname1,stat1 = filestat1_pair
-        pathname2,stat2 = filestat2_pair
-        if options.samename and os.path.basename(pathname1) != os.path.basename(pathname2):
+        dirname1,filename1,stat1 = file_info1
+        dirname2,filename2,stat2 = file_info2
+        if options.samename and filename1 != filename2:
             result = False
         elif not self._eligible_for_hardlink(stat1, stat2):
             result = False
         else:
-            result = self._are_file_contents_equal(pathname1, pathname2)
+            result = self._are_file_contents_equal(os.path.join(dirname1,filename1),
+                                                   os.path.join(dirname2,filename2))
         return result
 
 
     def _did_hardlink(self, source_file_info, dest_file_info):
-        sourcefile, source_stat_info = source_file_info
-        destfile, dest_stat_info = dest_file_info
+        source_dirname, source_filename, source_stat_info = source_file_info
+        dest_dirname, dest_filename, dest_stat_info = dest_file_info
+        source_pathname = os.path.join(source_dirname, source_filename)
+        dest_pathname = os.path.join(dest_dirname, dest_filename)
 
         options = self.options
         gStats = self.stats
 
         # update our stats (Note: dest_stat_info is from pre-link())
-        gStats.did_hardlink(sourcefile, destfile, dest_stat_info)
+        gStats.did_hardlink(source_pathname, dest_pathname, dest_stat_info)
         if options.verbosity > 0:
             if not options.linking_enabled:
                 preamble1 = "Can be "
@@ -664,12 +673,12 @@ class Hardlinkable:
                 preamble1 = ""
                 preamble2 = ""
 
-            print("%sLinked: %s" % (preamble1, sourcefile))
+            print("%sLinked: %s" % (preamble1, source_pathname))
             if dest_stat_info.st_nlink == 1:
-                print("%s    to: %s, saved %s" % (preamble2, destfile,
+                print("%s    to: %s, saved %s" % (preamble2, dest_pathname,
                                                   humanize_number(dest_stat_info.st_size)))
             else:
-                print("%s    to: %s" % (preamble2, destfile))
+                print("%s    to: %s" % (preamble2, dest_pathname))
 
 
 def main():
