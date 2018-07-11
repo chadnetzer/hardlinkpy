@@ -33,6 +33,13 @@ import time
 from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
 
 
+# Python 3 moved intern() to sys module
+try:
+    intern
+except NameError:
+    intern = sys.intern
+
+
 # global declarations
 OLD_VERBOSE_OPTION_ERROR = True
 
@@ -504,6 +511,11 @@ class Hardlinkable:
 
                     # Extract the normalized path directory name
                     dirname = os.path.dirname(pathname)
+
+                    # Try to save space on redundant dirname and filename
+                    # storage by interning
+                    dirname = intern(dirname)
+                    filename = intern(filename)
                     self._hardlink_identical_files(dirname, filename, stat_info)
 
         if options.printstats:
