@@ -1,0 +1,42 @@
+This program is built on and evolved from hardlink.py (or hardlinkpy), which
+was originally written by John L. Villalovos (sodarock), and developed further
+by Antti Kaihola, Carl Henrik Lunde, and others.
+
+=========================================================================
+ hardlink.py – hardlink together identical files in order to save space.
+=========================================================================
+
+John L. Villalovos (sodarock) first wrote the code in C++ and then
+decided to port it to Python.  It was later forked and copied from
+Google code to GitHub by Antti Kaihola, and some modifications and
+improvements were made there.
+
+Performance is orders of magnitude faster than hardlink.c due to a
+more efficient algorithm.  Plus readability is much better too.
+
+ ------------------------------------------------------------------------
+ John Villalovos
+ email: john@sodarock.com
+ http://www.sodarock.com/
+
+ Inspiration for this program came from the hardlink.c code. I liked what it
+ did but did not like the code itself, to me it was very unmaintainable.  So I
+ rewrote in C++ and then I rewrote it in python.  In reality this code is
+ nothing like the original hardlink.c, since I do things quite differently.
+ Even though this code is written in python the performance of the python
+ version is much faster than the hardlink.c code, in my limited testing.  This
+ is mainly due to use of different algorithms.
+
+ Original inspirational hardlink.c code was written by:  Jakub Jelinek
+ <jakub@redhat.com>
+
+
+Survey of other similar programs (Chad Netzer)
+----------------------------------------------
+I have found the following variants of hardlink.py, as well as other attempts
+at writing code for consolidating equivalent files via hard-linking:
+
+https://github.com/akaihola/hardlinkpy
+https://github.com/JohnVillalovos/hardlinkpy
+https://github.com/smblott-github/py-hardlink
+https://github.com/d0d63/hardlinkify

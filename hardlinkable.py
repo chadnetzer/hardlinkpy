@@ -1,9 +1,11 @@
 #!/usr/bin/python
 
-# hardlink - Goes through a directory structure and creates hardlinks for
-# files which are identical.
+# hardlinkable - Goes through a directory structure and reports files which are
+# identical and could be hard-linked together.  Optionally performs the
+# hardlinking.
 #
-# Copyright (C) 2003 - 2010  John L. Villalovos, Hillsboro, Oregon
+# Copyright     2007 - 2018  Chad Netzer and contributors
+# Copyright (C) 2003 - 2018  John L. Villalovos, Hillsboro, Oregon
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -18,32 +20,6 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc., 59
 # Temple Place, Suite 330, Boston, MA  02111-1307, USA.
-#
-#
-# ------------------------------------------------------------------------
-# John Villalovos
-# email: john@sodarock.com
-# http://www.sodarock.com/
-#
-# Inspiration for this program came from the hardlink.c code. I liked what it
-# did but did not like the code itself, to me it was very unmaintainable.  So I
-# rewrote in C++ and then I rewrote it in python.  In reality this code is
-# nothing like the original hardlink.c, since I do things quite differently.
-# Even though this code is written in python the performance of the python
-# version is much faster than the hardlink.c code, in my limited testing.  This
-# is mainly due to use of different algorithms.
-#
-# Original inspirational hardlink.c code was written by:  Jakub Jelinek
-# <jakub@redhat.com>
-#
-# ------------------------------------------------------------------------
-#
-# TODO:
-#   *   Thinking it might make sense to walk the entire tree first and collect
-#       up all the file information before starting to do comparisons.  Thought
-#       here is we could find all the files which are hardlinked to each other
-#       and then do a comparison.  If they are identical then hardlink
-#       everything at once.
 
 import filecmp
 import fnmatch
@@ -407,38 +383,18 @@ def humanize_number(number):
     return ("%d bytes" % number)
 
 
-def printversion(self):
-    print("hardlink.py, Version %s" % VERSION)
-    print("Copyright (C) 2003 - 2010 John L. Villalovos.")
-    print("email: software@sodarock.com")
-    print("web: http://www.sodarock.com/")
-    print("""
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
-
-This program is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE.  See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc., 59 Temple
-Place, Suite 330, Boston, MA  02111-1307, USA.
-""")
-
-
 def parse_command_line():
     usage = "usage: %prog [options] directory [ directory ... ]"
     version = "%prog: " + VERSION
     description = """\
-This is a tool to hard-link together identical files in order to save space.
-The tool scans the provided directories looking for identical files.  Linked
-files can save space, but a change to one hardlinked file changes them all."""
+This is a tool to scan directories and report identical files that could be
+hard-linked together in order to save space.  Linked files can save space, but
+a change to one hardlinked file changes them all."""
 
     parser = OptionParser(usage=usage, version=version, description=description)
-    parser.add_option("-n", "--dry-run", dest="dryrun",
-                      help="Do NOT actually hardlink files",
-                      action="store_true", default=False,)
+    parser.add_option("--enable-linking", dest="dryrun",
+                      help="Perform the actual hardlinking",
+                      action="store_false", default=True,)
 
     parser.add_option("-p", "--print-previous", dest="printprevious",
                       help="Print previously created hardlinks",
@@ -551,8 +507,8 @@ including files becoming owned by another user.
         # that is intentionally meant to be scanned.  Since it seems rare, we
         # intentionally disallow it as protection against misinterpretation of
         # the old style verbose option argument.  Eventually, when enough time
-        # has passed to assume that hardlinkpy users have switched over to the
-        # new verbosity argument, we can remove this safeguard.
+        # has passed to assume that hardlinkable users have switched over to
+        # the new verbosity argument, we can remove this safeguard.
 
         # Iterate over a reversed argument list, looking for options pairs of
         # type ['-v', '<num>']
