@@ -69,52 +69,52 @@ def is_already_hardlinked(st1,     # first file's status
 def hardlink_files(source_file_info, dest_file_info):
     source_dirname, source_filename, source_stat_info = source_file_info
     dest_dirname, dest_filename, dest_stat_info = dest_file_info
-    sourcefile = os.path.join(source_dirname, source_filename)
-    destfile = os.path.join(dest_dirname, dest_filename)
+    source_pathname = os.path.join(source_dirname, source_filename)
+    dest_pathname = os.path.join(dest_dirname, dest_filename)
 
     hardlink_succeeded = False
     # rename the destination file to save it
-    temp_name = destfile + ".$$$___cleanit___$$$"
+    temp_pathname = dest_pathname + ".$$$___cleanit___$$$"
     try:
-        os.rename(destfile, temp_name)
+        os.rename(dest_pathname, temp_pathname)
     except OSError:
         error = sys.exc_info()[1]
-        logging.error("Failed to rename: %s to %s\n%s" % (destfile, temp_name, error))
+        logging.error("Failed to rename: %s to %s\n%s" % (dest_pathname, temp_pathname, error))
     else:
         # Now link the sourcefile to the destination file
         try:
-            os.link(sourcefile, destfile)
+            os.link(source_pathname, dest_pathname)
         except Exception:
             error = sys.exc_info()[1]
-            logging.error("Failed to hardlink: %s to %s\n%s" % (sourcefile, destfile, error))
+            logging.error("Failed to hardlink: %s to %s\n%s" % (source_pathname, dest_pathname, error))
             # Try to recover
             try:
-                os.rename(temp_name, destfile)
+                os.rename(temp_pathname, dest_pathname)
             except Exception:
                 error = sys.exc_info()[1]
-                logging.critical("Failed to rename temp filename %s back to %s\n%s" % (temp_name, destfile, error))
+                logging.critical("Failed to rename temp filename %s back to %s\n%s" % (temp_pathname, dest_pathname, error))
                 sys.exit(3)
         else:
             hardlink_succeeded = True
 
             # Delete the renamed version since we don't need it.
             try:
-                os.unlink(temp_name)
+                os.unlink(temp_pathname)
             except Exception:
                 error = sys.exc_info()[1]
                 # Failing to remove the temp file could lead to endless
                 # attempts to link to it in the future.
-                logging.critical("Failed to remove temp filename: %s\n%s" % (temp_name, error))
+                logging.critical("Failed to remove temp filename: %s\n%s" % (temp_pathname, error))
                 sys.exit(3)
 
             # Use the destination file attributes if it's most recently modified
             if dest_stat_info.st_mtime > source_stat_info.st_mtime:
                 try:
-                    os.utime(destfile, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
-                    os.chown(destfile, dest_stat_info.st_uid, dest_stat_info.st_gid)
+                    os.utime(dest_pathname, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
+                    os.chown(dest_pathname, dest_stat_info.st_uid, dest_stat_info.st_gid)
                 except Exception:
                     error = sys.exc_info()[1]
-                    logging.warning("Failed to update file attributes for %s\n%s" % (sourcefile, error))
+                    logging.warning("Failed to update file attributes for %s\n%s" % (source_pathname, error))
 
     return hardlink_succeeded
 
@@ -346,16 +346,16 @@ class Statistics:
     def did_comparison(self):
         self.comparisons = self.comparisons + 1
 
-    def found_hardlink(self, sourcefile, destfile, stat_info):
+    def found_hardlink(self, sourcepath, destpath, stat_info):
         filesize = stat_info.st_size
         self.hardlinked_previously = self.hardlinked_previously + 1
         self.bytes_saved_previously = self.bytes_saved_previously + filesize
-        if sourcefile not in self.previouslyhardlinked:
-            self.previouslyhardlinked[sourcefile] = (filesize, [destfile])
+        if sourcepath not in self.previouslyhardlinked:
+            self.previouslyhardlinked[sourcepath] = (filesize, [destpath])
         else:
-            self.previouslyhardlinked[sourcefile][1].append(destfile)
+            self.previouslyhardlinked[sourcepath][1].append(destpath)
 
-    def did_hardlink(self, sourcefile, destfile, dest_stat_info):
+    def did_hardlink(self, sourcepath, destpath, dest_stat_info):
         filesize = dest_stat_info.st_size
         self.hardlinked_thisrun = self.hardlinked_thisrun + 1
         if dest_stat_info.st_nlink == 1:
@@ -363,7 +363,7 @@ class Statistics:
             # removed.
             self.bytes_saved_thisrun = self.bytes_saved_thisrun + filesize
             self.nlinks_to_zero_thisrun = self.nlinks_to_zero_thisrun + 1
-        self.hardlinkstats.append((sourcefile, destfile))
+        self.hardlinkstats.append((sourcepath, destpath))
 
     def found_hash(self):
         self.num_hash_hits += 1
