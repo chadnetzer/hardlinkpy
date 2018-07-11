@@ -699,6 +699,83 @@ class TestDifferentDevices(BaseTests):
         f4.close()
 
 
+class TestNLinkOrderBug(BaseTests):
+    """A proposed solution to the 'clustering' issue (where an inode with a
+    high number of links has each individual link deleted and recreated) was to
+    order the link() so that the destination always has the lowest number of
+    links.  However, this means that filenames that have already been
+    processed, can have their inodes orphaned, since we only visit each path
+    once.
+    """
+    def setUp(self):
+        self.setup_tempdir()
+
+    def test_missed_link_opportunity(self):
+        # Create 3 clusters
+        self.make_hardlinkable_file("a", testdata0)
+        self.make_linked_file("a", "b")
+        self.make_hardlinkable_file("m", testdata0)
+        self.make_linked_file("m", "n")
+        self.make_linked_file("m", "o")
+        self.make_hardlinkable_file("z", testdata0)
+        self.make_linked_file("z", "y")
+        self.make_linked_file("z", "x")
+
+        self.assertEqual(os.lstat('a').st_nlink, 2)
+        self.assertEqual(os.lstat('b').st_nlink, 2)
+        self.assertEqual(os.lstat('m').st_nlink, 3)
+        self.assertEqual(os.lstat('n').st_nlink, 3)
+        self.assertEqual(os.lstat('o').st_nlink, 3)
+        self.assertEqual(os.lstat('x').st_nlink, 3)
+        self.assertEqual(os.lstat('y').st_nlink, 3)
+        self.assertEqual(os.lstat('z').st_nlink, 3)
+
+        sys.argv = ["hardlink.py", "--no-stats", "--content-only", self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        # The algorithm should be able to link all these files together
+        # However, if the walk proceeds alphabetically, and the link() source
+        # is always the higher than the destination nlink, the 'a' or 'b' file
+        # can get orphaned, because it isn't re-scanned.
+        self.assertEqual(os.lstat('a').st_nlink, 8)
+
+    def test_missed_link_opportunity_reverse_order(self):
+        """Same idea as the other test, but with the initial links set to
+        exhibit the problem if the directory entries are traversed in reverse
+        alphabetical order."""
+        # Create 3 clusters
+        self.make_hardlinkable_file("a", testdata0)
+        self.make_linked_file("a", "b")
+        self.make_linked_file("a", "c")
+        self.make_hardlinkable_file("m", testdata0)
+        self.make_linked_file("m", "n")
+        self.make_linked_file("m", "o")
+        self.make_hardlinkable_file("z", testdata0)
+        self.make_linked_file("z", "y")
+
+        self.assertEqual(os.lstat('a').st_nlink, 3)
+        self.assertEqual(os.lstat('b').st_nlink, 3)
+        self.assertEqual(os.lstat('c').st_nlink, 3)
+        self.assertEqual(os.lstat('m').st_nlink, 3)
+        self.assertEqual(os.lstat('n').st_nlink, 3)
+        self.assertEqual(os.lstat('o').st_nlink, 3)
+        self.assertEqual(os.lstat('y').st_nlink, 2)
+        self.assertEqual(os.lstat('z').st_nlink, 2)
+
+        sys.argv = ["hardlink.py", "--no-stats", "--content-only", self.root]
+        hardlink.main()
+
+        self.verify_file_contents()
+
+        # The algorithm should be able to link all these files together
+        # However, if the walk proceeds alphabetically, and the link() source
+        # is always the higher than the destination nlink, the 'a' or 'b' file
+        # can get orphaned, because it isn't re-scanned.
+        self.assertEqual(os.lstat('a').st_nlink, 8)
+
+
 if __name__ == '__main__':
     # Although the program currently runs on older Python 2, the test suite
     # doesn't work that far back.
