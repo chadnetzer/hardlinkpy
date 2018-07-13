@@ -675,16 +675,16 @@ class Hardlinkable:
     def _did_hardlink(self, source_file_info, dest_file_info):
         source_dirname, source_filename, source_stat_info = source_file_info
         dest_dirname, dest_filename, dest_stat_info = dest_file_info
-        source_pathname = os.path.join(source_dirname, source_filename)
-        dest_pathname = os.path.join(dest_dirname, dest_filename)
+
+        source_namepair = (source_dirname, source_filename)
+        dest_namepair = (dest_dirname, dest_filename)
+        assert source_namepair != dest_namepair, source_namepair
 
         options = self.options
         gStats = self.stats
 
         # update our stats (Note: dest_stat_info is from pre-link())
-        gStats.did_hardlink((source_dirname, source_filename),
-                            (dest_dirname, dest_filename),
-                             dest_stat_info)
+        gStats.did_hardlink(source_namepair, dest_namepair, dest_stat_info)
         if options.verbosity > 0:
             if not options.linking_enabled:
                 preamble1 = "Can be "
@@ -692,6 +692,9 @@ class Hardlinkable:
             else:
                 preamble1 = ""
                 preamble2 = ""
+
+            source_pathname = os.path.join(source_dirname, source_filename)
+            dest_pathname = os.path.join(dest_dirname, dest_filename)
 
             print("%sLinked: %s" % (preamble1, source_pathname))
             if dest_stat_info.st_nlink == 1:
