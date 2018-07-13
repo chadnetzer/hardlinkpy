@@ -456,6 +456,7 @@ class Hardlinkable:
         for top_dir in directories:
             # Use topdown=True for directory search pruning. followlinks is False
             for dirpath, dirs, filenames in os.walk(top_dir, topdown=True):
+                assert dirpath
 
                 # If excludes match any of the subdirs (or the current dir), skip
                 # them.
@@ -468,6 +469,7 @@ class Hardlinkable:
 
                 # Loop through all the files in the directory
                 for filename in filenames:
+                    assert filename
                     if found_excluded(filename, options.excludes):
                         continue
                     if found_excluded_dotfile(filename):
