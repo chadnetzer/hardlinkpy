@@ -575,7 +575,7 @@ class Hardlinkable:
                             print("Existing link: %s" % cached_pathname)
                             print("        with : %s" % pathname)
                         gStats.found_hardlink((cached_dirname, cached_filename),
-                                              (dirname, pathname),
+                                              (dirname, filename),
                                               cached_stat_info)
                         break
             else:
