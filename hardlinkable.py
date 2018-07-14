@@ -630,7 +630,7 @@ class Hardlinkable:
                     cached_dirname, cached_filename = cached_namepair
                     if not options.samename or cached_filename == filename:
                         break
-            else:
+            else:  # nobreak
                 # We did not find this file as hardlinked to any other file
                 # yet.  So now lets see if our file should be hardlinked to any
                 # of the other files with the same hash.
@@ -647,14 +647,14 @@ class Hardlinkable:
 
                         self._did_hardlink(cached_file_info, file_info)
                         break
-                else:
+                else:  # nobreak
                     # The file should NOT be hardlinked to any of the other
                     # files with the same hash.  So we will add it to the list
                     # of files.
                     file_hashes[file_hash].append(ino)
                     ino_stat[ino] = stat_info
                     gStats.no_hash_match()
-        else:
+        else: # if file_hash NOT in file_hashes
             # There weren't any other files with the same hash value so we will
             # create a new entry and store our file.
             file_hashes[file_hash] = [ino]
