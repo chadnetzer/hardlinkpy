@@ -607,15 +607,9 @@ class Hardlinkable:
             # We have file(s) that have the same hash as our current file.
             # Let's go through the list of files with the same hash and see if
             # we are already hardlinked to any of them.
-            for cached_ino in file_hashes[file_hash]:
-                gStats.inc_hash_list_iteration()
-                cached_stat_info = ino_stat[cached_ino]
-                if is_already_hardlinked(cached_stat_info, stat_info):
-                    cached_namepair = self._arbitrary_namepair_from_ino(cached_ino)
-                    cached_dirname, cached_filename = cached_namepair
-                    if not options.samename or cached_filename == filename:
-                        break
-            else:  # nobreak
+            found_cached_ino = (ino in file_hashes[file_hash])
+            if (not found_cached_ino or
+                (options.samename and not self._ino_has_filename(ino, filename))):
                 # We did not find this file as hardlinked to any other file
                 # yet.  So now lets see if our file should be hardlinked to any
                 # of the other files with the same hash.
@@ -636,13 +630,13 @@ class Hardlinkable:
                     # The file should NOT be hardlinked to any of the other
                     # files with the same hash.  So we will add it to the list
                     # of files.
-                    file_hashes[file_hash].append(ino)
+                    file_hashes[file_hash].add(ino)
                     ino_stat[ino] = stat_info
                     gStats.no_hash_match()
         else: # if file_hash NOT in file_hashes
             # There weren't any other files with the same hash value so we will
             # create a new entry and store our file.
-            file_hashes[file_hash] = [ino]
+            file_hashes[file_hash] = set([ino])
             assert ino not in ino_stat
             gStats.missed_hash()
 
@@ -706,9 +700,8 @@ class Hardlinkable:
 
         dirname1,filename1,stat1 = file_info1
         dirname2,filename2,stat2 = file_info2
-        if options.samename and filename1 != filename2:
-            result = False
-        elif not self._eligible_for_hardlink(stat1, stat2):
+        assert not options.samename or filename1 == filename2
+        if not self._eligible_for_hardlink(stat1, stat2):
             result = False
         else:
             result = self._are_file_contents_equal(os.path.join(dirname1,filename1),
