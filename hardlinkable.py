@@ -478,21 +478,6 @@ class Hardlinkable:
         l = next(iter(d.values()))
         return l[0]
 
-    def _namepair_from_ino(self, ino, filename):
-        """When samename not True, returns an arbitrary pathname"""
-        if self.options.samename:
-            ino_pathnames = self._get_dev_ino_filenames(self.cur_dev)
-            l = ino_pathnames[ino][filename]
-            return l[0]
-        else:
-            return self._arbitrary_namepair_from_ino(ino)
-
-    def _arbitrary_pathname_from_ino(self, ino):
-        return os.path.join(*self._arbitrary_namepair_from_ino(ino))
-
-    def _pathname_from_ino(self, ino, filename):
-        return os.path.join(*self._namepair_from_ino(ino,filename))
-
     def _ino_append_namepair(self, ino, filename, namepair):
         ino_pathnames = self._get_dev_ino_filenames(self.cur_dev)
         d = ino_pathnames.setdefault(ino, {})
