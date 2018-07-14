@@ -485,10 +485,12 @@ class Hardlinkable:
         l.append(namepair)
 
     def _fileinfo_from_ino(self, ino, filename):
-        """When samename not True, returns an arbitrary pathname"""
-        ino_pathnames = self._get_dev_ino_filenames(self.cur_dev)
+        """When samename not True, chooses an arbitrary namepair linked to the inode"""
         _, ino_stat = self._get_dev_dicts(self.cur_dev)
         if self.options.samename:
+            ino_pathnames = self._get_dev_ino_filenames(self.cur_dev)
+            assert ino in ino_pathnames
+            assert filename in ino_pathnames[ino]
             l = ino_pathnames[ino][filename]
             dirname, filename = l[0]
         else:
