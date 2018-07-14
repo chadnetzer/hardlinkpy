@@ -440,11 +440,67 @@ class Statistics:
 class Hardlinkable:
     def __init__(self, options):
         self.options = options
-
-        self.file_hashes = {}
         self.stats = Statistics()
         self.max_nlinks_per_dev = {}
 
+        self.st_devs = {}   # type: Tuple[MutableMapping, MutableMapping]
+
+
+    def _init_dev_dicts(self, st_dev):
+        # For each hash value, track inode (and optionally filename)
+        # file_hashes <- {hash_val: set(ino)}
+        #
+        # Keep track of per-inode stat info
+        # ino_stat <- {st_ino: stat_info}
+        #
+        # For each inode, keep track of all the pathnames
+        # ino_pathnames <- {st_ino: {filename: list((dirname, filename))}}
+        self.cur_dev = st_dev
+
+        if st_dev not in self.st_devs:
+            # tuple of (file_hashes, ino_pathnames, ino_stat)
+            self.st_devs[st_dev] = ({}, {}, {})
+            assert len(self.st_devs) == 1 # debug
+
+    def _get_dev_ino_filenames(self, st_dev):
+        self._init_dev_dicts(st_dev)
+        return self.st_devs[st_dev][2]
+
+    def _get_dev_dicts(self, st_dev):
+        self._init_dev_dicts(st_dev)
+        return self.st_devs[st_dev][:2]
+
+    def _arbitrary_namepair_from_ino(self, ino):
+        ino_pathnames = self._get_dev_ino_filenames(self.cur_dev)
+        # Get the dict of filename: [pathnames] for ino_key
+        d = ino_pathnames[ino]
+        # Get an arbitrary pathnames list
+        l = next(iter(d.values()))
+        return l[0]
+
+    def _ino_append_namepair(self, ino, filename, namepair):
+        ino_pathnames = self._get_dev_ino_filenames(self.cur_dev)
+        d = ino_pathnames.setdefault(ino, {})
+        l = d.setdefault(filename, [])
+        l.append(namepair)
+
+    def _fileinfo_from_ino(self, ino, filename):
+        """When samename not True, chooses an arbitrary namepair linked to the inode"""
+        _, ino_stat = self._get_dev_dicts(self.cur_dev)
+        if self.options.samename:
+            ino_pathnames = self._get_dev_ino_filenames(self.cur_dev)
+            assert ino in ino_pathnames
+            assert filename in ino_pathnames[ino]
+            l = ino_pathnames[ino][filename]
+            dirname, filename = l[0]
+        else:
+            dirname, filename = self._arbitrary_namepair_from_ino(ino)
+        return (dirname, filename, ino_stat[ino])
+
+    def _ino_has_filename(self, ino, filename):
+        """Return true if the given ino has 'filename' linked to it."""
+        ino_pathnames = self._get_dev_ino_filenames(self.cur_dev)
+        return (filename in ino_pathnames[ino])
 
     def linkify(self, directories):
         options = self.options
@@ -456,6 +512,7 @@ class Hardlinkable:
         for top_dir in directories:
             # Use topdown=True for directory search pruning. followlinks is False
             for dirpath, dirs, filenames in os.walk(top_dir, topdown=True):
+                assert dirpath
 
                 # If excludes match any of the subdirs (or the current dir), skip
                 # them.
@@ -468,6 +525,7 @@ class Hardlinkable:
 
                 # Loop through all the files in the directory
                 for filename in filenames:
+                    assert filename
                     if found_excluded(filename, options.excludes):
                         continue
                     if found_excluded_dotfile(filename):
@@ -526,65 +584,43 @@ class Hardlinkable:
     # component (ie. the basename) without the path.  The tree walking provides
     # this, so we don't have to extract it with os.path.split()
     def _hardlink_identical_files(self, dirname, filename, stat_info):
-        """
-        The purpose of this function is to hardlink files together if the files are
-        the same.  To be considered the same they must be equal in the following
-        criteria:
-              * file size
-              * file contents
-              * file mode (default)
-              * owner user id (default)
-              * owner group id (default)
-              * modified time (default)
-
-        Also, files will only be hardlinked if they are on the same device.  This
-        is because hardlink does not allow you to hardlink across file systems.
-
-        The basic idea on how this is done is as follows:
-
-            Walk the directory tree building up a list of the files.
-
-         For each file, generate a simple hash based on the size and modified time.
-
-         For any other files which share this hash make sure that they are not
-         identical to this file.  If they are identical then hardlink the files.
-
-         Add the file info to the list of files that have the same hash value."""
-
         options = self.options
-        file_hashes = self.file_hashes
         gStats = self.stats
 
+        file_hashes, ino_stat = self._get_dev_dicts(stat_info.st_dev)
+
+        ino = stat_info.st_ino
+        namepair = (dirname, filename)
         file_info = (dirname, filename, stat_info)
 
-        # Create the hash for the file.
         file_hash = hash_value(stat_info, options)
         if file_hash in file_hashes:
             gStats.found_hash()
+            # See if the new file has the same inode as one we've already seen.
+            if ino in ino_stat:
+                prev_namepair = self._arbitrary_namepair_from_ino(ino)
+                pathname = os.path.join(dirname, filename)
+                if options.verbosity > 1:
+                    prev_pathname = os.path.join(*prev_namepair)
+                    print("Existing link: %s" % prev_pathname)
+                    print("        with : %s" % pathname)
+                prev_stat_info = ino_stat[ino]
+                gStats.found_hardlink(prev_namepair, namepair, prev_stat_info)
             # We have file(s) that have the same hash as our current file.
             # Let's go through the list of files with the same hash and see if
             # we are already hardlinked to any of them.
-            for cached_file_info in file_hashes[file_hash]:
-                gStats.inc_hash_list_iteration()
-                cached_dirname, cached_filename, cached_stat_info = cached_file_info
-                if is_already_hardlinked(stat_info, cached_stat_info):
-                    if not options.samename or filename == cached_filename:
-                        cached_pathname = os.path.join(cached_dirname, cached_filename)
-                        pathname = os.path.join(dirname, filename)
-                        if options.verbosity > 1:
-                            print("Existing link: %s" % cached_pathname)
-                            print("        with : %s" % pathname)
-                        gStats.found_hardlink((cached_dirname, cached_filename),
-                                              (dirname, filename),
-                                              cached_stat_info)
-                        break
-            else:
+            found_cached_ino = (ino in file_hashes[file_hash])
+            if (not found_cached_ino or
+                (options.samename and not self._ino_has_filename(ino, filename))):
                 # We did not find this file as hardlinked to any other file
                 # yet.  So now lets see if our file should be hardlinked to any
                 # of the other files with the same hash.
-                for cached_file_info in file_hashes[file_hash]:
+                for cached_ino in file_hashes[file_hash]:
                     gStats.inc_hash_list_iteration()
-                    if self._are_files_hardlinkable(file_info, cached_file_info):
+                    if (options.samename and not self._ino_has_filename(cached_ino, filename)):
+                        continue
+                    cached_file_info = self._fileinfo_from_ino(cached_ino, filename)
+                    if self._are_files_hardlinkable(cached_file_info, file_info):
                         if options.linking_enabled:
                             # DO NOT call hardlink_files() unless link creation
                             # is selected. It unconditionally performs links.
@@ -592,18 +628,22 @@ class Hardlinkable:
 
                         self._did_hardlink(cached_file_info, file_info)
                         break
-                else:
+                else:  # nobreak
                     # The file should NOT be hardlinked to any of the other
                     # files with the same hash.  So we will add it to the list
                     # of files.
-                    file_hashes[file_hash].append(file_info)
+                    file_hashes[file_hash].add(ino)
+                    ino_stat[ino] = stat_info
                     gStats.no_hash_match()
-        else:
+        else: # if file_hash NOT in file_hashes
             # There weren't any other files with the same hash value so we will
             # create a new entry and store our file.
-            file_hashes[file_hash] = [file_info]
+            file_hashes[file_hash] = set([ino])
+            assert ino not in ino_stat
             gStats.missed_hash()
 
+        ino_stat[ino] = stat_info
+        self._ino_append_namepair(ino, filename, namepair)
 
     # Determine if a file is eligibile for hardlinking.  Files will only be
     # considered for hardlinking if this function returns true.
@@ -662,9 +702,8 @@ class Hardlinkable:
 
         dirname1,filename1,stat1 = file_info1
         dirname2,filename2,stat2 = file_info2
-        if options.samename and filename1 != filename2:
-            result = False
-        elif not self._eligible_for_hardlink(stat1, stat2):
+        assert not options.samename or filename1 == filename2
+        if not self._eligible_for_hardlink(stat1, stat2):
             result = False
         else:
             result = self._are_file_contents_equal(os.path.join(dirname1,filename1),
@@ -675,16 +714,16 @@ class Hardlinkable:
     def _did_hardlink(self, source_file_info, dest_file_info):
         source_dirname, source_filename, source_stat_info = source_file_info
         dest_dirname, dest_filename, dest_stat_info = dest_file_info
-        source_pathname = os.path.join(source_dirname, source_filename)
-        dest_pathname = os.path.join(dest_dirname, dest_filename)
+
+        source_namepair = (source_dirname, source_filename)
+        dest_namepair = (dest_dirname, dest_filename)
+        assert source_namepair != dest_namepair, source_namepair
 
         options = self.options
         gStats = self.stats
 
         # update our stats (Note: dest_stat_info is from pre-link())
-        gStats.did_hardlink((source_dirname, source_filename),
-                            (dest_dirname, dest_filename),
-                             dest_stat_info)
+        gStats.did_hardlink(source_namepair, dest_namepair, dest_stat_info)
         if options.verbosity > 0:
             if not options.linking_enabled:
                 preamble1 = "Can be "
@@ -692,6 +731,9 @@ class Hardlinkable:
             else:
                 preamble1 = ""
                 preamble2 = ""
+
+            source_pathname = os.path.join(source_dirname, source_filename)
+            dest_pathname = os.path.join(dest_dirname, dest_filename)
 
             print("%sLinked: %s" % (preamble1, source_pathname))
             if dest_stat_info.st_nlink == 1:
