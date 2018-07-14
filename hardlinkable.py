@@ -609,6 +609,16 @@ class Hardlinkable:
         file_hash = hash_value(stat_info, options)
         if file_hash in file_hashes:
             gStats.found_hash()
+            # See if the new file has the same inode as one we've already seen.
+            if ino in ino_stat:
+                prev_namepair = self._arbitrary_namepair_from_ino(ino)
+                pathname = os.path.join(dirname, filename)
+                if options.verbosity > 1:
+                    prev_pathname = os.path.join(*prev_namepair)
+                    print("Existing link: %s" % prev_pathname)
+                    print("        with : %s" % pathname)
+                prev_stat_info = ino_stat[ino]
+                gStats.found_hardlink(prev_namepair, namepair, prev_stat_info)
             # We have file(s) that have the same hash as our current file.
             # Let's go through the list of files with the same hash and see if
             # we are already hardlinked to any of them.
@@ -618,13 +628,6 @@ class Hardlinkable:
                 if is_already_hardlinked(cached_stat_info, stat_info):
                     cached_namepair = self._arbitrary_namepair_from_ino(cached_ino)
                     cached_dirname, cached_filename = cached_namepair
-                    cached_pathname = os.path.join(*cached_namepair)
-                    pathname = os.path.join(dirname, filename)
-                    if options.verbosity > 1:
-                        print("Existing link: %s" % cached_pathname)
-                        print("        with : %s" % pathname)
-                    gStats.found_hardlink(cached_namepair, (dirname, filename),
-                                          cached_stat_info)
                     if not options.samename or cached_filename == filename:
                         break
             else:
