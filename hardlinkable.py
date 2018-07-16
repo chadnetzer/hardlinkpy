@@ -324,6 +324,36 @@ def found_matched_filename(name, matches):
     return False
 
 
+def linkable_inode_sets(remaining_inodes):
+    # Must start with the largest inode number, since the 'key' inode is always
+    # greater than it's value inodes.
+    remaining_inodes = remaining_inodes.copy()
+    src_inos = sorted(remaining_inodes, reverse=True)
+    for start_ino in src_inos:
+        if start_ino not in remaining_inodes:
+            continue
+        result_set = set()
+        pending = [start_ino]
+        while pending:
+            ino = pending.pop()
+            result_set.add(ino)
+            try:
+                connected_links = remaining_inodes.pop(ino)
+                pending.extend(connected_links)
+            except KeyError:
+                pass
+        yield result_set
+
+
+def namepairs_per_inode(d):
+    """Yield namepairs for each value in the dictionary d"""
+    # A dictionary of {filename:[namepair]}, ie. a filename and list of
+    # namepairs.
+    for filename, namepairs in d.items():
+        for namepair in namepairs:
+            yield namepair
+
+
 class Statistics:
     def __init__(self):
         self.dircount = 0                   # how many directories we find
@@ -458,12 +488,17 @@ class Hardlinkable:
         #
         # For each inode, keep track of all the pathnames
         # ino_pathnames <- {st_ino: {filename: list((dirname, filename))}}
+        #
+        # For each linkable file pair found, add their inodes as a pair (ie.
+        # ultimately we want to "link" the inodes together).  Each pair is
+        # added twice, in each order, so that a pair can be found from either
+        # inode.
+        # linked_inodes = {largest_ino_num: set(ino_nums)}
         self.cur_dev = st_dev
 
         if st_dev not in self.st_devs:
-            # tuple of (file_hashes, ino_pathnames, ino_stat)
-            self.st_devs[st_dev] = ({}, {}, {})
-            assert len(self.st_devs) == 1 # debug
+            # tuple of (file_hashes, ino_pathnames, ino_stat, linked_inodes)
+            self.st_devs[st_dev] = ({}, {}, {}, {})
 
     def _get_dev_ino_filenames(self, st_dev):
         self._init_dev_dicts(st_dev)
@@ -505,7 +540,86 @@ class Hardlinkable:
         ino_pathnames = self._get_dev_ino_filenames(self.cur_dev)
         return (filename in ino_pathnames[ino])
 
+    def _add_linked_inodes(self, ino1, ino2):
+        """Adds to the dictionary of ino1 to ino2 mappings."""
+        assert ino1 != ino2
+        d = self.st_devs[self.cur_dev][3]
+        s = d.setdefault(ino1, set())
+        s.add(ino2)
+        s = d.setdefault(ino2, set())
+        s.add(ino1)
+
+    def _sorted_links(self):
+        for st_dev in self.st_devs:
+            _, ino_stat, ino_pathnames, linked_inodes = self.st_devs[st_dev]
+            for linkable_set in linkable_inode_sets(linked_inodes):
+                nlinks_list = [(ino_stat[ino].st_nlink, ino) for ino in linkable_set]
+                nlinks_list.sort(reverse=True)
+                assert len(nlinks_list) > 1
+                while len(nlinks_list) > 1:
+                    # Loop until src + dest nlink < max_nlink
+                    src_nlink, src_ino = nlinks_list[0]
+                    nlinks_list = nlinks_list[1:]
+                    src_dirname, src_filename = self._arbitrary_namepair_from_ino(src_ino)
+                    while nlinks_list:
+                        dest_nlink, dest_ino = nlinks_list.pop()
+                        assert src_nlink >= dest_nlink
+                        if src_nlink + dest_nlink > self.max_nlinks_per_dev[st_dev]:
+                            nlinks_list = nlinks_list[1:]
+                            break
+                        for dest_dirname, dest_filename in namepairs_per_inode(ino_pathnames[dest_ino]):
+                            src_file_info = (src_dirname, src_filename, ino_stat[src_ino])
+                            dest_file_info = (dest_dirname, dest_filename, ino_stat[dest_ino])
+                            yield (src_file_info, dest_file_info)
+                            src_nlink += 1
+                            dest_nlink -= 1
+
+    def _inode_stats(self):
+        total_inodes = 0
+        total_bytes = 0
+        total_saved_bytes = 0 # Each nlink > 1 is counted as "saved" space
+        for st_dev in self.st_devs:
+            _, ino_stat, ino_pathnames, linked_inodes = self.st_devs[st_dev]
+            for ino, stat_info in ino_stat.items():
+                total_inodes += 1
+                total_bytes += stat_info.st_size
+                total_saved_bytes += (stat_info.st_size * (stat_info.st_nlink - 1))
+        return {'total_inodes' : total_inodes,
+                'total_bytes': total_bytes,
+                'total_saved_bytes': total_saved_bytes}
+
+
     def linkify(self, directories):
+        for dirname, filename, stat_info in self.matched_file_info(directories):
+            self._find_identical_files(dirname, filename, stat_info)
+
+        #pp(self._inode_stats())
+        for (src_file_info, dest_file_info) in self._sorted_links():
+            src_dirname, src_filename, src_stat_info = src_file_info
+            dest_dirname, dest_filename, dest_stat_info = dest_file_info
+            src_pathname = os.path.join(src_dirname, src_filename)
+            dest_pathname = os.path.join(dest_dirname, dest_filename)
+
+            hardlink_succeeded = False
+            if self.options.linking_enabled:
+                # DO NOT call hardlink_files() unless link creation
+                # is selected. It unconditionally performs links.
+                hardlink_succeeded = self._hardlink_files(src_file_info,
+                                                          dest_file_info)
+
+            if not self.options.linking_enabled or hardlink_succeeded:
+                _, ino_stat = self._get_dev_dicts(src_stat_info.st_dev)
+                src_file_info = (src_dirname, src_filename, ino_stat[src_stat_info.st_ino])
+                dest_file_info = (dest_dirname, dest_filename, ino_stat[dest_stat_info.st_ino])
+                self.stats.did_hardlink(src_file_info, dest_file_info)
+                self._updated_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
+                self._updated_stat_info(dest_stat_info, nlink=dest_stat_info.st_nlink - 1)
+
+        #pp(self._inode_stats())
+        if self.options.printstats:
+            self.stats.print_stats(self.options)
+
+    def matched_file_info(self, directories):
         options = self.options
         gStats = self.stats
 
@@ -575,11 +689,7 @@ class Hardlinkable:
                     # storage by interning
                     dirname = intern(dirname)
                     filename = intern(filename)
-                    self._hardlink_identical_files(dirname, filename, stat_info)
-
-        if options.printstats:
-            gStats.print_stats(options)
-
+                    yield (dirname, filename, stat_info)
 
     # dirname is the directory component and filename is just the file name
     # component (ie. the basename) without the path.  The tree walking provides
@@ -708,12 +818,7 @@ class Hardlinkable:
         source_dirname, source_filename, source_stat_info = source_file_info
         dest_dirname, dest_filename, dest_stat_info = dest_file_info
 
-        source_namepair = (source_dirname, source_filename)
-        dest_namepair = (dest_dirname, dest_filename)
-        assert source_namepair != dest_namepair, source_namepair
-
-        options = self.options
-        gStats = self.stats
+        self._add_linked_inodes(source_stat_info.st_ino, dest_stat_info.st_ino)
 
         # update our stats (Note: dest_stat_info is from pre-link())
         if self.options.debug_level > 0:
