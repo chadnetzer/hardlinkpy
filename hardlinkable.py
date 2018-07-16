@@ -364,9 +364,14 @@ class Statistics:
         else:
             self.previouslyhardlinked[source_namepair][1].append(dest_namepair)
 
-    def did_hardlink(self, source_namepair, dest_namepair, dest_stat_info):
-        assert len(source_namepair) == 2
-        assert len(dest_namepair) == 2
+    def did_hardlink(self, src_file_info, dest_file_info):
+        # nlink count is not necessarily accurate at the moment
+        src_dirname, src_filename, src_stat_info = src_file_info
+        dest_dirname, dest_filename, dest_stat_info = dest_file_info
+        src_namepair = (src_dirname, src_filename)
+        dest_namepair = (dest_dirname, dest_filename)
+        self.hardlinkstats.append((src_namepair, dest_namepair))
+
         filesize = dest_stat_info.st_size
         self.hardlinked_thisrun = self.hardlinked_thisrun + 1
         if dest_stat_info.st_nlink == 1:
@@ -374,7 +379,6 @@ class Statistics:
             # removed.
             self.bytes_saved_thisrun = self.bytes_saved_thisrun + filesize
             self.nlinks_to_zero_thisrun = self.nlinks_to_zero_thisrun + 1
-        self.hardlinkstats.append((source_namepair, dest_namepair))
 
     def found_hash(self):
         self.num_hash_hits += 1
@@ -712,24 +716,14 @@ class Hardlinkable:
         gStats = self.stats
 
         # update our stats (Note: dest_stat_info is from pre-link())
-        gStats.did_hardlink(source_namepair, dest_namepair, dest_stat_info)
-        if options.verbosity > 0:
-            if not options.linking_enabled:
-                preamble1 = "Can be "
-                preamble2 = "       "
-            else:
-                preamble1 = ""
-                preamble2 = ""
-
+        if self.options.debug_level > 0:
             source_pathname = os.path.join(source_dirname, source_filename)
             dest_pathname = os.path.join(dest_dirname, dest_filename)
+            assert source_pathname != dest_pathname
+            print("Linkable: %s" % source_pathname)
+            print("      to: %s" % dest_pathname)
 
-            print("%sLinked: %s" % (preamble1, source_pathname))
-            if dest_stat_info.st_nlink == 1:
-                print("%s    to: %s, saved %s" % (preamble2, dest_pathname,
-                                                  humanize_number(dest_stat_info.st_size)))
             else:
-                print("%s    to: %s" % (preamble2, dest_pathname))
 
 
 def main():
