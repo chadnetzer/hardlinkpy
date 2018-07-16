@@ -445,7 +445,6 @@ class Hardlinkable:
 
         self.st_devs = {}   # type: Tuple[MutableMapping, MutableMapping]
 
-
     def _init_dev_dicts(self, st_dev):
         # For each hash value, track inode (and optionally filename)
         # file_hashes <- {hash_val: set(ino)}
@@ -507,8 +506,6 @@ class Hardlinkable:
         gStats = self.stats
 
         # Now go through all the directories that have been added.
-        # NOTE: hardlink_identical_files() will add more directories to the
-        #       directories list as it finds them.
         for top_dir in directories:
             # Use topdown=True for directory search pruning. followlinks is False
             for dirpath, dirs, filenames in os.walk(top_dir, topdown=True):
@@ -683,7 +680,6 @@ class Hardlinkable:
             result = ((st1.st_nlink + st2.st_nlink) <= max_nlinks)
         return result
 
-
     def _are_file_contents_equal(self, pathname1, pathname2):
         """Determine if the contents of two files are equal"""
         options = self.options
@@ -693,7 +689,6 @@ class Hardlinkable:
             print("     to  : %s" % pathname2)
         gStats.did_comparison()
         return filecmp.cmp(pathname1, pathname2, shallow=False)
-
 
     # Determines if two files should be hard linked together.
     def _are_files_hardlinkable(self, file_info1, file_info2):
