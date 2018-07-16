@@ -72,60 +72,6 @@ def is_already_hardlinked(st1,     # first file's status
     return result
 
 
-# Hardlink two files together
-def hardlink_files(source_file_info, dest_file_info):
-    source_dirname, source_filename, source_stat_info = source_file_info
-    dest_dirname, dest_filename, dest_stat_info = dest_file_info
-    source_pathname = os.path.join(source_dirname, source_filename)
-    dest_pathname = os.path.join(dest_dirname, dest_filename)
-
-    hardlink_succeeded = False
-    # rename the destination file to save it
-    temp_pathname = dest_pathname + ".$$$___cleanit___$$$"
-    try:
-        os.rename(dest_pathname, temp_pathname)
-    except OSError:
-        error = sys.exc_info()[1]
-        logging.error("Failed to rename: %s to %s\n%s" % (dest_pathname, temp_pathname, error))
-    else:
-        # Now link the sourcefile to the destination file
-        try:
-            os.link(source_pathname, dest_pathname)
-        except Exception:
-            error = sys.exc_info()[1]
-            logging.error("Failed to hardlink: %s to %s\n%s" % (source_pathname, dest_pathname, error))
-            # Try to recover
-            try:
-                os.rename(temp_pathname, dest_pathname)
-            except Exception:
-                error = sys.exc_info()[1]
-                logging.critical("Failed to rename temp filename %s back to %s\n%s" % (temp_pathname, dest_pathname, error))
-                sys.exit(3)
-        else:
-            hardlink_succeeded = True
-
-            # Delete the renamed version since we don't need it.
-            try:
-                os.unlink(temp_pathname)
-            except Exception:
-                error = sys.exc_info()[1]
-                # Failing to remove the temp file could lead to endless
-                # attempts to link to it in the future.
-                logging.critical("Failed to remove temp filename: %s\n%s" % (temp_pathname, error))
-                sys.exit(3)
-
-            # Use the destination file attributes if it's most recently modified
-            if dest_stat_info.st_mtime > source_stat_info.st_mtime:
-                try:
-                    os.utime(dest_pathname, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
-                    os.chown(dest_pathname, dest_stat_info.st_uid, dest_stat_info.st_gid)
-                except Exception:
-                    error = sys.exc_info()[1]
-                    logging.warning("Failed to update file attributes for %s\n%s" % (source_pathname, error))
-
-    return hardlink_succeeded
-
-
 def humanize_number(number):
     if number > 1024 ** 3:
         return ("%.3f GiB" % (number / (1024.0 ** 3)))
@@ -828,7 +774,94 @@ class Hardlinkable:
             print("Linkable: %s" % source_pathname)
             print("      to: %s" % dest_pathname)
 
+    def _updated_stat_info(self, stat_info, nlink=None, mtime=None, atime=None, uid=None, gid=None):
+        """Updates an ino_stat stat_info with the given values."""
+        l = list(stat_info)
+        if nlink is not None:
+            l[stat.ST_NLINK] = nlink
+        if mtime is not None:
+            l[stat.ST_MTIME] = mtime
+        if atime is not None:
+            l[stat.ST_ATIME] = atime
+        if uid is not None:
+            l[stat.ST_UID] = uid
+        if gid is not None:
+            l[stat.ST_GID] = gid
+
+        _, ino_stat = self._get_dev_dicts(stat_info.st_dev)
+        ino_stat[stat_info.st_ino] = stat_info.__class__(l)
+        if ino_stat[stat_info.st_ino].st_nlink < 1:
+            assert ino_stat[stat_info.st_ino].st_nlink == 0
+            del ino_stat[stat_info.st_ino]
+
+    def _hardlink_files(self, source_file_info, dest_file_info):
+        """Actually perform the filesystem hardlinking of two files."""
+        source_dirname, source_filename, source_stat_info = source_file_info
+        dest_dirname, dest_filename, dest_stat_info = dest_file_info
+        source_pathname = os.path.join(source_dirname, source_filename)
+        dest_pathname = os.path.join(dest_dirname, dest_filename)
+
+        hardlink_succeeded = False
+        # rename the destination file to save it
+        temp_pathname = dest_pathname + ".$$$___cleanit___$$$"
+        try:
+            os.rename(dest_pathname, temp_pathname)
+        except OSError:
+            error = sys.exc_info()[1]
+            logging.error("Failed to rename: %s to %s\n%s" % (dest_pathname, temp_pathname, error))
+        else:
+            # Now link the sourcefile to the destination file
+            try:
+                os.link(source_pathname, dest_pathname)
+            except Exception:
+                error = sys.exc_info()[1]
+                logging.error("Failed to hardlink: %s to %s\n%s" % (source_pathname, dest_pathname, error))
+                # Try to recover
+                try:
+                    os.rename(temp_pathname, dest_pathname)
+                except Exception:
+                    error = sys.exc_info()[1]
+                    logging.critical("Failed to rename temp filename %s back to %s\n%s" % (temp_pathname, dest_pathname, error))
+                    sys.exit(3)
             else:
+                hardlink_succeeded = True
+
+                # Delete the renamed version since we don't need it.
+                try:
+                    os.unlink(temp_pathname)
+                except Exception:
+                    error = sys.exc_info()[1]
+                    # Failing to remove the temp file could lead to endless
+                    # attempts to link to it in the future.
+                    logging.critical("Failed to remove temp filename: %s\n%s" % (temp_pathname, error))
+                    sys.exit(3)
+
+                # Use the destination file attributes if it's most recently modified
+                dest_mtime = dest_atime = dest_uid = dest_gid = None
+                if dest_stat_info.st_mtime > source_stat_info.st_mtime:
+                    try:
+                        os.utime(src_pathname, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
+                        dest_atime = dest_stat_info.st_atime
+                        dest_mtime = dest_stat_info.st_mtime
+                    except Exception:
+                        error = sys.exc_info()[1]
+                        logging.warning("Failed to update file time attributes for %s\n%s" % (source_pathname, error))
+
+                    try:
+                        os.chown(src_pathname, dest_stat_info.st_uid, dest_stat_info.st_gid)
+                        dest_uid = dest_stat_info.st_uid
+                        dest_gid = dest_stat_info.st_gid
+                    except Exception:
+                        error = sys.exc_info()[1]
+                        logging.warning("Failed to update file owner attributes for %s\n%s" % (source_pathname, error))
+
+                    self._updated_stat_info(src_stat_info,
+                                            mtime=dest_mtime,
+                                            atime=dest_atime,
+                                            uid=dest_uid,
+                                            gid=dest_gid)
+
+        return hardlink_succeeded
 
 
 def main():
