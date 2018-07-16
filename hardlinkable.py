@@ -162,7 +162,7 @@ a change to one hardlinked file changes them all."""
                       action="count", default=0,)
 
     # hidden debug option, each repeat increases debug level (long option only)
-    parser.add_option("--debug", dest="debug",
+    parser.add_option("-d", "--debug", dest="debug_level",
                       help=SUPPRESS_HELP,
                       action="count", default=0,)
 
@@ -425,7 +425,7 @@ class Statistics:
         totalbytes = self.bytes_saved_thisrun + self.bytes_saved_previously
         print("Total bytes saved     : %s (%s)" % (totalbytes, humanize_number(totalbytes)))
         print("Total run time        : %s seconds" % (time.time() - self.starttime))
-        if options.debug:
+        if options.debug_level > 0:
             print("Total file hash hits       : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
                                                                                   self.num_hash_misses,
                                                                                   (self.num_hash_hits +
@@ -564,7 +564,7 @@ class Hardlinkable:
 
                     # Bump statistics count of regular files found.
                     gStats.found_regular_file()
-                    if options.verbosity > 2:
+                    if options.debug_level > 3:
                         print("File: %s" % pathname)
 
                     # Extract the normalized path directory name
@@ -600,7 +600,7 @@ class Hardlinkable:
             if ino in ino_stat:
                 prev_namepair = self._arbitrary_namepair_from_ino(ino)
                 pathname = os.path.join(dirname, filename)
-                if options.verbosity > 1:
+                if options.debug_level > 2:
                     prev_pathname = os.path.join(*prev_namepair)
                     print("Existing link: %s" % prev_pathname)
                     print("        with : %s" % pathname)
@@ -688,7 +688,7 @@ class Hardlinkable:
         """Determine if the contents of two files are equal"""
         options = self.options
         gStats = self.stats
-        if options.verbosity > 1:
+        if options.debug_level > 1:
             print("Comparing: %s" % pathname1)
             print("     to  : %s" % pathname2)
         gStats.did_comparison()
