@@ -353,7 +353,7 @@ class Statistics:
     def did_comparison(self):
         self.comparisons = self.comparisons + 1
 
-    def found_hardlink(self, source_namepair, dest_namepair, stat_info):
+    def found_existing_hardlink(self, source_namepair, dest_namepair, stat_info):
         assert len(source_namepair) == 2
         assert len(dest_namepair) == 2
         filesize = stat_info.st_size
@@ -602,7 +602,7 @@ class Hardlinkable:
                     print("Existing link: %s" % prev_pathname)
                     print("        with : %s" % pathname)
                 prev_stat_info = ino_stat[ino]
-                gStats.found_hardlink(prev_namepair, namepair, prev_stat_info)
+                gStats.found_existing_hardlink(prev_namepair, namepair, prev_stat_info)
             # We have file(s) that have the same hash as our current file.
             # Let's go through the list of files with the same hash and see if
             # we are already hardlinked to any of them.
