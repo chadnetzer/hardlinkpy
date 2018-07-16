@@ -580,7 +580,7 @@ class Hardlinkable:
     # dirname is the directory component and filename is just the file name
     # component (ie. the basename) without the path.  The tree walking provides
     # this, so we don't have to extract it with os.path.split()
-    def _hardlink_identical_files(self, dirname, filename, stat_info):
+    def _find_identical_files(self, dirname, filename, stat_info):
         options = self.options
         gStats = self.stats
 
@@ -618,11 +618,6 @@ class Hardlinkable:
                         continue
                     cached_file_info = self._fileinfo_from_ino(cached_ino, filename)
                     if self._are_files_hardlinkable(cached_file_info, file_info):
-                        if options.linking_enabled:
-                            # DO NOT call hardlink_files() unless link creation
-                            # is selected. It unconditionally performs links.
-                            hardlink_files(cached_file_info, file_info)
-
                         self._found_hardlinkable_file(cached_file_info, file_info)
                         break
                 else:  # nobreak
