@@ -623,7 +623,7 @@ class Hardlinkable:
                             # is selected. It unconditionally performs links.
                             hardlink_files(cached_file_info, file_info)
 
-                        self._did_hardlink(cached_file_info, file_info)
+                        self._found_hardlinkable_file(cached_file_info, file_info)
                         break
                 else:  # nobreak
                     # The file should NOT be hardlinked to any of the other
@@ -705,8 +705,7 @@ class Hardlinkable:
                                                    os.path.join(dirname2,filename2))
         return result
 
-
-    def _did_hardlink(self, source_file_info, dest_file_info):
+    def _found_hardlinkable_file(self, source_file_info, dest_file_info):
         source_dirname, source_filename, source_stat_info = source_file_info
         dest_dirname, dest_filename, dest_stat_info = dest_file_info
 
