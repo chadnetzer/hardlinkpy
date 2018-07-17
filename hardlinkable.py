@@ -72,60 +72,6 @@ def is_already_hardlinked(st1,     # first file's status
     return result
 
 
-# Hardlink two files together
-def hardlink_files(source_file_info, dest_file_info):
-    source_dirname, source_filename, source_stat_info = source_file_info
-    dest_dirname, dest_filename, dest_stat_info = dest_file_info
-    source_pathname = os.path.join(source_dirname, source_filename)
-    dest_pathname = os.path.join(dest_dirname, dest_filename)
-
-    hardlink_succeeded = False
-    # rename the destination file to save it
-    temp_pathname = dest_pathname + ".$$$___cleanit___$$$"
-    try:
-        os.rename(dest_pathname, temp_pathname)
-    except OSError:
-        error = sys.exc_info()[1]
-        logging.error("Failed to rename: %s to %s\n%s" % (dest_pathname, temp_pathname, error))
-    else:
-        # Now link the sourcefile to the destination file
-        try:
-            os.link(source_pathname, dest_pathname)
-        except Exception:
-            error = sys.exc_info()[1]
-            logging.error("Failed to hardlink: %s to %s\n%s" % (source_pathname, dest_pathname, error))
-            # Try to recover
-            try:
-                os.rename(temp_pathname, dest_pathname)
-            except Exception:
-                error = sys.exc_info()[1]
-                logging.critical("Failed to rename temp filename %s back to %s\n%s" % (temp_pathname, dest_pathname, error))
-                sys.exit(3)
-        else:
-            hardlink_succeeded = True
-
-            # Delete the renamed version since we don't need it.
-            try:
-                os.unlink(temp_pathname)
-            except Exception:
-                error = sys.exc_info()[1]
-                # Failing to remove the temp file could lead to endless
-                # attempts to link to it in the future.
-                logging.critical("Failed to remove temp filename: %s\n%s" % (temp_pathname, error))
-                sys.exit(3)
-
-            # Use the destination file attributes if it's most recently modified
-            if dest_stat_info.st_mtime > source_stat_info.st_mtime:
-                try:
-                    os.utime(dest_pathname, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
-                    os.chown(dest_pathname, dest_stat_info.st_uid, dest_stat_info.st_gid)
-                except Exception:
-                    error = sys.exc_info()[1]
-                    logging.warning("Failed to update file attributes for %s\n%s" % (source_pathname, error))
-
-    return hardlink_succeeded
-
-
 def humanize_number(number):
     if number > 1024 ** 3:
         return ("%.3f GiB" % (number / (1024.0 ** 3)))
@@ -162,7 +108,7 @@ a change to one hardlinked file changes them all."""
                       action="count", default=0,)
 
     # hidden debug option, each repeat increases debug level (long option only)
-    parser.add_option("--debug", dest="debug",
+    parser.add_option("-d", "--debug", dest="debug_level",
                       help=SUPPRESS_HELP,
                       action="count", default=0,)
 
@@ -324,6 +270,36 @@ def found_matched_filename(name, matches):
     return False
 
 
+def linkable_inode_sets(remaining_inodes):
+    # Must start with the largest inode number, since the 'key' inode is always
+    # greater than it's value inodes.
+    remaining_inodes = remaining_inodes.copy()
+    src_inos = sorted(remaining_inodes, reverse=True)
+    for start_ino in src_inos:
+        if start_ino not in remaining_inodes:
+            continue
+        result_set = set()
+        pending = [start_ino]
+        while pending:
+            ino = pending.pop()
+            result_set.add(ino)
+            try:
+                connected_links = remaining_inodes.pop(ino)
+                pending.extend(connected_links)
+            except KeyError:
+                pass
+        yield result_set
+
+
+def namepairs_per_inode(d):
+    """Yield namepairs for each value in the dictionary d"""
+    # A dictionary of {filename:[namepair]}, ie. a filename and list of
+    # namepairs.
+    for filename, namepairs in d.items():
+        for namepair in namepairs:
+            yield namepair
+
+
 class Statistics:
     def __init__(self):
         self.dircount = 0                   # how many directories we find
@@ -353,7 +329,7 @@ class Statistics:
     def did_comparison(self):
         self.comparisons = self.comparisons + 1
 
-    def found_hardlink(self, source_namepair, dest_namepair, stat_info):
+    def found_existing_hardlink(self, source_namepair, dest_namepair, stat_info):
         assert len(source_namepair) == 2
         assert len(dest_namepair) == 2
         filesize = stat_info.st_size
@@ -364,9 +340,14 @@ class Statistics:
         else:
             self.previouslyhardlinked[source_namepair][1].append(dest_namepair)
 
-    def did_hardlink(self, source_namepair, dest_namepair, dest_stat_info):
-        assert len(source_namepair) == 2
-        assert len(dest_namepair) == 2
+    def did_hardlink(self, src_file_info, dest_file_info):
+        # nlink count is not necessarily accurate at the moment
+        src_dirname, src_filename, src_stat_info = src_file_info
+        dest_dirname, dest_filename, dest_stat_info = dest_file_info
+        src_namepair = (src_dirname, src_filename)
+        dest_namepair = (dest_dirname, dest_filename)
+        self.hardlinkstats.append((src_namepair, dest_namepair))
+
         filesize = dest_stat_info.st_size
         self.hardlinked_thisrun = self.hardlinked_thisrun + 1
         if dest_stat_info.st_nlink == 1:
@@ -374,7 +355,6 @@ class Statistics:
             # removed.
             self.bytes_saved_thisrun = self.bytes_saved_thisrun + filesize
             self.nlinks_to_zero_thisrun = self.nlinks_to_zero_thisrun + 1
-        self.hardlinkstats.append((source_namepair, dest_namepair))
 
     def found_hash(self):
         self.num_hash_hits += 1
@@ -425,7 +405,7 @@ class Statistics:
         totalbytes = self.bytes_saved_thisrun + self.bytes_saved_previously
         print("Total bytes saved     : %s (%s)" % (totalbytes, humanize_number(totalbytes)))
         print("Total run time        : %s seconds" % (time.time() - self.starttime))
-        if options.debug:
+        if options.debug_level > 0:
             print("Total file hash hits       : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
                                                                                   self.num_hash_misses,
                                                                                   (self.num_hash_hits +
@@ -445,7 +425,6 @@ class Hardlinkable:
 
         self.st_devs = {}   # type: Tuple[MutableMapping, MutableMapping]
 
-
     def _init_dev_dicts(self, st_dev):
         # For each hash value, track inode (and optionally filename)
         # file_hashes <- {hash_val: set(ino)}
@@ -455,12 +434,17 @@ class Hardlinkable:
         #
         # For each inode, keep track of all the pathnames
         # ino_pathnames <- {st_ino: {filename: list((dirname, filename))}}
+        #
+        # For each linkable file pair found, add their inodes as a pair (ie.
+        # ultimately we want to "link" the inodes together).  Each pair is
+        # added twice, in each order, so that a pair can be found from either
+        # inode.
+        # linked_inodes = {largest_ino_num: set(ino_nums)}
         self.cur_dev = st_dev
 
         if st_dev not in self.st_devs:
-            # tuple of (file_hashes, ino_pathnames, ino_stat)
-            self.st_devs[st_dev] = ({}, {}, {})
-            assert len(self.st_devs) == 1 # debug
+            # tuple of (file_hashes, ino_pathnames, ino_stat, linked_inodes)
+            self.st_devs[st_dev] = ({}, {}, {}, {})
 
     def _get_dev_ino_filenames(self, st_dev):
         self._init_dev_dicts(st_dev)
@@ -502,13 +486,90 @@ class Hardlinkable:
         ino_pathnames = self._get_dev_ino_filenames(self.cur_dev)
         return (filename in ino_pathnames[ino])
 
+    def _add_linked_inodes(self, ino1, ino2):
+        """Adds to the dictionary of ino1 to ino2 mappings."""
+        assert ino1 != ino2
+        d = self.st_devs[self.cur_dev][3]
+        s = d.setdefault(ino1, set())
+        s.add(ino2)
+        s = d.setdefault(ino2, set())
+        s.add(ino1)
+
+    def _sorted_links(self):
+        for st_dev in self.st_devs:
+            _, ino_stat, ino_pathnames, linked_inodes = self.st_devs[st_dev]
+            for linkable_set in linkable_inode_sets(linked_inodes):
+                nlinks_list = [(ino_stat[ino].st_nlink, ino) for ino in linkable_set]
+                nlinks_list.sort(reverse=True)
+                assert len(nlinks_list) > 1
+                while len(nlinks_list) > 1:
+                    # Loop until src + dest nlink < max_nlink
+                    src_nlink, src_ino = nlinks_list[0]
+                    nlinks_list = nlinks_list[1:]
+                    src_dirname, src_filename = self._arbitrary_namepair_from_ino(src_ino)
+                    while nlinks_list:
+                        dest_nlink, dest_ino = nlinks_list.pop()
+                        assert src_nlink >= dest_nlink
+                        if src_nlink + dest_nlink > self.max_nlinks_per_dev[st_dev]:
+                            nlinks_list = nlinks_list[1:]
+                            break
+                        for dest_dirname, dest_filename in namepairs_per_inode(ino_pathnames[dest_ino]):
+                            src_file_info = (src_dirname, src_filename, ino_stat[src_ino])
+                            dest_file_info = (dest_dirname, dest_filename, ino_stat[dest_ino])
+                            yield (src_file_info, dest_file_info)
+                            src_nlink += 1
+                            dest_nlink -= 1
+
+    def _inode_stats(self):
+        total_inodes = 0
+        total_bytes = 0
+        total_saved_bytes = 0 # Each nlink > 1 is counted as "saved" space
+        for st_dev in self.st_devs:
+            _, ino_stat, ino_pathnames, linked_inodes = self.st_devs[st_dev]
+            for ino, stat_info in ino_stat.items():
+                total_inodes += 1
+                total_bytes += stat_info.st_size
+                total_saved_bytes += (stat_info.st_size * (stat_info.st_nlink - 1))
+        return {'total_inodes' : total_inodes,
+                'total_bytes': total_bytes,
+                'total_saved_bytes': total_saved_bytes}
+
+
     def linkify(self, directories):
+        for dirname, filename, stat_info in self.matched_file_info(directories):
+            self._find_identical_files(dirname, filename, stat_info)
+
+        #pp(self._inode_stats())
+        for (src_file_info, dest_file_info) in self._sorted_links():
+            src_dirname, src_filename, src_stat_info = src_file_info
+            dest_dirname, dest_filename, dest_stat_info = dest_file_info
+            src_pathname = os.path.join(src_dirname, src_filename)
+            dest_pathname = os.path.join(dest_dirname, dest_filename)
+
+            hardlink_succeeded = False
+            if self.options.linking_enabled:
+                # DO NOT call hardlink_files() unless link creation
+                # is selected. It unconditionally performs links.
+                hardlink_succeeded = self._hardlink_files(src_file_info,
+                                                          dest_file_info)
+
+            if not self.options.linking_enabled or hardlink_succeeded:
+                _, ino_stat = self._get_dev_dicts(src_stat_info.st_dev)
+                src_file_info = (src_dirname, src_filename, ino_stat[src_stat_info.st_ino])
+                dest_file_info = (dest_dirname, dest_filename, ino_stat[dest_stat_info.st_ino])
+                self.stats.did_hardlink(src_file_info, dest_file_info)
+                self._updated_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
+                self._updated_stat_info(dest_stat_info, nlink=dest_stat_info.st_nlink - 1)
+
+        #pp(self._inode_stats())
+        if self.options.printstats:
+            self.stats.print_stats(self.options)
+
+    def matched_file_info(self, directories):
         options = self.options
         gStats = self.stats
 
         # Now go through all the directories that have been added.
-        # NOTE: hardlink_identical_files() will add more directories to the
-        #       directories list as it finds them.
         for top_dir in directories:
             # Use topdown=True for directory search pruning. followlinks is False
             for dirpath, dirs, filenames in os.walk(top_dir, topdown=True):
@@ -564,7 +625,7 @@ class Hardlinkable:
 
                     # Bump statistics count of regular files found.
                     gStats.found_regular_file()
-                    if options.verbosity > 2:
+                    if options.debug_level > 3:
                         print("File: %s" % pathname)
 
                     # Extract the normalized path directory name
@@ -574,16 +635,12 @@ class Hardlinkable:
                     # storage by interning
                     dirname = intern(dirname)
                     filename = intern(filename)
-                    self._hardlink_identical_files(dirname, filename, stat_info)
-
-        if options.printstats:
-            gStats.print_stats(options)
-
+                    yield (dirname, filename, stat_info)
 
     # dirname is the directory component and filename is just the file name
     # component (ie. the basename) without the path.  The tree walking provides
     # this, so we don't have to extract it with os.path.split()
-    def _hardlink_identical_files(self, dirname, filename, stat_info):
+    def _find_identical_files(self, dirname, filename, stat_info):
         options = self.options
         gStats = self.stats
 
@@ -600,12 +657,12 @@ class Hardlinkable:
             if ino in ino_stat:
                 prev_namepair = self._arbitrary_namepair_from_ino(ino)
                 pathname = os.path.join(dirname, filename)
-                if options.verbosity > 1:
+                if options.debug_level > 2:
                     prev_pathname = os.path.join(*prev_namepair)
                     print("Existing link: %s" % prev_pathname)
                     print("        with : %s" % pathname)
                 prev_stat_info = ino_stat[ino]
-                gStats.found_hardlink(prev_namepair, namepair, prev_stat_info)
+                gStats.found_existing_hardlink(prev_namepair, namepair, prev_stat_info)
             # We have file(s) that have the same hash as our current file.
             # Let's go through the list of files with the same hash and see if
             # we are already hardlinked to any of them.
@@ -621,12 +678,7 @@ class Hardlinkable:
                         continue
                     cached_file_info = self._fileinfo_from_ino(cached_ino, filename)
                     if self._are_files_hardlinkable(cached_file_info, file_info):
-                        if options.linking_enabled:
-                            # DO NOT call hardlink_files() unless link creation
-                            # is selected. It unconditionally performs links.
-                            hardlink_files(cached_file_info, file_info)
-
-                        self._did_hardlink(cached_file_info, file_info)
+                        self._found_hardlinkable_file(cached_file_info, file_info)
                         break
                 else:  # nobreak
                     # The file should NOT be hardlinked to any of the other
@@ -683,17 +735,15 @@ class Hardlinkable:
             result = ((st1.st_nlink + st2.st_nlink) <= max_nlinks)
         return result
 
-
     def _are_file_contents_equal(self, pathname1, pathname2):
         """Determine if the contents of two files are equal"""
         options = self.options
         gStats = self.stats
-        if options.verbosity > 1:
+        if options.debug_level > 1:
             print("Comparing: %s" % pathname1)
             print("     to  : %s" % pathname2)
         gStats.did_comparison()
         return filecmp.cmp(pathname1, pathname2, shallow=False)
-
 
     # Determines if two files should be hard linked together.
     def _are_files_hardlinkable(self, file_info1, file_info2):
@@ -710,37 +760,108 @@ class Hardlinkable:
                                                    os.path.join(dirname2,filename2))
         return result
 
-
-    def _did_hardlink(self, source_file_info, dest_file_info):
+    def _found_hardlinkable_file(self, source_file_info, dest_file_info):
         source_dirname, source_filename, source_stat_info = source_file_info
         dest_dirname, dest_filename, dest_stat_info = dest_file_info
 
-        source_namepair = (source_dirname, source_filename)
-        dest_namepair = (dest_dirname, dest_filename)
-        assert source_namepair != dest_namepair, source_namepair
-
-        options = self.options
-        gStats = self.stats
+        self._add_linked_inodes(source_stat_info.st_ino, dest_stat_info.st_ino)
 
         # update our stats (Note: dest_stat_info is from pre-link())
-        gStats.did_hardlink(source_namepair, dest_namepair, dest_stat_info)
-        if options.verbosity > 0:
-            if not options.linking_enabled:
-                preamble1 = "Can be "
-                preamble2 = "       "
-            else:
-                preamble1 = ""
-                preamble2 = ""
-
+        if self.options.debug_level > 0:
             source_pathname = os.path.join(source_dirname, source_filename)
             dest_pathname = os.path.join(dest_dirname, dest_filename)
+            assert source_pathname != dest_pathname
+            print("Linkable: %s" % source_pathname)
+            print("      to: %s" % dest_pathname)
 
-            print("%sLinked: %s" % (preamble1, source_pathname))
-            if dest_stat_info.st_nlink == 1:
-                print("%s    to: %s, saved %s" % (preamble2, dest_pathname,
-                                                  humanize_number(dest_stat_info.st_size)))
+    def _updated_stat_info(self, stat_info, nlink=None, mtime=None, atime=None, uid=None, gid=None):
+        """Updates an ino_stat stat_info with the given values."""
+        l = list(stat_info)
+        if nlink is not None:
+            l[stat.ST_NLINK] = nlink
+        if mtime is not None:
+            l[stat.ST_MTIME] = mtime
+        if atime is not None:
+            l[stat.ST_ATIME] = atime
+        if uid is not None:
+            l[stat.ST_UID] = uid
+        if gid is not None:
+            l[stat.ST_GID] = gid
+
+        _, ino_stat = self._get_dev_dicts(stat_info.st_dev)
+        ino_stat[stat_info.st_ino] = stat_info.__class__(l)
+        if ino_stat[stat_info.st_ino].st_nlink < 1:
+            assert ino_stat[stat_info.st_ino].st_nlink == 0
+            del ino_stat[stat_info.st_ino]
+
+    def _hardlink_files(self, source_file_info, dest_file_info):
+        """Actually perform the filesystem hardlinking of two files."""
+        source_dirname, source_filename, source_stat_info = source_file_info
+        dest_dirname, dest_filename, dest_stat_info = dest_file_info
+        source_pathname = os.path.join(source_dirname, source_filename)
+        dest_pathname = os.path.join(dest_dirname, dest_filename)
+
+        hardlink_succeeded = False
+        # rename the destination file to save it
+        temp_pathname = dest_pathname + ".$$$___cleanit___$$$"
+        try:
+            os.rename(dest_pathname, temp_pathname)
+        except OSError:
+            error = sys.exc_info()[1]
+            logging.error("Failed to rename: %s to %s\n%s" % (dest_pathname, temp_pathname, error))
+        else:
+            # Now link the sourcefile to the destination file
+            try:
+                os.link(source_pathname, dest_pathname)
+            except Exception:
+                error = sys.exc_info()[1]
+                logging.error("Failed to hardlink: %s to %s\n%s" % (source_pathname, dest_pathname, error))
+                # Try to recover
+                try:
+                    os.rename(temp_pathname, dest_pathname)
+                except Exception:
+                    error = sys.exc_info()[1]
+                    logging.critical("Failed to rename temp filename %s back to %s\n%s" % (temp_pathname, dest_pathname, error))
+                    sys.exit(3)
             else:
-                print("%s    to: %s" % (preamble2, dest_pathname))
+                hardlink_succeeded = True
+
+                # Delete the renamed version since we don't need it.
+                try:
+                    os.unlink(temp_pathname)
+                except Exception:
+                    error = sys.exc_info()[1]
+                    # Failing to remove the temp file could lead to endless
+                    # attempts to link to it in the future.
+                    logging.critical("Failed to remove temp filename: %s\n%s" % (temp_pathname, error))
+                    sys.exit(3)
+
+                # Use the destination file attributes if it's most recently modified
+                dest_mtime = dest_atime = dest_uid = dest_gid = None
+                if dest_stat_info.st_mtime > source_stat_info.st_mtime:
+                    try:
+                        os.utime(src_pathname, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
+                        dest_atime = dest_stat_info.st_atime
+                        dest_mtime = dest_stat_info.st_mtime
+                    except Exception:
+                        error = sys.exc_info()[1]
+                        logging.warning("Failed to update file time attributes for %s\n%s" % (source_pathname, error))
+
+                    try:
+                        os.chown(src_pathname, dest_stat_info.st_uid, dest_stat_info.st_gid)
+                        dest_uid = dest_stat_info.st_uid
+                        dest_gid = dest_stat_info.st_gid
+                    except Exception:
+                        error = sys.exc_info()[1]
+                        logging.warning("Failed to update file owner attributes for %s\n%s" % (source_pathname, error))
+
+                    self._updated_stat_info(src_stat_info,
+                                            mtime=dest_mtime,
+                                            atime=dest_atime,
+                                            uid=dest_uid,
+                                            gid=dest_gid)
+
+        return hardlink_succeeded
 
 
 def main():
