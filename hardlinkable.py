@@ -301,6 +301,13 @@ def namepairs_per_inode(d):
             yield namepair
 
 
+def fileinfo_namepair(file_info):
+    """Return a namepair from a file_info (dirname, filename, stat_info)
+    tuple."""
+    dirname, filename, stat_info = file_info
+    return (dirname, filename)
+
+
 class Statistics:
     def __init__(self):
         self.dircount = 0                   # how many directories we find
@@ -343,12 +350,11 @@ class Statistics:
 
     def did_hardlink(self, src_file_info, dest_file_info):
         # nlink count is not necessarily accurate at the moment
-        src_dirname, src_filename, src_stat_info = src_file_info
-        dest_dirname, dest_filename, dest_stat_info = dest_file_info
-        src_namepair = (src_dirname, src_filename)
-        dest_namepair = (dest_dirname, dest_filename)
+        src_namepair = fileinfo_namepair(src_file_info)
+        dest_namepair = fileinfo_namepair(dest_file_info)
         self.hardlinkstats.append((src_namepair, dest_namepair))
 
+        dest_stat_info = dest_file_info[2]
         filesize = dest_stat_info.st_size
         self.hardlinked_thisrun = self.hardlinked_thisrun + 1
         if dest_stat_info.st_nlink == 1:
@@ -430,11 +436,6 @@ class Hardlinkable:
 
         #pp(self._inode_stats())
         for (src_file_info, dest_file_info) in self._sorted_links():
-            src_dirname, src_filename, src_stat_info = src_file_info
-            dest_dirname, dest_filename, dest_stat_info = dest_file_info
-            src_pathname = os.path.join(src_dirname, src_filename)
-            dest_pathname = os.path.join(dest_dirname, dest_filename)
-
             hardlink_succeeded = False
             if self.options.linking_enabled:
                 # DO NOT call hardlink_files() unless link creation
@@ -443,12 +444,15 @@ class Hardlinkable:
                                                           dest_file_info)
 
             if not self.options.linking_enabled or hardlink_succeeded:
-                fsdev = self._get_fsdev(src_stat_info.st_dev)
-                src_file_info = (src_dirname, src_filename, fsdev.ino_stat[src_stat_info.st_ino])
-                dest_file_info = (dest_dirname, dest_filename, fsdev.ino_stat[dest_stat_info.st_ino])
-                self.stats.did_hardlink(src_file_info, dest_file_info)
-                self._updated_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
-                self._updated_stat_info(dest_stat_info, nlink=dest_stat_info.st_nlink - 1)
+                new_src_file_info = self._updated_file_info(src_file_info)
+                new_dest_file_info = self._updated_file_info(dest_file_info)
+
+                self.stats.did_hardlink(new_src_file_info, new_dest_file_info)
+
+                src_stat_info = new_src_file_info[2]
+                dest_stat_info = new_dest_file_info[2]
+                self._update_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
+                self._update_stat_info(dest_stat_info, nlink=dest_stat_info.st_nlink - 1)
 
         #pp(self._inode_stats())
         if self.options.printstats:
@@ -559,6 +563,7 @@ class Hardlinkable:
                             yield (src_file_info, dest_file_info)
                             src_nlink += 1
                             dest_nlink -= 1
+                            assert dest_nlink >= 0
 
     def _inode_stats(self):
         total_inodes = 0
@@ -582,8 +587,8 @@ class Hardlinkable:
 
         fsdev = self._get_fsdev(stat_info.st_dev)
         ino = stat_info.st_ino
-        namepair = (dirname, filename)
         file_info = (dirname, filename, stat_info)
+        namepair = fileinfo_namepair(file_info)
 
         file_hash = hash_value(stat_info, options)
         if file_hash in fsdev.file_hashes:
@@ -715,7 +720,7 @@ class Hardlinkable:
             print("Linkable: %s" % source_pathname)
             print("      to: %s" % dest_pathname)
 
-    def _updated_stat_info(self, stat_info, nlink=None, mtime=None, atime=None, uid=None, gid=None):
+    def _update_stat_info(self, stat_info, nlink=None, mtime=None, atime=None, uid=None, gid=None):
         """Updates an ino_stat stat_info with the given values."""
         l = list(stat_info)
         if nlink is not None:
@@ -734,6 +739,13 @@ class Hardlinkable:
         if fsdev.ino_stat[stat_info.st_ino].st_nlink < 1:
             assert fsdev.ino_stat[stat_info.st_ino].st_nlink == 0
             del fsdev.ino_stat[stat_info.st_ino]
+
+    def _updated_file_info(self, file_info):
+        """Return a file_info tuple with the current stat_info value."""
+        dirname, filename, stat_info = file_info
+        fsdev = self._get_fsdev(stat_info.st_dev)
+        new_file_info = (dirname, filename, fsdev.ino_stat[stat_info.st_ino])
+        return new_file_info
 
     def _hardlink_files(self, source_file_info, dest_file_info):
         """Actually perform the filesystem hardlinking of two files."""
@@ -796,12 +808,11 @@ class Hardlinkable:
                         error = sys.exc_info()[1]
                         logging.warning("Failed to update file owner attributes for %s\n%s" % (source_pathname, error))
 
-                    self._updated_stat_info(src_stat_info,
-                                            mtime=dest_mtime,
-                                            atime=dest_atime,
-                                            uid=dest_uid,
-                                            gid=dest_gid)
-
+                    self._update_stat_info(src_stat_info,
+                                           mtime=dest_mtime,
+                                           atime=dest_atime,
+                                           uid=dest_uid,
+                                           gid=dest_gid)
         return hardlink_succeeded
 
 
