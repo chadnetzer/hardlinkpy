@@ -350,10 +350,11 @@ class Statistics:
         filesize = stat_info.st_size
         self.hardlinked_previously = self.hardlinked_previously + 1
         self.bytes_saved_previously = self.bytes_saved_previously + filesize
-        if source_namepair not in self.previouslyhardlinked:
-            self.previouslyhardlinked[source_namepair] = (filesize, [dest_namepair])
-        else:
-            self.previouslyhardlinked[source_namepair][1].append(dest_namepair)
+        if self.options.printprevious:
+            if source_namepair not in self.previouslyhardlinked:
+                self.previouslyhardlinked[source_namepair] = (filesize, [dest_namepair])
+            else:
+                self.previouslyhardlinked[source_namepair][1].append(dest_namepair)
 
     def did_hardlink(self, src_file_info, dest_file_info):
         # nlink count is not necessarily accurate at the moment
