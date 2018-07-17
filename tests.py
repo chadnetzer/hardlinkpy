@@ -233,6 +233,9 @@ class TestHappy(BaseTests):
                 ]
         hardlinkable.main()
 
+        # Save original file_contents dict
+        saved_file_contents = self.file_contents.copy()
+
         # remove unused directories from content check dictionary
         for pathname in self.file_contents.copy():
             if (pathname.startswith('dir1') or pathname.startswith('dir2')):
@@ -244,6 +247,9 @@ class TestHappy(BaseTests):
 
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
+
+        # Restore original file_contents for tearDown
+        self.file_contents = saved_file_contents
 
     def test_hardlink_tree_filenames_equal(self):
         sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--same-name", self.root]
