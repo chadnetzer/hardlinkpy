@@ -270,12 +270,13 @@ def found_matched_filename(name, matches):
     return False
 
 
-def linkable_inode_sets(remaining_inodes):
-    # Must start with the largest inode number, since the 'key' inode is always
-    # greater than it's value inodes.
-    remaining_inodes = remaining_inodes.copy()
-    src_inos = sorted(remaining_inodes, reverse=True)
-    for start_ino in src_inos:
+def linkable_inode_sets(linked_inodes):
+    """Generate sets of inodes that can be connected.  Starts with a mapping of
+    inode # keys, and set values, which are the inodes which are determined to
+    be equal (and thus linkable) to the key inode."""
+
+    remaining_inodes = linked_inodes.copy()
+    for start_ino in linked_inodes:
         if start_ino not in remaining_inodes:
             continue
         result_set = set()
