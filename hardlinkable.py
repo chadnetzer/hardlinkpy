@@ -315,7 +315,8 @@ def fileinfo_namepair(file_info):
 
 
 class Statistics:
-    def __init__(self):
+    def __init__(self, options):
+        self.options = options
         self.dircount = 0                   # how many directories we find
         self.regularfiles = 0               # how many regular files we find
         self.comparisons = 0                # how many file content comparisons
@@ -383,11 +384,11 @@ class Statistics:
     def inc_hash_list_iteration(self):
         self.num_list_iterations += 1
 
-    def print_stats(self, options):
+    def print_stats(self):
         print("\n")
         print("Hard linking Statistics:")
         # Print out the stats for the files we hardlinked, if any
-        if self.previouslyhardlinked and options.printprevious:
+        if self.previouslyhardlinked and self.options.printprevious:
             keys = list(self.previouslyhardlinked.keys())
             keys.sort()  # Could use sorted() once we only support >= Python 2.4
             print("Files Previously Hardlinked:")
@@ -418,7 +419,7 @@ class Statistics:
         totalbytes = self.bytes_saved_thisrun + self.bytes_saved_previously
         print("Total bytes saved     : %s (%s)" % (totalbytes, humanize_number(totalbytes)))
         print("Total run time        : %s seconds" % (time.time() - self.starttime))
-        if options.debug_level > 0:
+        if self.options.debug_level > 0:
             print("Total file hash hits       : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
                                                                                   self.num_hash_misses,
                                                                                   (self.num_hash_hits +
@@ -433,7 +434,7 @@ class Statistics:
 class Hardlinkable:
     def __init__(self, options):
         self.options = options
-        self.stats = Statistics()
+        self.stats = Statistics(options)
         self._fsdevs = {}
 
     def linkify(self, directories):
@@ -462,7 +463,7 @@ class Hardlinkable:
 
         #pp(self._inode_stats())
         if self.options.printstats:
-            self.stats.print_stats(self.options)
+            self.stats.print_stats()
 
     def matched_file_info(self, directories):
         options = self.options
