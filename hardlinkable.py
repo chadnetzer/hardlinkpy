@@ -422,8 +422,7 @@ class Hardlinkable:
         self.options = options
         self.stats = Statistics()
         self.max_nlinks_per_dev = {}
-
-        self.st_devs = {}   # type: Tuple[MutableMapping, MutableMapping]
+        self._fsdevs = {}
 
     def linkify(self, directories):
         for dirname, filename, stat_info in self.matched_file_info(directories):
@@ -444,9 +443,9 @@ class Hardlinkable:
                                                           dest_file_info)
 
             if not self.options.linking_enabled or hardlink_succeeded:
-                _, ino_stat = self._get_dev_dicts(src_stat_info.st_dev)
-                src_file_info = (src_dirname, src_filename, ino_stat[src_stat_info.st_ino])
-                dest_file_info = (dest_dirname, dest_filename, ino_stat[dest_stat_info.st_ino])
+                fsdev = self._get_fsdev(src_stat_info.st_dev)
+                src_file_info = (src_dirname, src_filename, fsdev.ino_stat[src_stat_info.st_ino])
+                dest_file_info = (dest_dirname, dest_filename, fsdev.ino_stat[dest_stat_info.st_ino])
                 self.stats.did_hardlink(src_file_info, dest_file_info)
                 self._updated_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
                 self._updated_stat_info(dest_stat_info, nlink=dest_stat_info.st_nlink - 1)
@@ -527,97 +526,34 @@ class Hardlinkable:
                     filename = intern(filename)
                     yield (dirname, filename, stat_info)
 
-    def _init_dev_dicts(self, st_dev):
-        # For each hash value, track inode (and optionally filename)
-        # file_hashes <- {hash_val: set(ino)}
-        #
-        # Keep track of per-inode stat info
-        # ino_stat <- {st_ino: stat_info}
-        #
-        # For each inode, keep track of all the pathnames
-        # ino_pathnames <- {st_ino: {filename: list((dirname, filename))}}
-        #
-        # For each linkable file pair found, add their inodes as a pair (ie.
-        # ultimately we want to "link" the inodes together).  Each pair is
-        # added twice, in each order, so that a pair can be found from either
-        # inode.
-        # linked_inodes = {largest_ino_num: set(ino_nums)}
-        self.cur_dev = st_dev
-
-        if st_dev not in self.st_devs:
-            # tuple of (file_hashes, ino_pathnames, ino_stat, linked_inodes)
-            self.st_devs[st_dev] = ({}, {}, {}, {})
-
-    def _get_dev_ino_filenames(self, st_dev):
-        self._init_dev_dicts(st_dev)
-        return self.st_devs[st_dev][2]
-
-    def _get_dev_dicts(self, st_dev):
-        self._init_dev_dicts(st_dev)
-        return self.st_devs[st_dev][:2]
-
-    def _arbitrary_namepair_from_ino(self, ino):
-        ino_pathnames = self._get_dev_ino_filenames(self.cur_dev)
-        # Get the dict of filename: [pathnames] for ino_key
-        d = ino_pathnames[ino]
-        # Get an arbitrary pathnames list
-        l = next(iter(d.values()))
-        return l[0]
-
-    def _ino_append_namepair(self, ino, filename, namepair):
-        ino_pathnames = self._get_dev_ino_filenames(self.cur_dev)
-        d = ino_pathnames.setdefault(ino, {})
-        l = d.setdefault(filename, [])
-        l.append(namepair)
-
-    def _fileinfo_from_ino(self, ino, filename):
-        """When samename not True, chooses an arbitrary namepair linked to the inode"""
-        _, ino_stat = self._get_dev_dicts(self.cur_dev)
-        if self.options.samename:
-            ino_pathnames = self._get_dev_ino_filenames(self.cur_dev)
-            assert ino in ino_pathnames
-            assert filename in ino_pathnames[ino]
-            l = ino_pathnames[ino][filename]
-            dirname, filename = l[0]
-        else:
-            dirname, filename = self._arbitrary_namepair_from_ino(ino)
-        return (dirname, filename, ino_stat[ino])
-
-    def _ino_has_filename(self, ino, filename):
-        """Return true if the given ino has 'filename' linked to it."""
-        ino_pathnames = self._get_dev_ino_filenames(self.cur_dev)
-        return (filename in ino_pathnames[ino])
-
-    def _add_linked_inodes(self, ino1, ino2):
-        """Adds to the dictionary of ino1 to ino2 mappings."""
-        assert ino1 != ino2
-        d = self.st_devs[self.cur_dev][3]
-        s = d.setdefault(ino1, set())
-        s.add(ino2)
-        s = d.setdefault(ino2, set())
-        s.add(ino1)
+    def _get_fsdev(self, st_dev):
+        """Return an FSDev for given stat_info.st_dev"""
+        fsdev = self._fsdevs.get(st_dev, None)
+        if fsdev is None:
+            fsdev = FSDev(st_dev)
+            self._fsdevs[st_dev] = fsdev
+        return fsdev
 
     def _sorted_links(self):
-        for st_dev in self.st_devs:
-            _, ino_stat, ino_pathnames, linked_inodes = self.st_devs[st_dev]
-            for linkable_set in linkable_inode_sets(linked_inodes):
-                nlinks_list = [(ino_stat[ino].st_nlink, ino) for ino in linkable_set]
+        for st_dev, fsdev in self._fsdevs.items():
+            for linkable_set in linkable_inode_sets(fsdev.linked_inodes):
+                nlinks_list = [(fsdev.ino_stat[ino].st_nlink, ino) for ino in linkable_set]
                 nlinks_list.sort(reverse=True)
                 assert len(nlinks_list) > 1
                 while len(nlinks_list) > 1:
                     # Loop until src + dest nlink < max_nlink
                     src_nlink, src_ino = nlinks_list[0]
                     nlinks_list = nlinks_list[1:]
-                    src_dirname, src_filename = self._arbitrary_namepair_from_ino(src_ino)
+                    src_dirname, src_filename = fsdev._arbitrary_namepair_from_ino(src_ino)
                     while nlinks_list:
                         dest_nlink, dest_ino = nlinks_list.pop()
                         assert src_nlink >= dest_nlink
                         if src_nlink + dest_nlink > self.max_nlinks_per_dev[st_dev]:
                             nlinks_list = nlinks_list[1:]
                             break
-                        for dest_dirname, dest_filename in namepairs_per_inode(ino_pathnames[dest_ino]):
-                            src_file_info = (src_dirname, src_filename, ino_stat[src_ino])
-                            dest_file_info = (dest_dirname, dest_filename, ino_stat[dest_ino])
+                        for dest_dirname, dest_filename in namepairs_per_inode(fsdev.ino_pathnames[dest_ino]):
+                            src_file_info = (src_dirname, src_filename, fsdev.ino_stat[src_ino])
+                            dest_file_info = (dest_dirname, dest_filename, fsdev.ino_stat[dest_ino])
                             yield (src_file_info, dest_file_info)
                             src_nlink += 1
                             dest_nlink -= 1
@@ -626,9 +562,8 @@ class Hardlinkable:
         total_inodes = 0
         total_bytes = 0
         total_saved_bytes = 0 # Each nlink > 1 is counted as "saved" space
-        for st_dev in self.st_devs:
-            _, ino_stat, ino_pathnames, linked_inodes = self.st_devs[st_dev]
-            for ino, stat_info in ino_stat.items():
+        for fsdev in self._fsdevs.values():
+            for ino, stat_info in fsdev.ino_stat.items():
                 total_inodes += 1
                 total_bytes += stat_info.st_size
                 total_saved_bytes += (stat_info.st_size * (stat_info.st_nlink - 1))
@@ -643,39 +578,42 @@ class Hardlinkable:
         options = self.options
         gStats = self.stats
 
-        file_hashes, ino_stat = self._get_dev_dicts(stat_info.st_dev)
-
+        fsdev = self._get_fsdev(stat_info.st_dev)
         ino = stat_info.st_ino
         namepair = (dirname, filename)
         file_info = (dirname, filename, stat_info)
 
         file_hash = hash_value(stat_info, options)
-        if file_hash in file_hashes:
+        if file_hash in fsdev.file_hashes:
             gStats.found_hash()
             # See if the new file has the same inode as one we've already seen.
-            if ino in ino_stat:
-                prev_namepair = self._arbitrary_namepair_from_ino(ino)
+            if ino in fsdev.ino_stat:
+                prev_namepair = fsdev._arbitrary_namepair_from_ino(ino)
                 pathname = os.path.join(dirname, filename)
                 if options.debug_level > 2:
                     prev_pathname = os.path.join(*prev_namepair)
                     print("Existing link: %s" % prev_pathname)
                     print("        with : %s" % pathname)
-                prev_stat_info = ino_stat[ino]
+                prev_stat_info = fsdev.ino_stat[ino]
                 gStats.found_existing_hardlink(prev_namepair, namepair, prev_stat_info)
             # We have file(s) that have the same hash as our current file.
             # Let's go through the list of files with the same hash and see if
             # we are already hardlinked to any of them.
-            found_cached_ino = (ino in file_hashes[file_hash])
+            found_cached_ino = (ino in fsdev.file_hashes[file_hash])
             if (not found_cached_ino or
-                (options.samename and not self._ino_has_filename(ino, filename))):
+                (options.samename and not fsdev._ino_has_filename(ino, filename))):
                 # We did not find this file as hardlinked to any other file
                 # yet.  So now lets see if our file should be hardlinked to any
                 # of the other files with the same hash.
-                for cached_ino in file_hashes[file_hash]:
+                for cached_ino in fsdev.file_hashes[file_hash]:
                     gStats.inc_hash_list_iteration()
-                    if (options.samename and not self._ino_has_filename(cached_ino, filename)):
+                    if (options.samename and not fsdev._ino_has_filename(cached_ino, filename)):
                         continue
-                    cached_file_info = self._fileinfo_from_ino(cached_ino, filename)
+
+                    if options.samename:
+                        cached_file_info = fsdev._fileinfo_from_ino(cached_ino, filename)
+                    else:
+                        cached_file_info = fsdev._fileinfo_from_ino(cached_ino)
                     if self._are_files_hardlinkable(cached_file_info, file_info):
                         self._found_hardlinkable_file(cached_file_info, file_info)
                         break
@@ -683,18 +621,18 @@ class Hardlinkable:
                     # The file should NOT be hardlinked to any of the other
                     # files with the same hash.  So we will add it to the list
                     # of files.
-                    file_hashes[file_hash].add(ino)
-                    ino_stat[ino] = stat_info
+                    fsdev.file_hashes[file_hash].add(ino)
+                    fsdev.ino_stat[ino] = stat_info
                     gStats.no_hash_match()
         else: # if file_hash NOT in file_hashes
             # There weren't any other files with the same hash value so we will
             # create a new entry and store our file.
-            file_hashes[file_hash] = set([ino])
-            assert ino not in ino_stat
+            fsdev.file_hashes[file_hash] = set([ino])
+            assert ino not in fsdev.ino_stat
             gStats.missed_hash()
 
-        ino_stat[ino] = stat_info
-        self._ino_append_namepair(ino, filename, namepair)
+        fsdev.ino_stat[ino] = stat_info
+        fsdev._ino_append_namepair(ino, filename, namepair)
 
     # Determine if a file is eligibile for hardlinking.  Files will only be
     # considered for hardlinking if this function returns true.
@@ -763,7 +701,9 @@ class Hardlinkable:
         source_dirname, source_filename, source_stat_info = source_file_info
         dest_dirname, dest_filename, dest_stat_info = dest_file_info
 
-        self._add_linked_inodes(source_stat_info.st_ino, dest_stat_info.st_ino)
+        assert source_stat_info.st_dev == dest_stat_info.st_dev
+        fsdev = self._get_fsdev(source_stat_info.st_dev)
+        fsdev._add_linked_inodes(source_stat_info.st_ino, dest_stat_info.st_ino)
 
         # update our stats (Note: dest_stat_info is from pre-link())
         if self.options.debug_level > 0:
@@ -787,11 +727,11 @@ class Hardlinkable:
         if gid is not None:
             l[stat.ST_GID] = gid
 
-        _, ino_stat = self._get_dev_dicts(stat_info.st_dev)
-        ino_stat[stat_info.st_ino] = stat_info.__class__(l)
-        if ino_stat[stat_info.st_ino].st_nlink < 1:
-            assert ino_stat[stat_info.st_ino].st_nlink == 0
-            del ino_stat[stat_info.st_ino]
+        fsdev = self._get_fsdev(stat_info.st_dev)
+        fsdev.ino_stat[stat_info.st_ino] = stat_info.__class__(l)
+        if fsdev.ino_stat[stat_info.st_ino].st_nlink < 1:
+            assert fsdev.ino_stat[stat_info.st_ino].st_nlink == 0
+            del fsdev.ino_stat[stat_info.st_ino]
 
     def _hardlink_files(self, source_file_info, dest_file_info):
         """Actually perform the filesystem hardlinking of two files."""
@@ -861,6 +801,66 @@ class Hardlinkable:
                                             gid=dest_gid)
 
         return hardlink_succeeded
+
+
+class FSDev:
+    """Per filesystem (ie. st_dev) operations"""
+    def __init__(self, st_dev):
+        self.st_dev = st_dev
+
+        # For each hash value, track inode (and optionally filename)
+        # file_hashes <- {hash_val: set(ino)}
+        self.file_hashes = {}
+
+        # Keep track of per-inode stat info
+        # ino_stat <- {st_ino: stat_info}
+        self.ino_stat = {}
+
+        # For each inode, keep track of all the pathnames
+        # ino_pathnames <- {st_ino: {filename: list((dirname, filename))}}
+        self.ino_pathnames = {}
+
+        # For each linkable file pair found, add their inodes as a pair (ie.
+        # ultimately we want to "link" the inodes together).  Each pair is
+        # added twice, in each order, so that a pair can be found from either
+        # inode.
+        # linked_inodes = {largest_ino_num: set(ino_nums)}
+        self.linked_inodes = {}
+
+    def _arbitrary_namepair_from_ino(self, ino):
+        # Get the dict of filename: [pathnames] for ino_key
+        d = self.ino_pathnames[ino]
+        # Get an arbitrary pathnames list
+        l = next(iter(d.values()))
+        return l[0]
+
+    def _ino_append_namepair(self, ino, filename, namepair):
+        d = self.ino_pathnames.setdefault(ino, {})
+        l = d.setdefault(filename, [])
+        l.append(namepair)
+
+    def _fileinfo_from_ino(self, ino, filename=None):
+        """When filename is None, chooses an arbitrary namepair linked to the inode"""
+        if filename is not None:
+            assert ino in self.ino_pathnames
+            assert filename in self.ino_pathnames[ino]
+            l = self.ino_pathnames[ino][filename]
+            dirname, filename = l[0]
+        else:
+            dirname, filename = self._arbitrary_namepair_from_ino(ino)
+        return (dirname, filename, self.ino_stat[ino])
+
+    def _ino_has_filename(self, ino, filename):
+        """Return true if the given ino has 'filename' linked to it."""
+        return (filename in self.ino_pathnames[ino])
+
+    def _add_linked_inodes(self, ino1, ino2):
+        """Adds to the dictionary of ino1 to ino2 mappings."""
+        assert ino1 != ino2
+        s = self.linked_inodes.setdefault(ino1, set())
+        s.add(ino2)
+        s = self.linked_inodes.setdefault(ino2, set())
+        s.add(ino1)
 
 
 def main():
