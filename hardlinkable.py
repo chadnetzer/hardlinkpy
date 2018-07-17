@@ -95,10 +95,6 @@ a change to one hardlinked file changes them all."""
                       help="Perform the actual hardlinking",
                       action="store_true", default=False,)
 
-    parser.add_option("-p", "--print-previous", dest="printprevious",
-                      help="Print previously created hardlinks",
-                      action="store_true", default=False,)
-
     parser.add_option("-q", "--no-stats", dest="printstats",
                       help="Do not print the statistics",
                       action="store_false", default=True,)
@@ -350,7 +346,7 @@ class Statistics:
         filesize = stat_info.st_size
         self.hardlinked_previously = self.hardlinked_previously + 1
         self.bytes_saved_previously = self.bytes_saved_previously + filesize
-        if self.options.printprevious:
+        if self.options.verbosity > 1:
             if source_namepair not in self.previouslyhardlinked:
                 self.previouslyhardlinked[source_namepair] = (filesize, [dest_namepair])
             else:
@@ -386,25 +382,23 @@ class Statistics:
         self.num_list_iterations += 1
 
     def print_stats(self):
-        print("\n")
         print("Hard linking Statistics:")
         # Print out the stats for the files we hardlinked, if any
-        if self.previouslyhardlinked and self.options.printprevious:
+        if self.options.verbosity > 1 and self.previouslyhardlinked:
             keys = list(self.previouslyhardlinked.keys())
             keys.sort()  # Could use sorted() once we only support >= Python 2.4
             print("Files Previously Hardlinked:")
             for key in keys:
                 size, file_list = self.previouslyhardlinked[key]
-                print("Hardlinked together: %s" % os.path.join(*key))
+                print("Currently hardlinked: %s" % os.path.join(*key))
                 for namepair in file_list:
                     pathname = os.path.join(*namepair)
-                    print("                   : %s" % pathname)
+                    print("                    : %s" % pathname)
                 print("Size per file: %s  Total saved: %s" % (humanize_number(size),
                                                               humanize_number(size * len(file_list))))
             print("")
-        if self.hardlinkstats:
+        if self.options.verbosity > 0 and self.hardlinkstats:
             if not self.options.linking_enabled:
-                print("Statistics reflect what would happen if actual linking were enabled")
                 print("Files that are hardlinkable:")
             else:
                 print("Files that were hardlinked this run:")
@@ -412,16 +406,32 @@ class Statistics:
                 print("from: %s" % os.path.join(*source_namepair))
                 print("  to: %s" % os.path.join(*dest_namepair))
             print("")
-        print("Directories           : %s" % self.dircount)
-        print("Regular files         : %s" % self.regularfiles)
-        print("Comparisons           : %s" % self.comparisons)
-        print("Consolidated this run : %s" % self.nlinks_to_zero_thisrun)
-        print("Hardlinked this run   : %s" % self.hardlinked_thisrun)
-        print("Total hardlinks       : %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
-        print("Bytes saved this run  : %s (%s)" % (self.bytes_saved_thisrun, humanize_number(self.bytes_saved_thisrun)))
+        if not self.options.linking_enabled:
+            print("Statistics reflect what would result if actual linking were enabled")
+        print("Directories               : %s" % self.dircount)
+        print("Regular files             : %s" % self.regularfiles)
+        print("Comparisons               : %s" % self.comparisons)
+        if self.options.linking_enabled:
+            s1 = "Consolidated inodes       : %s"
+            s2 = "Hardlinked this run       : %s"
+        else:
+            s1 = "Consolidatable inodes     : %s"
+            s2 = "Hardlinkable files        : %s"
+        print(s1 % self.nlinks_to_zero_thisrun)
+        print(s2 % self.hardlinked_thisrun)
+        print("Total hardlinks           : %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
+        if self.options.linking_enabled:
+            s3 = "Additional bytes saved    : %s (%s)"
+        else:
+            s3 = "Additional bytes saveable : %s (%s)"
+        print(s3 % (self.bytes_saved_thisrun, humanize_number(self.bytes_saved_thisrun)))
         totalbytes = self.bytes_saved_thisrun + self.bytes_saved_previously
-        print("Total bytes saved     : %s (%s)" % (totalbytes, humanize_number(totalbytes)))
-        print("Total run time        : %s seconds" % (time.time() - self.starttime))
+        if self.options.linking_enabled:
+            s4 = "Total bytes saved         : %s (%s)"
+        else:
+            s4 = "Total bytes saveable      : %s (%s)"
+        print(s4 % (totalbytes, humanize_number(totalbytes)))
+        print("Total run time            : %s seconds" % (time.time() - self.starttime))
         if self.options.debug_level > 0:
             print("Total file hash hits       : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
                                                                                   self.num_hash_misses,
