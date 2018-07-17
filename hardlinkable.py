@@ -276,11 +276,17 @@ def linkable_inode_sets(linked_inodes):
     be equal (and thus linkable) to the key inode."""
 
     remaining_inodes = linked_inodes.copy()
+    # iterate once over each inode key, building a set of it's connected
+    # inodes, by direct or indirect association
     for start_ino in linked_inodes:
         if start_ino not in remaining_inodes:
             continue
         result_set = set()
         pending = [start_ino]
+        # We know this loop terminates because we always remove an item from
+        # the pending list, and a key from the remaining_inodes dict.  Since no
+        # additions are made to the remaining_inodes, eventually the pending
+        # list must empty.
         while pending:
             ino = pending.pop()
             result_set.add(ino)
@@ -546,17 +552,27 @@ class Hardlinkable:
                 nlinks_list.sort(reverse=True)
                 assert len(nlinks_list) > 1
                 while len(nlinks_list) > 1:
-                    # Loop until src + dest nlink < max_nlinks
+                    # Ensure we don't try to combine inodes that would create
+                    # more links than the maximum allowed nlinks, by looping
+                    # until src + dest nlink < max_nlinks
+                    #
+                    # Every loop shortens the nlinks_list, so the loop will
+                    # terminate.
                     src_nlink, src_ino = nlinks_list[0]
                     nlinks_list = nlinks_list[1:]
                     src_dirname, src_filename = fsdev._arbitrary_namepair_from_ino(src_ino)
                     while nlinks_list:
+                        # Always removes last element, so loop must terminate
                         dest_nlink, dest_ino = nlinks_list.pop()
                         assert src_nlink >= dest_nlink
                         if (fsdev.max_nlinks is not None and
                             src_nlink + dest_nlink > fsdev.max_nlinks):
                             nlinks_list = nlinks_list[1:]
                             break
+                        # Keep track of src/dest nlinks so that we can ensure
+                        # we don't exceed the max_nlinks for the device.  We
+                        # return the unmodified stat_infos because they may end
+                        # up just being reported, not actually linked.
                         for dest_dirname, dest_filename in namepairs_per_inode(fsdev.ino_pathnames[dest_ino]):
                             src_file_info = (src_dirname, src_filename, fsdev.ino_stat[src_ino])
                             dest_file_info = (dest_dirname, dest_filename, fsdev.ino_stat[dest_ino])
