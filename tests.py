@@ -9,8 +9,6 @@ import tempfile
 import time
 import unittest
 
-from shutil import rmtree
-
 import hardlinkable
 
 testdata0 = ""
@@ -67,7 +65,29 @@ class BaseTests(unittest.TestCase):
         self.file_contents = {}
 
     def remove_tempdir(self):
-        rmtree(self.root)
+        for pathname in self.file_contents:
+            assert os.path.normpath(pathname) == pathname
+            assert not pathname.lstrip().startswith("/")
+            os.unlink(pathname)
+            dirname = os.path.dirname(pathname)
+
+            # This is last resort against an infinite loop, which shouldn't
+            # really happen anyway
+            len_dirname = len(dirname) + 1
+
+            # Loop until empty dirs deleted
+            while dirname and len_dirname != len(dirname):
+                try:
+                    os.rmdir(dirname)
+                except OSError:
+                    # If there's an exception, the dir isn't yet empty
+                    break
+
+                # Now remove the last component and try again
+                len_dirname = len(dirname)
+                dirname = os.path.dirname(dirname)
+
+        os.rmdir(self.root)
 
     def verify_file_contents(self):
         for pathname, contents in self.file_contents.items():
