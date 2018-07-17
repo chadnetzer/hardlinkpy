@@ -421,7 +421,6 @@ class Hardlinkable:
     def __init__(self, options):
         self.options = options
         self.stats = Statistics()
-        self.max_nlinks_per_dev = {}
         self._fsdevs = {}
 
     def linkify(self, directories):
@@ -502,7 +501,7 @@ class Hardlinkable:
                         (stat_info.st_size < options.min_file_size)):
                         continue
 
-                    if stat_info.st_dev not in self.max_nlinks_per_dev:
+                    if stat_info.st_dev not in self._fsdevs:
                         # Try to discover the maximum number of nlinks possible for
                         # each new device.
                         try:
@@ -510,7 +509,8 @@ class Hardlinkable:
                         except:
                             # Avoid retrying if PC_LINK_MAX fails for a device
                             max_nlinks = None
-                        self.max_nlinks_per_dev[stat_info.st_dev] = max_nlinks
+                        fsdev = self._get_fsdev(stat_info.st_dev)
+                        fsdev.max_nlinks = max_nlinks
 
                     # Bump statistics count of regular files found.
                     gStats.found_regular_file()
@@ -526,29 +526,30 @@ class Hardlinkable:
                     filename = intern(filename)
                     yield (dirname, filename, stat_info)
 
-    def _get_fsdev(self, st_dev):
+    def _get_fsdev(self, st_dev, max_nlinks=None):
         """Return an FSDev for given stat_info.st_dev"""
         fsdev = self._fsdevs.get(st_dev, None)
         if fsdev is None:
-            fsdev = FSDev(st_dev)
+            fsdev = FSDev(st_dev, max_nlinks)
             self._fsdevs[st_dev] = fsdev
         return fsdev
 
     def _sorted_links(self):
-        for st_dev, fsdev in self._fsdevs.items():
+        for fsdev in self._fsdevs.values():
             for linkable_set in linkable_inode_sets(fsdev.linked_inodes):
                 nlinks_list = [(fsdev.ino_stat[ino].st_nlink, ino) for ino in linkable_set]
                 nlinks_list.sort(reverse=True)
                 assert len(nlinks_list) > 1
                 while len(nlinks_list) > 1:
-                    # Loop until src + dest nlink < max_nlink
+                    # Loop until src + dest nlink < max_nlinks
                     src_nlink, src_ino = nlinks_list[0]
                     nlinks_list = nlinks_list[1:]
                     src_dirname, src_filename = fsdev._arbitrary_namepair_from_ino(src_ino)
                     while nlinks_list:
                         dest_nlink, dest_ino = nlinks_list.pop()
                         assert src_nlink >= dest_nlink
-                        if src_nlink + dest_nlink > self.max_nlinks_per_dev[st_dev]:
+                        if (fsdev.max_nlinks is not None and
+                            src_nlink + dest_nlink > fsdev.max_nlinks):
                             nlinks_list = nlinks_list[1:]
                             break
                         for dest_dirname, dest_filename in namepairs_per_inode(fsdev.ino_pathnames[dest_ino]):
@@ -663,13 +664,13 @@ class Hardlinkable:
 
             st1.st_dev == st2.st_dev                 # device is the same
         )
-        max_nlinks = self.max_nlinks_per_dev[st1.st_dev]
-        if result and (max_nlinks is not None):
+        fsdev = self._get_fsdev(st1.st_dev)
+        if result and (fsdev.max_nlinks is not None):
             # The justification for not linking a pair of files if their nlinks sum
             # to more than the device maximum, is that linking them won't change
             # the overall link count, meaning no space saving is possible overall
             # even when all their filenames are found and re-linked.
-            result = ((st1.st_nlink + st2.st_nlink) <= max_nlinks)
+            result = ((st1.st_nlink + st2.st_nlink) <= fsdev.max_nlinks)
         return result
 
     def _are_file_contents_equal(self, pathname1, pathname2):
@@ -805,8 +806,9 @@ class Hardlinkable:
 
 class FSDev:
     """Per filesystem (ie. st_dev) operations"""
-    def __init__(self, st_dev):
+    def __init__(self, st_dev, max_nlinks):
         self.st_dev = st_dev
+        self.max_nlinks = max_nlinks  # Can be None
 
         # For each hash value, track inode (and optionally filename)
         # file_hashes <- {hash_val: set(ino)}
