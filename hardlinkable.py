@@ -402,12 +402,14 @@ class Statistics:
                                                               humanize_number(size * len(file_list))))
             print("")
         if self.hardlinkstats:
-            if options.linking_enabled:
-                print("Statistics reflect what would have happened if linking were enabled")
-            print("Files Hardlinked this run:")
-            for (source, dest) in self.hardlinkstats:
-                print("Hardlinked: %s" % os.path.join(*source))
-                print("        to: %s" % os.path.join(*dest))
+            if not self.options.linking_enabled:
+                print("Statistics reflect what would happen if actual linking were enabled")
+                print("Files that are hardlinkable:")
+            else:
+                print("Files that were hardlinked this run:")
+            for (source_namepair, dest_namepair) in self.hardlinkstats:
+                print("from: %s" % os.path.join(*source_namepair))
+                print("  to: %s" % os.path.join(*dest_namepair))
             print("")
         print("Directories           : %s" % self.dircount)
         print("Regular files         : %s" % self.regularfiles)
