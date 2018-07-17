@@ -425,6 +425,108 @@ class Hardlinkable:
 
         self.st_devs = {}   # type: Tuple[MutableMapping, MutableMapping]
 
+    def linkify(self, directories):
+        for dirname, filename, stat_info in self.matched_file_info(directories):
+            self._find_identical_files(dirname, filename, stat_info)
+
+        #pp(self._inode_stats())
+        for (src_file_info, dest_file_info) in self._sorted_links():
+            src_dirname, src_filename, src_stat_info = src_file_info
+            dest_dirname, dest_filename, dest_stat_info = dest_file_info
+            src_pathname = os.path.join(src_dirname, src_filename)
+            dest_pathname = os.path.join(dest_dirname, dest_filename)
+
+            hardlink_succeeded = False
+            if self.options.linking_enabled:
+                # DO NOT call hardlink_files() unless link creation
+                # is selected. It unconditionally performs links.
+                hardlink_succeeded = self._hardlink_files(src_file_info,
+                                                          dest_file_info)
+
+            if not self.options.linking_enabled or hardlink_succeeded:
+                _, ino_stat = self._get_dev_dicts(src_stat_info.st_dev)
+                src_file_info = (src_dirname, src_filename, ino_stat[src_stat_info.st_ino])
+                dest_file_info = (dest_dirname, dest_filename, ino_stat[dest_stat_info.st_ino])
+                self.stats.did_hardlink(src_file_info, dest_file_info)
+                self._updated_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
+                self._updated_stat_info(dest_stat_info, nlink=dest_stat_info.st_nlink - 1)
+
+        #pp(self._inode_stats())
+        if self.options.printstats:
+            self.stats.print_stats(self.options)
+
+    def matched_file_info(self, directories):
+        options = self.options
+        gStats = self.stats
+
+        # Now go through all the directories that have been added.
+        for top_dir in directories:
+            # Use topdown=True for directory search pruning. followlinks is False
+            for dirpath, dirs, filenames in os.walk(top_dir, topdown=True):
+                assert dirpath
+
+                # If excludes match any of the subdirs (or the current dir), skip
+                # them.
+                cull_excluded_directories(dirs, options.excludes)
+                cur_dir = os.path.basename(dirpath)
+                if cur_dir and found_excluded(cur_dir, options.excludes):
+                    continue
+
+                gStats.found_directory()
+
+                # Loop through all the files in the directory
+                for filename in filenames:
+                    assert filename
+                    if found_excluded(filename, options.excludes):
+                        continue
+                    if found_excluded_dotfile(filename):
+                        continue
+                    if not found_matched_filename(filename, options.matches):
+                        continue
+
+                    pathname = os.path.normpath(os.path.join(dirpath, filename))
+                    try:
+                        stat_info = os.lstat(pathname)
+                    except OSError:
+                        error = sys.exc_info()[1]
+                        logging.warning("Unable to get stat info for: %s\n%s" % (pathname, error))
+                        continue
+
+                    # Is it a regular file?
+                    assert not stat.S_ISDIR(stat_info.st_mode)
+                    if not stat.S_ISREG(stat_info.st_mode):
+                        continue
+
+                    # Is the file within the selected size range?
+                    if ((options.max_file_size and
+                         stat_info.st_size > options.max_file_size) or
+                        (stat_info.st_size < options.min_file_size)):
+                        continue
+
+                    if stat_info.st_dev not in self.max_nlinks_per_dev:
+                        # Try to discover the maximum number of nlinks possible for
+                        # each new device.
+                        try:
+                            max_nlinks = os.pathconf(pathname, "PC_LINK_MAX")
+                        except:
+                            # Avoid retrying if PC_LINK_MAX fails for a device
+                            max_nlinks = None
+                        self.max_nlinks_per_dev[stat_info.st_dev] = max_nlinks
+
+                    # Bump statistics count of regular files found.
+                    gStats.found_regular_file()
+                    if options.debug_level > 3:
+                        print("File: %s" % pathname)
+
+                    # Extract the normalized path directory name
+                    dirname = os.path.dirname(pathname)
+
+                    # Try to save space on redundant dirname and filename
+                    # storage by interning
+                    dirname = intern(dirname)
+                    filename = intern(filename)
+                    yield (dirname, filename, stat_info)
+
     def _init_dev_dicts(self, st_dev):
         # For each hash value, track inode (and optionally filename)
         # file_hashes <- {hash_val: set(ino)}
@@ -533,109 +635,6 @@ class Hardlinkable:
         return {'total_inodes' : total_inodes,
                 'total_bytes': total_bytes,
                 'total_saved_bytes': total_saved_bytes}
-
-
-    def linkify(self, directories):
-        for dirname, filename, stat_info in self.matched_file_info(directories):
-            self._find_identical_files(dirname, filename, stat_info)
-
-        #pp(self._inode_stats())
-        for (src_file_info, dest_file_info) in self._sorted_links():
-            src_dirname, src_filename, src_stat_info = src_file_info
-            dest_dirname, dest_filename, dest_stat_info = dest_file_info
-            src_pathname = os.path.join(src_dirname, src_filename)
-            dest_pathname = os.path.join(dest_dirname, dest_filename)
-
-            hardlink_succeeded = False
-            if self.options.linking_enabled:
-                # DO NOT call hardlink_files() unless link creation
-                # is selected. It unconditionally performs links.
-                hardlink_succeeded = self._hardlink_files(src_file_info,
-                                                          dest_file_info)
-
-            if not self.options.linking_enabled or hardlink_succeeded:
-                _, ino_stat = self._get_dev_dicts(src_stat_info.st_dev)
-                src_file_info = (src_dirname, src_filename, ino_stat[src_stat_info.st_ino])
-                dest_file_info = (dest_dirname, dest_filename, ino_stat[dest_stat_info.st_ino])
-                self.stats.did_hardlink(src_file_info, dest_file_info)
-                self._updated_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
-                self._updated_stat_info(dest_stat_info, nlink=dest_stat_info.st_nlink - 1)
-
-        #pp(self._inode_stats())
-        if self.options.printstats:
-            self.stats.print_stats(self.options)
-
-    def matched_file_info(self, directories):
-        options = self.options
-        gStats = self.stats
-
-        # Now go through all the directories that have been added.
-        for top_dir in directories:
-            # Use topdown=True for directory search pruning. followlinks is False
-            for dirpath, dirs, filenames in os.walk(top_dir, topdown=True):
-                assert dirpath
-
-                # If excludes match any of the subdirs (or the current dir), skip
-                # them.
-                cull_excluded_directories(dirs, options.excludes)
-                cur_dir = os.path.basename(dirpath)
-                if cur_dir and found_excluded(cur_dir, options.excludes):
-                    continue
-
-                gStats.found_directory()
-
-                # Loop through all the files in the directory
-                for filename in filenames:
-                    assert filename
-                    if found_excluded(filename, options.excludes):
-                        continue
-                    if found_excluded_dotfile(filename):
-                        continue
-                    if not found_matched_filename(filename, options.matches):
-                        continue
-
-                    pathname = os.path.normpath(os.path.join(dirpath, filename))
-                    try:
-                        stat_info = os.lstat(pathname)
-                    except OSError:
-                        error = sys.exc_info()[1]
-                        logging.warning("Unable to get stat info for: %s\n%s" % (pathname, error))
-                        continue
-
-                    # Is it a regular file?
-                    assert not stat.S_ISDIR(stat_info.st_mode)
-                    if not stat.S_ISREG(stat_info.st_mode):
-                        continue
-
-                    # Is the file within the selected size range?
-                    if ((options.max_file_size and
-                         stat_info.st_size > options.max_file_size) or
-                        (stat_info.st_size < options.min_file_size)):
-                        continue
-
-                    if stat_info.st_dev not in self.max_nlinks_per_dev:
-                        # Try to discover the maximum number of nlinks possible for
-                        # each new device.
-                        try:
-                            max_nlinks = os.pathconf(pathname, "PC_LINK_MAX")
-                        except:
-                            # Avoid retrying if PC_LINK_MAX fails for a device
-                            max_nlinks = None
-                        self.max_nlinks_per_dev[stat_info.st_dev] = max_nlinks
-
-                    # Bump statistics count of regular files found.
-                    gStats.found_regular_file()
-                    if options.debug_level > 3:
-                        print("File: %s" % pathname)
-
-                    # Extract the normalized path directory name
-                    dirname = os.path.dirname(pathname)
-
-                    # Try to save space on redundant dirname and filename
-                    # storage by interning
-                    dirname = intern(dirname)
-                    filename = intern(filename)
-                    yield (dirname, filename, stat_info)
 
     # dirname is the directory component and filename is just the file name
     # component (ie. the basename) without the path.  The tree walking provides
