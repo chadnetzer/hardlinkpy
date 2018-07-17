@@ -150,6 +150,10 @@ class TestTester(BaseTests):
 
         self.verify_file_contents()
 
+        # Remove empty dirs for cleanup (not in file_contents)
+        os.rmdir('dir1')
+        os.rmdir('dir2')
+
 
 class TestHappy(BaseTests):
     def setUp(self):
