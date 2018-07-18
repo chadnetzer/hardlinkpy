@@ -896,6 +896,9 @@ class TestNLinkOrderBug(BaseTests):
     def setUp(self):
         self.setup_tempdir()
 
+    def tearDown(self):
+        self.remove_tempdir()
+
     def test_missed_link_opportunity(self):
         # Create 3 clusters
         self.make_hardlinkable_file("a", testdata3)
