@@ -252,7 +252,6 @@ class Hardlinkable:
     def matched_file_info(self, directories):
         """Yield (dirname, filename, stat_info) triplets for all non-excluded/matched files"""
         options = self.options
-        gStats = self.stats
 
         # Now go through all the directories that have been added.
         for top_dir in directories:
@@ -267,7 +266,7 @@ class Hardlinkable:
                 if cur_dir and _found_excluded(cur_dir, options.excludes):
                     continue
 
-                gStats.found_directory()
+                self.stats.found_directory()
 
                 # Loop through all the files in the directory
                 for filename in filenames:
@@ -310,7 +309,7 @@ class Hardlinkable:
                         fsdev.max_nlinks = max_nlinks
 
                     # Bump statistics count of regular files found.
-                    gStats.found_regular_file()
+                    self.stats.found_regular_file()
                     if options.debug_level > 3:
                         print("File: %s" % pathname)
 
@@ -391,7 +390,6 @@ class Hardlinkable:
     # this, so we don't have to extract it with _os.path.split()
     def _find_identical_files(self, dirname, filename, stat_info):
         options = self.options
-        gStats = self.stats
 
         fsdev = self._get_fsdev(stat_info.st_dev)
         ino = stat_info.st_ino
@@ -400,7 +398,7 @@ class Hardlinkable:
 
         file_hash = _hash_value(stat_info, options)
         if file_hash in fsdev.file_hashes:
-            gStats.found_hash()
+            self.stats.found_hash()
             # See if the new file has the same inode as one we've already seen.
             if ino in fsdev.ino_stat:
                 prev_namepair = fsdev._arbitrary_namepair_from_ino(ino)
@@ -410,7 +408,7 @@ class Hardlinkable:
                     print("Existing link: %s" % prev_pathname)
                     print("        with : %s" % pathname)
                 prev_stat_info = fsdev.ino_stat[ino]
-                gStats.found_existing_hardlink(prev_namepair, namepair, prev_stat_info)
+                self.stats.found_existing_hardlink(prev_namepair, namepair, prev_stat_info)
             # We have file(s) that have the same hash as our current file.
             # Let's go through the list of files with the same hash and see if
             # we are already hardlinked to any of them.
@@ -421,7 +419,7 @@ class Hardlinkable:
                 # yet.  So now lets see if our file should be hardlinked to any
                 # of the other files with the same hash.
                 for cached_ino in fsdev.file_hashes[file_hash]:
-                    gStats.inc_hash_list_iteration()
+                    self.stats.inc_hash_list_iteration()
                     if (options.samename and not fsdev._ino_has_filename(cached_ino, filename)):
                         continue
 
@@ -438,13 +436,13 @@ class Hardlinkable:
                     # of files.
                     fsdev.file_hashes[file_hash].add(ino)
                     fsdev.ino_stat[ino] = stat_info
-                    gStats.no_hash_match()
+                    self.stats.no_hash_match()
         else: # if file_hash NOT in file_hashes
             # There weren't any other files with the same hash value so we will
             # create a new entry and store our file.
             fsdev.file_hashes[file_hash] = set([ino])
             assert ino not in fsdev.ino_stat
-            gStats.missed_hash()
+            self.stats.missed_hash()
 
         fsdev.ino_stat[ino] = stat_info
         fsdev._ino_append_namepair(ino, filename, namepair)
@@ -490,20 +488,18 @@ class Hardlinkable:
     def _are_file_contents_equal(self, pathname1, pathname2):
         """Determine if the contents of two files are equal"""
         options = self.options
-        gStats = self.stats
         if options.debug_level > 1:
             print("Comparing: %s" % pathname1)
             print("     to  : %s" % pathname2)
-        gStats.did_comparison()
+        self.stats.did_comparison()
         result = _filecmp.cmp(pathname1, pathname2, shallow=False)
         if result:
-            gStats.found_equal_comparison()
+            self.stats.found_equal_comparison()
         return result
 
     # Determines if two files should be hard linked together.
     def _are_files_hardlinkable(self, file_info1, file_info2):
         options = self.options
-        gStats = self.stats
 
         dirname1,filename1,stat1 = file_info1
         dirname2,filename2,stat2 = file_info2
