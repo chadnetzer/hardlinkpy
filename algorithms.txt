@@ -1,0 +1,72 @@
+A simple overview of algorithms used for finding hardlinkable files, starting
+with a basic slow algorithm, to the one used by 'hardlinkpy' (which
+'hardlinkable' is based on, to the 'hardlinkable' algorithm.  Note that files
+can also have a "equal filenames" requirement, which complicates each
+algorithm (especially the accounting of bytes saved, etc.)
+
+
+Online algorithm (ie. link during walk) - simplest alg for comparison
+---------------------------------------
+Keep track of all seen pathnames (or perhaps re-walk on each new pathname)
+
+For each new pathname:
+  - Compare to all seen pathnames, skipping those that are the same inode
+  - If "equal" to a pathname with different inode, link
+
+Accounting can be tricky.  Perhaps easiest by calculating as work proceeds,
+then making a second walk and recalculating.
+
+
+Online algorithm (ie. link during walk) - original 'hardlinkpy' alg
+---------------------------------------
+"hash" is based on inode metadata (& possibly filename), not file content.
+
+Data structures:
+For each pathname, (hash: [(stat_info, pathname)]) map
+
+For each new pathname:
+  - Create "hash" of file metadata (ie. size and timestamp)
+  - If no "match" found in cache, add to cache and proceed to next pathname.
+  - Cache match found, check to see if pathname is already hardlinked to an
+    inode in the cache.  If so, proceed to next pathname.
+  - If not already linked to a cached inode, search for an equality match in
+    cache. If none found, add to cache and proceed to next file.
+  - Equal files with different inodes found, link pathnames using cached
+    pathname as source.
+
+Because the cache doesn't keep track of all inodes/pathnames, accurate
+accounting in one pass can be tricky (requiring updating of stored inode data
+in the cache to simulate linking in dry-run).
+
+
+Offline algorithm (ie. link after walk complete) - 'hardlinkable' alg
+------------------------------------------------
+Keep track of which pathnames belong to which inodes; mapping keyed on inode
+number and device.  For each file, check inode, and if in inode:pathname
+mapping, append to inode list, otherwise add inode:pathname to mapping.
+
+Similar to Online algorithm, use 'hash' to narrow down search for linkable
+files (based on same file size, timestamp, etc.).  When linkable files are
+found, add to list of linkable pathnames, but don't perform link.
+
+After all files walked, we have a mapping of all known pathnames to inodes,
+and a list of linkable pathname pairs.  The linkable pathname pairs is used to
+create a mapping of inodes that should be linked; at the end of the mapping
+process, each inode number has a set of inode numbers that it can be linked
+to.  From this per-inode mapping, we can create sets of inodes that are all to
+be linked together (ie. each directly connected inode mapping and all
+indirectly connected mappings).
+
+For each set of connected inodes, sort inodes by number of existing nlinks
+from max to min.  Using the inode with maximum nlink count as the source, link
+to each pathname of the inodes with smaller nlinks.  If an inode reaches the
+max number of nlinks, use the next largest inode nlink count as source.
+
+By using the inode with the maximum nlink count as source, we ensure that we
+minimize the number of links we make, and also that a follow up run doesn't
+redo all the links in the reverse order.
+
+Also, by keeping track of all the existing inode counts, and pathname->inode
+mappings, and updating the stored data to match what happens when linking, we
+have the information required to output accurate data on the number of bytes
+saved overall (even when not actually linking).
