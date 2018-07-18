@@ -557,12 +557,12 @@ class Hardlinkable:
 
         hardlink_succeeded = False
         # rename the destination file to save it
-        temp_pathname = dst_pathname + ".$$$___cleanit___$$$"
+        tmp_pathname = dst_pathname + ".$$$___cleanit___$$$"
         try:
-            _os.rename(dst_pathname, temp_pathname)
+            _os.rename(dst_pathname, tmp_pathname)
         except OSError:
             error = _sys.exc_info()[1]
-            _logging.error("Failed to rename: %s to %s\n%s" % (dst_pathname, temp_pathname, error))
+            _logging.error("Failed to rename: %s to %s\n%s" % (dst_pathname, tmp_pathname, error))
         else:
             # Now link the sourcefile to the destination file
             try:
@@ -572,22 +572,22 @@ class Hardlinkable:
                 _logging.error("Failed to hardlink: %s to %s\n%s" % (src_pathname, dst_pathname, error))
                 # Try to recover
                 try:
-                    _os.rename(temp_pathname, dst_pathname)
+                    _os.rename(tmp_pathname, dst_pathname)
                 except Exception:
                     error = _sys.exc_info()[1]
-                    _logging.critical("Failed to rename temp filename %s back to %s\n%s" % (temp_pathname, dst_pathname, error))
+                    _logging.critical("Failed to rename temp filename %s back to %s\n%s" % (tmp_pathname, dst_pathname, error))
                     _sys.exit(3)
             else:
                 hardlink_succeeded = True
 
                 # Delete the renamed version since we don't need it.
                 try:
-                    _os.unlink(temp_pathname)
+                    _os.unlink(tmp_pathname)
                 except Exception:
                     error = _sys.exc_info()[1]
                     # Failing to remove the temp file could lead to endless
                     # attempts to link to it in the future.
-                    _logging.critical("Failed to remove temp filename: %s\n%s" % (temp_pathname, error))
+                    _logging.critical("Failed to remove temp filename: %s\n%s" % (tmp_pathname, error))
                     _sys.exit(3)
 
                 src_stat_info = src_fsdev.ino_stat[src_ino]
