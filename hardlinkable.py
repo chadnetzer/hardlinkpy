@@ -21,44 +21,48 @@
 # with this program; if not, write to the Free Software Foundation, Inc., 59
 # Temple Place, Suite 330, Boston, MA  02111-1307, USA.
 
-import filecmp
-import fnmatch
-import logging
-import os
-import re
-import stat
-import sys
-import time
+import filecmp as _filecmp
+import fnmatch as _fnmatch
+import logging as _logging
+import os as _os
+import re as _re
+import stat as _stat
+import sys as _sys
+import time as _time
 
-from optparse import OptionParser, OptionGroup, SUPPRESS_HELP
+from optparse import OptionParser as _OptionParser
+from optparse import OptionGroup as _OptionGroup
+from optparse import SUPPRESS_HELP as _SUPPRESS_HELP
 
 
 # Python 3 moved intern() to sys module
 try:
-    intern
+    _intern = intern
 except NameError:
-    intern = sys.intern
+    _intern = _sys.intern
 
+__all__ = ["Hardlinkable"]
 
 # global declarations
-OLD_VERBOSE_OPTION_ERROR = True
+_OLD_VERBOSE_OPTION_ERROR = True
 
-VERSION = "0.8 alpha - 2018-07-09 (09-Jul-2018)"
+__version__ = '0.8'
+_VERSION = "0.8 alpha - 2018-07-09 (09-Jul-2018)"
 
 # Compile up our regexes ahead of time
-MIRROR_PL_REGEX = re.compile(r'^\.in\.')
-RSYNC_TEMP_REGEX = re.compile((r'^\..*\.\?{6,6}$'))
+_MIRROR_PL_REGEX = _re.compile(r'^\.in\.')
+_RSYNC_TEMP_REGEX = _re.compile((r'^\..*\.\?{6,6}$'))
 
 
 def parse_command_line():
     usage = "usage: %prog [options] directory [ directory ... ]"
-    version = "%prog: " + VERSION
+    version = "%prog: " + _VERSION
     description = """\
 This is a tool to scan directories and report identical files that could be
 hard-linked together in order to save space.  Linked files can save space, but
 a change to one hardlinked file changes them all."""
 
-    parser = OptionParser(usage=usage, version=version, description=description)
+    parser = _OptionParser(usage=usage, version=version, description=description)
     parser.add_option("--enable-linking", dest="linking_enabled",
                       help="Perform the actual hardlinking",
                       action="store_true", default=False,)
@@ -73,7 +77,7 @@ a change to one hardlinked file changes them all."""
 
     # hidden debug option, each repeat increases debug level (long option only)
     parser.add_option("-d", "--debug", dest="debug_level",
-                      help=SUPPRESS_HELP,
+                      help=_SUPPRESS_HELP,
                       action="count", default=0,)
 
     properties_description= """
@@ -82,7 +86,7 @@ and mtime must also match.
 Use --content-only with caution, as it can lead to surprising results,
 including files becoming owned by another user.
 """
-    group = OptionGroup(parser, title="File Matching",
+    group = _OptionGroup(parser, title="File Matching",
             description=properties_description,)
     parser.add_option_group(group)
 
@@ -108,7 +112,7 @@ including files becoming owned by another user.
 
     group.add_option("--timestamp-ignore",
                      dest="deprecated_timestamp_option_name",
-                     help=SUPPRESS_HELP,
+                     help=_SUPPRESS_HELP,
                      action="store_true", default=False,)
 
     # Can't think of a good short option.  Should be used rarely anyway.
@@ -116,7 +120,7 @@ including files becoming owned by another user.
                      help="File permissions do not need to match",
                      action="store_true", default=False,)
 
-    group = OptionGroup(parser, title="Name Matching",)
+    group = _OptionGroup(parser, title="Name Matching",)
     parser.add_option_group(group)
 
     group.add_option("-m", "--match", dest="matches", metavar="PATTERN",
@@ -131,9 +135,9 @@ including files becoming owned by another user.
     if not args:
         parser.print_help()
         parser.error("Must supply one or more directories")
-    args = [os.path.abspath(os.path.expanduser(dirname)) for dirname in args]
+    args = [_os.path.abspath(_os.path.expanduser(dirname)) for dirname in args]
     for dirname in args:
-        if not os.path.isdir(dirname):
+        if not _os.path.isdir(dirname):
             parser.error("%s is NOT a directory" % dirname)
     if options.min_file_size < 0:
         parser.error("--min_size cannot be negative")
@@ -151,12 +155,12 @@ including files becoming owned by another user.
 
     # Accept --timestamp-ignore for backwards compatibility
     if options.deprecated_timestamp_option_name:
-        logging.warning("Enabling --ignore-timestamp. "
-                        "Option name --timestamp-ignore is deprecated.")
+        _logging.warning("Enabling --ignore-timestamp. "
+                         "Option name --timestamp-ignore is deprecated.")
         options.notimestamp = True
         del options.deprecated_timestamp_option_name
 
-    if OLD_VERBOSE_OPTION_ERROR:
+    if _OLD_VERBOSE_OPTION_ERROR:
         # When old style verbose options (-v 1) are parsed using the new
         # verbosity option (as a counter), the numbers end up being interpreted
         # as directories.  As long as the directories don't exist, the program
@@ -175,10 +179,10 @@ including files becoming owned by another user.
 
         # Iterate over a reversed argument list, looking for options pairs of
         # type ['-v', '<num>']
-        for i,s in enumerate(sys.argv[::-1]):
+        for i,s in enumerate(_sys.argv[::-1]):
             if i == 0:
                 continue
-            n_str = sys.argv[-i]
+            n_str = _sys.argv[-i]
             if s in ('-v', '--verbose') and n_str.isdigit():
                 parser.error("Use of deprecated numeric verbosity option (%s)." % ('-v ' + n_str))
 
@@ -196,8 +200,8 @@ class Hardlinkable:
         for (src_tup, dest_tup) in self._sorted_links(directories):
             src_namepair = src_tup[:2]
             dest_namepair = dest_tup[:2]
-            src_pathname = os.path.join(*src_namepair)
-            dest_pathname = os.path.join(*dest_namepair)
+            src_pathname = _os.path.join(*src_namepair)
+            dest_pathname = _os.path.join(*dest_namepair)
 
             yield (src_pathname, dest_pathname)
 
@@ -246,13 +250,13 @@ class Hardlinkable:
         # Now go through all the directories that have been added.
         for top_dir in directories:
             # Use topdown=True for directory search pruning. followlinks is False
-            for dirpath, dirs, filenames in os.walk(top_dir, topdown=True):
+            for dirpath, dirs, filenames in _os.walk(top_dir, topdown=True):
                 assert dirpath
 
                 # If excludes match any of the subdirs (or the current dir), skip
                 # them.
                 cull_excluded_directories(dirs, options.excludes)
-                cur_dir = os.path.basename(dirpath)
+                cur_dir = _os.path.basename(dirpath)
                 if cur_dir and found_excluded(cur_dir, options.excludes):
                     continue
 
@@ -268,17 +272,17 @@ class Hardlinkable:
                     if not found_matched_filename(filename, options.matches):
                         continue
 
-                    pathname = os.path.normpath(os.path.join(dirpath, filename))
+                    pathname = _os.path.normpath(_os.path.join(dirpath, filename))
                     try:
-                        stat_info = os.lstat(pathname)
+                        stat_info = _os.lstat(pathname)
                     except OSError:
-                        error = sys.exc_info()[1]
-                        logging.warning("Unable to get stat info for: %s\n%s" % (pathname, error))
+                        error = _sys.exc_info()[1]
+                        _logging.warning("Unable to get stat info for: %s\n%s" % (pathname, error))
                         continue
 
                     # Is it a regular file?
-                    assert not stat.S_ISDIR(stat_info.st_mode)
-                    if not stat.S_ISREG(stat_info.st_mode):
+                    assert not _stat.S_ISDIR(stat_info.st_mode)
+                    if not _stat.S_ISREG(stat_info.st_mode):
                         continue
 
                     # Is the file within the selected size range?
@@ -291,7 +295,7 @@ class Hardlinkable:
                         # Try to discover the maximum number of nlinks possible for
                         # each new device.
                         try:
-                            max_nlinks = os.pathconf(pathname, "PC_LINK_MAX")
+                            max_nlinks = _os.pathconf(pathname, "PC_LINK_MAX")
                         except:
                             # Avoid retrying if PC_LINK_MAX fails for a device
                             max_nlinks = None
@@ -304,12 +308,12 @@ class Hardlinkable:
                         print("File: %s" % pathname)
 
                     # Extract the normalized path directory name
-                    dirname = os.path.dirname(pathname)
+                    dirname = _os.path.dirname(pathname)
 
                     # Try to save space on redundant dirname and filename
                     # storage by interning
-                    dirname = intern(dirname)
-                    filename = intern(filename)
+                    dirname = _intern(dirname)
+                    filename = _intern(filename)
                     yield (dirname, filename, stat_info)
 
     def _get_fsdev(self, st_dev, max_nlinks=None):
@@ -377,7 +381,7 @@ class Hardlinkable:
 
     # dirname is the directory component and filename is just the file name
     # component (ie. the basename) without the path.  The tree walking provides
-    # this, so we don't have to extract it with os.path.split()
+    # this, so we don't have to extract it with _os.path.split()
     def _find_identical_files(self, dirname, filename, stat_info):
         options = self.options
         gStats = self.stats
@@ -393,9 +397,9 @@ class Hardlinkable:
             # See if the new file has the same inode as one we've already seen.
             if ino in fsdev.ino_stat:
                 prev_namepair = fsdev._arbitrary_namepair_from_ino(ino)
-                pathname = os.path.join(dirname, filename)
+                pathname = _os.path.join(dirname, filename)
                 if options.debug_level > 2:
-                    prev_pathname = os.path.join(*prev_namepair)
+                    prev_pathname = _os.path.join(*prev_namepair)
                     print("Existing link: %s" % prev_pathname)
                     print("        with : %s" % pathname)
                 prev_stat_info = fsdev.ino_stat[ino]
@@ -484,7 +488,7 @@ class Hardlinkable:
             print("Comparing: %s" % pathname1)
             print("     to  : %s" % pathname2)
         gStats.did_comparison()
-        return filecmp.cmp(pathname1, pathname2, shallow=False)
+        return _filecmp.cmp(pathname1, pathname2, shallow=False)
 
     # Determines if two files should be hard linked together.
     def _are_files_hardlinkable(self, file_info1, file_info2):
@@ -497,8 +501,8 @@ class Hardlinkable:
         if not self._eligible_for_hardlink(stat1, stat2):
             result = False
         else:
-            result = self._are_file_contents_equal(os.path.join(dirname1,filename1),
-                                                   os.path.join(dirname2,filename2))
+            result = self._are_file_contents_equal(_os.path.join(dirname1,filename1),
+                                                   _os.path.join(dirname2,filename2))
         return result
 
     def _found_hardlinkable_file(self, source_file_info, dest_file_info):
@@ -511,8 +515,8 @@ class Hardlinkable:
 
         # update our stats (Note: dest_stat_info is from pre-link())
         if self.options.debug_level > 0:
-            source_pathname = os.path.join(source_dirname, source_filename)
-            dest_pathname = os.path.join(dest_dirname, dest_filename)
+            source_pathname = _os.path.join(source_dirname, source_filename)
+            dest_pathname = _os.path.join(dest_dirname, dest_filename)
             assert source_pathname != dest_pathname
             print("Linkable: %s" % source_pathname)
             print("      to: %s" % dest_pathname)
@@ -521,15 +525,15 @@ class Hardlinkable:
         """Updates an ino_stat stat_info with the given values."""
         l = list(stat_info)
         if nlink is not None:
-            l[stat.ST_NLINK] = nlink
+            l[_stat.ST_NLINK] = nlink
         if mtime is not None:
-            l[stat.ST_MTIME] = mtime
+            l[_stat.ST_MTIME] = mtime
         if atime is not None:
-            l[stat.ST_ATIME] = atime
+            l[_stat.ST_ATIME] = atime
         if uid is not None:
-            l[stat.ST_UID] = uid
+            l[_stat.ST_UID] = uid
         if gid is not None:
-            l[stat.ST_GID] = gid
+            l[_stat.ST_GID] = gid
 
         fsdev = self._get_fsdev(stat_info.st_dev)
         fsdev.ino_stat[stat_info.st_ino] = stat_info.__class__(l)
@@ -548,43 +552,43 @@ class Hardlinkable:
         """Actually perform the filesystem hardlinking of two files."""
         source_dirname, source_filename, source_ino, source_fsdev = source_tup
         dest_dirname, dest_filename, dest_ino, dest_fsdev = dest_tup
-        source_pathname = os.path.join(source_dirname, source_filename)
-        dest_pathname = os.path.join(dest_dirname, dest_filename)
+        source_pathname = _os.path.join(source_dirname, source_filename)
+        dest_pathname = _os.path.join(dest_dirname, dest_filename)
 
         hardlink_succeeded = False
         # rename the destination file to save it
         temp_pathname = dest_pathname + ".$$$___cleanit___$$$"
         try:
-            os.rename(dest_pathname, temp_pathname)
+            _os.rename(dest_pathname, temp_pathname)
         except OSError:
-            error = sys.exc_info()[1]
-            logging.error("Failed to rename: %s to %s\n%s" % (dest_pathname, temp_pathname, error))
+            error = _sys.exc_info()[1]
+            _logging.error("Failed to rename: %s to %s\n%s" % (dest_pathname, temp_pathname, error))
         else:
             # Now link the sourcefile to the destination file
             try:
-                os.link(source_pathname, dest_pathname)
+                _os.link(source_pathname, dest_pathname)
             except Exception:
-                error = sys.exc_info()[1]
-                logging.error("Failed to hardlink: %s to %s\n%s" % (source_pathname, dest_pathname, error))
+                error = _sys.exc_info()[1]
+                _logging.error("Failed to hardlink: %s to %s\n%s" % (source_pathname, dest_pathname, error))
                 # Try to recover
                 try:
-                    os.rename(temp_pathname, dest_pathname)
+                    _os.rename(temp_pathname, dest_pathname)
                 except Exception:
-                    error = sys.exc_info()[1]
-                    logging.critical("Failed to rename temp filename %s back to %s\n%s" % (temp_pathname, dest_pathname, error))
-                    sys.exit(3)
+                    error = _sys.exc_info()[1]
+                    _logging.critical("Failed to rename temp filename %s back to %s\n%s" % (temp_pathname, dest_pathname, error))
+                    _sys.exit(3)
             else:
                 hardlink_succeeded = True
 
                 # Delete the renamed version since we don't need it.
                 try:
-                    os.unlink(temp_pathname)
+                    _os.unlink(temp_pathname)
                 except Exception:
-                    error = sys.exc_info()[1]
+                    error = _sys.exc_info()[1]
                     # Failing to remove the temp file could lead to endless
                     # attempts to link to it in the future.
-                    logging.critical("Failed to remove temp filename: %s\n%s" % (temp_pathname, error))
-                    sys.exit(3)
+                    _logging.critical("Failed to remove temp filename: %s\n%s" % (temp_pathname, error))
+                    _sys.exit(3)
 
                 source_stat_info = source_fsdev.ino_stat[source_ino]
                 dest_stat_info = dest_fsdev.ino_stat[dest_ino]
@@ -593,20 +597,20 @@ class Hardlinkable:
                 dest_mtime = dest_atime = dest_uid = dest_gid = None
                 if dest_stat_info.st_mtime > source_stat_info.st_mtime:
                     try:
-                        os.utime(source_pathname, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
+                        _os.utime(source_pathname, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
                         dest_atime = dest_stat_info.st_atime
                         dest_mtime = dest_stat_info.st_mtime
                     except Exception:
-                        error = sys.exc_info()[1]
-                        logging.warning("Failed to update file time attributes for %s\n%s" % (source_pathname, error))
+                        error = _sys.exc_info()[1]
+                        _logging.warning("Failed to update file time attributes for %s\n%s" % (source_pathname, error))
 
                     try:
-                        os.chown(source_pathname, dest_stat_info.st_uid, dest_stat_info.st_gid)
+                        _os.chown(source_pathname, dest_stat_info.st_uid, dest_stat_info.st_gid)
                         dest_uid = dest_stat_info.st_uid
                         dest_gid = dest_stat_info.st_gid
                     except Exception:
-                        error = sys.exc_info()[1]
-                        logging.warning("Failed to update file owner attributes for %s\n%s" % (source_pathname, error))
+                        error = _sys.exc_info()[1]
+                        _logging.warning("Failed to update file owner attributes for %s\n%s" % (source_pathname, error))
 
                     self._update_stat_info(source_stat_info,
                                            mtime=dest_mtime,
@@ -708,7 +712,7 @@ class Statistics:
         self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run
         self.bytes_saved_previously = 0     # bytes saved by previous hardlinks
         self.hardlinkstats = []             # list of files hardlinked this run
-        self.starttime = time.time()        # track how long it takes
+        self.starttime = _time.time()       # track how long it takes
         self.previouslyhardlinked = {}      # list of files hardlinked previously
 
         # Debugging stats
@@ -773,9 +777,9 @@ class Statistics:
             print("Files Previously Hardlinked:")
             for key in keys:
                 size, file_list = self.previouslyhardlinked[key]
-                print("Currently hardlinked: %s" % os.path.join(*key))
+                print("Currently hardlinked: %s" % _os.path.join(*key))
                 for namepair in file_list:
-                    pathname = os.path.join(*namepair)
+                    pathname = _os.path.join(*namepair)
                     print("                    : %s" % pathname)
                 print("Size per file: %s  Total saved: %s" % (humanize_number(size),
                                                               humanize_number(size * len(file_list))))
@@ -786,8 +790,8 @@ class Statistics:
             else:
                 print("Files that were hardlinked this run:")
             for (source_namepair, dest_namepair) in self.hardlinkstats:
-                print("from: %s" % os.path.join(*source_namepair))
-                print("  to: %s" % os.path.join(*dest_namepair))
+                print("from: %s" % _os.path.join(*source_namepair))
+                print("  to: %s" % _os.path.join(*dest_namepair))
             print("")
         if not self.options.linking_enabled:
             print("Statistics reflect what would result if actual linking were enabled")
@@ -814,7 +818,7 @@ class Statistics:
         else:
             s4 = "Total bytes saveable      : %s (%s)"
         print(s4 % (totalbytes, humanize_number(totalbytes)))
-        print("Total run time            : %s seconds" % (time.time() - self.starttime))
+        print("Total run time            : %s seconds" % (_time.time() - self.starttime))
         if self.options.debug_level > 0:
             print("Total file hash hits       : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
                                                                                   self.num_hash_misses,
@@ -860,7 +864,7 @@ def cull_excluded_directories(dirs, excludes):
 def found_excluded(name, excludes):
     """If excludes option is given, return True if name matches any regex."""
     for exclude in excludes:
-        if re.search(exclude, name):
+        if _re.search(exclude, name):
             return True
     return False
 
@@ -871,11 +875,11 @@ def found_excluded_dotfile(name):
     if name.startswith("."):
         # Ignore any mirror.pl files.  These are the files that
         # start with ".in."
-        if MIRROR_PL_REGEX.match(name):
+        if _MIRROR_PL_REGEX.match(name):
             return True
         # Ignore any RSYNC files.  These are files that have the
         # format .FILENAME.??????
-        if RSYNC_TEMP_REGEX.match(name):
+        if _RSYNC_TEMP_REGEX.match(name):
             return True
     return False
 
@@ -886,7 +890,7 @@ def found_matched_filename(name, matches):
     if not matches:
         return True
     for match in matches:
-        if fnmatch.fnmatch(name, match):
+        if _fnmatch.fnmatch(name, match):
             return True
     return False
 
@@ -949,12 +953,12 @@ def humanize_number(number):
 
 def main():
     # 'logging' package forces at least Python 2.3
-    assert sys.version_info >= (2,3), ("%s requires at least Python 2.3" % sys.argv[0])
+    assert _sys.version_info >= (2,3), ("%s requires at least Python 2.3" % _sys.argv[0])
 
-    if sys.version_info >= (2,4):
+    if _sys.version_info >= (2,4):
         # logging.basicConfig in Python 2.3 accepted no args
         # Remove user from logging output
-        logging.basicConfig(format='%(levelname)s:%(message)s')
+        _logging.basicConfig(format='%(levelname)s:%(message)s')
 
     # Parse our argument list and get our list of directories
     options, directories = parse_command_line()
