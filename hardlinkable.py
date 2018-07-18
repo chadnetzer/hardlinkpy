@@ -815,8 +815,11 @@ class _Statistics:
             s1 = "Consolidatable inodes     : %s"
             s2 = "Hardlinkable files        : %s"
         print(s1 % self.nlinks_to_zero_thisrun)
+        print("Current hardlinks         : %s" % (self.hardlinked_previously))
         print(s2 % self.hardlinked_thisrun)
         print("Total hardlinks           : %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
+        print("Current bytes saved       : %s (%s)" % (self.bytes_saved_previously,
+                                                       _humanize_number(self.bytes_saved_previously)))
         if self.options.linking_enabled:
             s3 = "Additional bytes saved    : %s (%s)"
         else:
