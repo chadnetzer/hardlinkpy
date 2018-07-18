@@ -106,6 +106,7 @@ by hard linking identical files.  It can also perform the linking."""
                      help="Maximum file size",
                      action="store", default=0,)
 
+    # Hidden option for backwards compatability (w/ hardlinkpy)
     group.add_option("--timestamp-ignore",
                      dest="deprecated_timestamp_option_name",
                      help=_SUPPRESS_HELP,
