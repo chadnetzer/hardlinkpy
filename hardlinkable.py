@@ -54,7 +54,7 @@ _MIRROR_PL_REGEX = _re.compile(r'^\.in\.')
 _RSYNC_TEMP_REGEX = _re.compile((r'^\..*\.\?{6,6}$'))
 
 
-def _parse_command_line():
+def _parse_command_line(get_default_options=False):
     usage = "usage: %prog [options] directory [ directory ... ]"
     version = "%prog: " + _VERSION
     description = """\
@@ -131,6 +131,11 @@ including files becoming owned by another user.
                      help="Regular expression used to exclude files/dirs (may specify multiple times)",
                      action="append", default=[],)
 
+    # Allow for a way to get a default options object (for Statistics)
+    if get_default_options:
+        (options, args) = parser.parse_args([""])
+        return options
+
     (options, args) = parser.parse_args()
     if not args:
         parser.print_help()
@@ -190,7 +195,9 @@ including files becoming owned by another user.
 
 
 class Hardlinkable:
-    def __init__(self, options):
+    def __init__(self, options=None):
+        if options is None:
+            options = _parse_command_line(get_default_options=True)
         self.options = options
         self.stats = _Statistics(options)
         self._fsdevs = {}
