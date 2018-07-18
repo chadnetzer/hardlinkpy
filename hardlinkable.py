@@ -58,9 +58,8 @@ def _parse_command_line(get_default_options=False):
     usage = "usage: %prog [options] directory [ directory ... ]"
     version = "%prog: " + _VERSION
     description = """\
-This is a tool to scan directories and report identical files that could be
-hard-linked together in order to save space.  Linked files can save space, but
-a change to one hardlinked file changes them all."""
+This is a tool to scan directories and report on the space that could be saved
+by hard linking identical files.  It can also perform the linking."""
 
     parser = _OptionParser(usage=usage, version=version, description=description)
     parser.add_option("--enable-linking", dest="linking_enabled",
@@ -80,14 +79,7 @@ a change to one hardlinked file changes them all."""
                       help=_SUPPRESS_HELP,
                       action="count", default=0,)
 
-    properties_description= """
-File content must always match exactly.  By default, ownership, permissions,
-and mtime must also match.
-Use --content-only with caution, as it can lead to surprising results,
-including files becoming owned by another user.
-"""
-    group = _OptionGroup(parser, title="File Matching",
-            description=properties_description,)
+    group = _OptionGroup(parser, title="File Matching",)
     parser.add_option_group(group)
 
     group.add_option("-c", "--content-only", dest="contentonly",
@@ -107,7 +99,7 @@ including files becoming owned by another user.
                      action="store", default=0,)
 
     group.add_option("-t", "--ignore-timestamp", dest="notimestamp",
-                     help="File modification times do NOT have to be identical",
+                     help="File modification times do not need to match",
                      action="store_true", default=False,)
 
     group.add_option("--timestamp-ignore",
@@ -120,15 +112,15 @@ including files becoming owned by another user.
                      help="File permissions do not need to match",
                      action="store_true", default=False,)
 
-    group = _OptionGroup(parser, title="Name Matching",)
+    group = _OptionGroup(parser, title="Name Matching (may specify multiple times)",)
     parser.add_option_group(group)
 
     group.add_option("-m", "--match", dest="matches", metavar="PATTERN",
-                     help="Shell patterns used to match files (may specify multiple times)",
+                     help="Shell patterns used to match files",
                      action="append", default=[],)
 
     group.add_option("-x", "--exclude", dest="excludes", metavar="REGEX",
-                     help="Regular expression used to exclude files/dirs (may specify multiple times)",
+                     help="Regular expression used to exclude files/dirs",
                      action="append", default=[],)
 
     # Allow for a way to get a default options object (for Statistics)
