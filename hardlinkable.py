@@ -197,6 +197,10 @@ class Hardlinkable:
 
         prelink_inode_stats = self._inode_stats()
         for (src_tup, dest_tup) in self._sorted_links():
+
+    def run(self, directories):
+        """Run link scan, and perform linking if requested.  Return stats."""
+        for (src_tup, dest_tup) in self._sorted_links(directories):
             hardlink_succeeded = False
             if self.options.linking_enabled:
                 # DO NOT call hardlink_files() unless link creation
@@ -225,11 +229,14 @@ class Hardlinkable:
         # double check figures based on direct inode stats
         postlink_inode_stats = self._inode_stats()
         totalsavedbytes = self.stats.bytes_saved_thisrun + self.stats.bytes_saved_previously
-        bytes_saved_thisrun = postlink_inode_stats['total_saved_bytes'] - prelink_inode_stats['total_saved_bytes']
+        bytes_saved_thisrun = postlink_inode_stats['total_saved_bytes'] - self._prelink_inode_stats['total_saved_bytes']
         assert totalsavedbytes == postlink_inode_stats['total_saved_bytes'], (totalsavedbytes, postlink_inode_stats['total_saved_bytes'])
         assert self.stats.bytes_saved_thisrun == bytes_saved_thisrun
 
+        return self.stats
+
     def matched_file_info(self, directories):
+        """Yield (dirname, filename, stat_info) triplets for all non-excluded/matched files"""
         options = self.options
         gStats = self.stats
 
@@ -310,7 +317,12 @@ class Hardlinkable:
             self._fsdevs[st_dev] = fsdev
         return fsdev
 
-    def _sorted_links(self):
+    def _sorted_links(self, directories):
+        """Perform the walk, collect and sort linking data, and yield link tuples."""
+        for dirname, filename, stat_info in self.matched_file_info(directories):
+            self._find_identical_files(dirname, filename, stat_info)
+
+        self._prelink_inode_stats = self._inode_stats()
         for fsdev in self._fsdevs.values():
             for linkable_set in linkable_inode_sets(fsdev.linked_inodes):
                 nlinks_list = [(fsdev.ino_stat[ino].st_nlink, ino) for ino in linkable_set]
@@ -945,7 +957,7 @@ def main():
     options, directories = parse_command_line()
 
     hl = Hardlinkable(options)
-    hl.linkify(directories)
+    hl.run(directories)
 
 
 if __name__ == '__main__':
