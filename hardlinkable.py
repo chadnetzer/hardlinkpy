@@ -191,12 +191,15 @@ class Hardlinkable:
         self.stats = Statistics(options)
         self._fsdevs = {}
 
-    def linkify(self, directories):
-        for dirname, filename, stat_info in self.matched_file_info(directories):
-            self._find_identical_files(dirname, filename, stat_info)
+    def linkables(self, directories):
+        """Yield pairs of linkable pathnames in the given directories"""
+        for (src_tup, dest_tup) in self._sorted_links(directories):
+            src_namepair = src_tup[:2]
+            dest_namepair = dest_tup[:2]
+            src_pathname = os.path.join(*src_namepair)
+            dest_pathname = os.path.join(*dest_namepair)
 
-        prelink_inode_stats = self._inode_stats()
-        for (src_tup, dest_tup) in self._sorted_links():
+            yield (src_pathname, dest_pathname)
 
     def run(self, directories):
         """Run link scan, and perform linking if requested.  Return stats."""
