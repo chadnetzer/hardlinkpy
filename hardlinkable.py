@@ -303,13 +303,6 @@ def namepairs_per_inode(d):
             yield namepair
 
 
-def fileinfo_namepair(file_info):
-    """Return a namepair from a file_info (dirname, filename, stat_info)
-    tuple."""
-    dirname, filename, stat_info = file_info
-    return (dirname, filename)
-
-
 class Statistics:
     def __init__(self, options):
         self.options = options
