@@ -90,6 +90,14 @@ by hard linking identical files.  It can also perform the linking."""
                      help="Filenames have to be identical",
                      action="store_true", default=False,)
 
+    group.add_option("-p", "--ignore-permissions", dest="nosameperm",
+                     help="File permissions do not need to match",
+                     action="store_true", default=False,)
+
+    group.add_option("-t", "--ignore-timestamp", dest="notimestamp",
+                     help="File modification times do not need to match",
+                     action="store_true", default=False,)
+
     group.add_option("-s", "--min-size", dest="min_file_size", type="int",
                      help="Minimum file size (default: %default)",
                      action="store", default=1,)
@@ -98,17 +106,9 @@ by hard linking identical files.  It can also perform the linking."""
                      help="Maximum file size",
                      action="store", default=0,)
 
-    group.add_option("-t", "--ignore-timestamp", dest="notimestamp",
-                     help="File modification times do not need to match",
-                     action="store_true", default=False,)
-
     group.add_option("--timestamp-ignore",
                      dest="deprecated_timestamp_option_name",
                      help=_SUPPRESS_HELP,
-                     action="store_true", default=False,)
-
-    group.add_option("-p", "--ignore-permissions", dest="nosameperm",
-                     help="File permissions do not need to match",
                      action="store_true", default=False,)
 
     group = _OptionGroup(parser, title="Name Matching (may specify multiple times)",)
