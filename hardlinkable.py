@@ -779,12 +779,12 @@ class _Statistics:
         self.num_list_iterations += 1
 
     def print_stats(self):
-        print("Hard linking Statistics:")
+        print("Hard linking statistics")
+        print("-----------------------")
         # Print out the stats for the files we hardlinked, if any
         if self.options.verbosity > 1 and self.previouslyhardlinked:
             keys = list(self.previouslyhardlinked.keys())
             keys.sort()  # Could use sorted() once we only support >= Python 2.4
-            print("Files Previously Hardlinked:")
             for key in keys:
                 size, file_list = self.previouslyhardlinked[key]
                 print("Currently hardlinked: %s" % _os.path.join(*key))
@@ -793,7 +793,7 @@ class _Statistics:
                     print("                    : %s" % pathname)
                 print("Size per file: %s  Total saved: %s" % (_humanize_number(size),
                                                               _humanize_number(size * len(file_list))))
-            print("")
+            print("-----------------------")
         if self.options.verbosity > 0 and self.hardlinkstats:
             if not self.options.linking_enabled:
                 print("Files that are hardlinkable:")
@@ -802,7 +802,7 @@ class _Statistics:
             for (src_namepair, dst_namepair) in self.hardlinkstats:
                 print("from: %s" % _os.path.join(*src_namepair))
                 print("  to: %s" % _os.path.join(*dst_namepair))
-            print("")
+            print("-----------------------")
         if not self.options.linking_enabled:
             print("Statistics reflect what would result if actual linking were enabled")
         print("Directories               : %s" % self.dircount)
