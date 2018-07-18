@@ -107,8 +107,7 @@ by hard linking identical files.  It can also perform the linking."""
                      help=_SUPPRESS_HELP,
                      action="store_true", default=False,)
 
-    # Can't think of a good short option.  Should be used rarely anyway.
-    group.add_option("--ignore-permissions", dest="nosameperm",
+    group.add_option("-p", "--ignore-permissions", dest="nosameperm",
                      help="File permissions do not need to match",
                      action="store_true", default=False,)
 
