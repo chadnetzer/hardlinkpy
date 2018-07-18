@@ -298,7 +298,7 @@ def namepairs_per_inode(d):
     """Yield namepairs for each value in the dictionary d"""
     # A dictionary of {filename:[namepair]}, ie. a filename and list of
     # namepairs.
-    for filename, namepairs in d.items():
+    for filename, namepairs in d.copy().items():
         for namepair in namepairs:
             yield namepair
 
@@ -352,13 +352,10 @@ class Statistics:
             else:
                 self.previouslyhardlinked[source_namepair][1].append(dest_namepair)
 
-    def did_hardlink(self, src_file_info, dest_file_info):
+    def did_hardlink(self, src_namepair, dest_namepair, dest_stat_info):
         # nlink count is not necessarily accurate at the moment
-        src_namepair = fileinfo_namepair(src_file_info)
-        dest_namepair = fileinfo_namepair(dest_file_info)
-        self.hardlinkstats.append((src_namepair, dest_namepair))
-
-        dest_stat_info = dest_file_info[2]
+        self.hardlinkstats.append((tuple(src_namepair),
+                                   tuple(dest_namepair)))
         filesize = dest_stat_info.st_size
         self.hardlinked_thisrun = self.hardlinked_thisrun + 1
         if dest_stat_info.st_nlink == 1:
@@ -455,24 +452,28 @@ class Hardlinkable:
             self._find_identical_files(dirname, filename, stat_info)
 
         #pp(self._inode_stats())
-        for (src_file_info, dest_file_info) in self._sorted_links():
+        for (src_tup, dest_tup) in self._sorted_links():
             hardlink_succeeded = False
             if self.options.linking_enabled:
                 # DO NOT call hardlink_files() unless link creation
                 # is selected. It unconditionally performs links.
-                hardlink_succeeded = self._hardlink_files(src_file_info,
-                                                          dest_file_info)
+                hardlink_succeeded = self._hardlink_files(src_tup, dest_tup)
 
             if not self.options.linking_enabled or hardlink_succeeded:
-                new_src_file_info = self._updated_file_info(src_file_info)
-                new_dest_file_info = self._updated_file_info(dest_file_info)
+                assert src_tup[3] == dest_tup[3]
+                fsdev = src_tup[3]
 
-                self.stats.did_hardlink(new_src_file_info, new_dest_file_info)
+                src_namepair, dest_namepair = src_tup[:2], dest_tup[:2]
+                src_ino, dest_ino = src_tup[2], dest_tup[2]
 
-                src_stat_info = new_src_file_info[2]
-                dest_stat_info = new_dest_file_info[2]
+                src_stat_info = fsdev.ino_stat[src_ino]
+                dest_stat_info = fsdev.ino_stat[dest_ino]
+
+                self.stats.did_hardlink(src_namepair, dest_namepair, dest_stat_info)
+
                 self._update_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
                 self._update_stat_info(dest_stat_info, nlink=dest_stat_info.st_nlink - 1)
+                fsdev._move_linked_namepair(dest_namepair, src_ino, dest_ino)
 
         #pp(self._inode_stats())
         if self.options.printstats:
@@ -588,9 +589,9 @@ class Hardlinkable:
                         # return the unmodified stat_infos because they may end
                         # up just being reported, not actually linked.
                         for dest_dirname, dest_filename in namepairs_per_inode(fsdev.ino_pathnames[dest_ino]):
-                            src_file_info = (src_dirname, src_filename, fsdev.ino_stat[src_ino])
-                            dest_file_info = (dest_dirname, dest_filename, fsdev.ino_stat[dest_ino])
-                            yield (src_file_info, dest_file_info)
+                            src_tup = (src_dirname, src_filename, src_ino, fsdev)
+                            dest_tup = (dest_dirname, dest_filename, dest_ino, fsdev)
+                            yield (src_tup, dest_tup)
                             src_nlink += 1
                             dest_nlink -= 1
                             assert dest_nlink >= 0
@@ -618,7 +619,7 @@ class Hardlinkable:
         fsdev = self._get_fsdev(stat_info.st_dev)
         ino = stat_info.st_ino
         file_info = (dirname, filename, stat_info)
-        namepair = fileinfo_namepair(file_info)
+        namepair = (dirname, filename)
 
         file_hash = hash_value(stat_info, options)
         if file_hash in fsdev.file_hashes:
@@ -777,10 +778,10 @@ class Hardlinkable:
         new_file_info = (dirname, filename, fsdev.ino_stat[stat_info.st_ino])
         return new_file_info
 
-    def _hardlink_files(self, source_file_info, dest_file_info):
+    def _hardlink_files(self, source_tup, dest_tup):
         """Actually perform the filesystem hardlinking of two files."""
-        source_dirname, source_filename, source_stat_info = source_file_info
-        dest_dirname, dest_filename, dest_stat_info = dest_file_info
+        source_dirname, source_filename, source_ino, source_fsdev = source_tup
+        dest_dirname, dest_filename, dest_ino, dest_fsdev = dest_tup
         source_pathname = os.path.join(source_dirname, source_filename)
         dest_pathname = os.path.join(dest_dirname, dest_filename)
 
@@ -818,6 +819,9 @@ class Hardlinkable:
                     # attempts to link to it in the future.
                     logging.critical("Failed to remove temp filename: %s\n%s" % (temp_pathname, error))
                     sys.exit(3)
+
+                source_stat_info = source_fsdev.ino_stat[source_ino]
+                dest_stat_info = dest_fsdev.ino_stat[dest_ino]
 
                 # Use the destination file attributes if it's most recently modified
                 dest_mtime = dest_atime = dest_uid = dest_gid = None
@@ -905,6 +909,16 @@ class FSDev:
         s.add(ino2)
         s = self.linked_inodes.setdefault(ino2, set())
         s.add(ino1)
+
+    def _move_linked_namepair(self, namepair, src_ino, dest_ino):
+        """Move namepair from dest_ino to src_ino (yes, backwards)"""
+        dirname, filename = namepair
+        pathnames = self.ino_pathnames[dest_ino][filename]
+        pathnames.remove(namepair)
+        assert namepair not in pathnames
+        if not pathnames:
+            del self.ino_pathnames[dest_ino][filename]
+        self._ino_append_namepair(src_ino, filename, namepair)
 
 
 def main():
