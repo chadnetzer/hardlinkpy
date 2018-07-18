@@ -33,6 +33,7 @@ import time as _time
 from optparse import OptionParser as _OptionParser
 from optparse import OptionGroup as _OptionGroup
 from optparse import SUPPRESS_HELP as _SUPPRESS_HELP
+from optparse import TitledHelpFormatter as _TitledHelpFormatter
 
 
 # Python 3 moved intern() to sys module
@@ -61,7 +62,11 @@ def _parse_command_line(get_default_options=False):
 This is a tool to scan directories and report on the space that could be saved
 by hard linking identical files.  It can also perform the linking."""
 
-    parser = _OptionParser(usage=usage, version=version, description=description)
+    formatter = _TitledHelpFormatter(max_help_position=26)
+    parser = _OptionParser(usage=usage,
+                           version=version,
+                           description=description,
+                           formatter=formatter)
     parser.add_option("-q", "--no-stats", dest="printstats",
                       help="Do not print the statistics",
                       action="store_false", default=True,)
