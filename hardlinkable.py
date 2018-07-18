@@ -444,7 +444,7 @@ class Hardlinkable:
         for dirname, filename, stat_info in self.matched_file_info(directories):
             self._find_identical_files(dirname, filename, stat_info)
 
-        #pp(self._inode_stats())
+        prelink_inode_stats = self._inode_stats()
         for (src_tup, dest_tup) in self._sorted_links():
             hardlink_succeeded = False
             if self.options.linking_enabled:
@@ -468,9 +468,15 @@ class Hardlinkable:
                 self._update_stat_info(dest_stat_info, nlink=dest_stat_info.st_nlink - 1)
                 fsdev._move_linked_namepair(dest_namepair, src_ino, dest_ino)
 
-        #pp(self._inode_stats())
         if self.options.printstats:
             self.stats.print_stats()
+
+        # double check figures based on direct inode stats
+        postlink_inode_stats = self._inode_stats()
+        totalsavedbytes = self.stats.bytes_saved_thisrun + self.stats.bytes_saved_previously
+        bytes_saved_thisrun = postlink_inode_stats['total_saved_bytes'] - prelink_inode_stats['total_saved_bytes']
+        assert totalsavedbytes == postlink_inode_stats['total_saved_bytes'], (totalsavedbytes, postlink_inode_stats['total_saved_bytes'])
+        assert self.stats.bytes_saved_thisrun == bytes_saved_thisrun
 
     def matched_file_info(self, directories):
         options = self.options
@@ -597,7 +603,8 @@ class Hardlinkable:
             for ino, stat_info in fsdev.ino_stat.items():
                 total_inodes += 1
                 total_bytes += stat_info.st_size
-                total_saved_bytes += (stat_info.st_size * (stat_info.st_nlink - 1))
+                count = fsdev._count_nlinks_this_inode(ino)
+                total_saved_bytes += (stat_info.st_size * (count - 1))
         return {'total_inodes' : total_inodes,
                 'total_bytes': total_bytes,
                 'total_saved_bytes': total_saved_bytes}
@@ -912,6 +919,15 @@ class FSDev:
         if not pathnames:
             del self.ino_pathnames[dest_ino][filename]
         self._ino_append_namepair(src_ino, filename, namepair)
+
+    def _count_nlinks_this_inode(self, ino):
+        """Because of file matching and exclusions, the number of links that we
+        care about may not equal the total nlink count for the inode."""
+        # Count the number of links to this inode that we have discovered
+        count = 0
+        for pathnames in self.ino_pathnames[ino].values():
+            count += len(pathnames)
+        return count
 
 
 def main():
