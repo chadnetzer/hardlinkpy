@@ -703,6 +703,9 @@ class _FSDev:
 class _Statistics:
     def __init__(self, options):
         self.options = options
+        self.reset()
+
+    def reset(self):
         self.dircount = 0                   # how many directories we find
         self.regularfiles = 0               # how many regular files we find
         self.comparisons = 0                # how many file content comparisons
