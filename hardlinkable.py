@@ -487,8 +487,7 @@ class Hardlinkable:
 
     def _are_file_contents_equal(self, pathname1, pathname2):
         """Determine if the contents of two files are equal"""
-        options = self.options
-        if options.debug_level > 1:
+        if self.options.debug_level > 1:
             print("Comparing: %s" % pathname1)
             print("     to  : %s" % pathname2)
         self.stats.did_comparison()
@@ -499,11 +498,9 @@ class Hardlinkable:
 
     # Determines if two files should be hard linked together.
     def _are_files_hardlinkable(self, file_info1, file_info2):
-        options = self.options
-
         dirname1,filename1,stat1 = file_info1
         dirname2,filename2,stat2 = file_info2
-        assert not options.samename or filename1 == filename2
+        assert not self.options.samename or filename1 == filename2
         if not self._eligible_for_hardlink(stat1, stat2):
             result = False
         else:
