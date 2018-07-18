@@ -99,8 +99,8 @@ including files becoming owned by another user.
                      action="store_true", default=False,)
 
     group.add_option("-s", "--min-size", dest="min_file_size", type="int",
-                     help="Minimum file size",
-                     action="store", default=0,)
+                     help="Minimum file size (default: %default)",
+                     action="store", default=1,)
 
     group.add_option("-S", "--max-size", dest="max_file_size", type="int",
                      help="Maximum file size",
