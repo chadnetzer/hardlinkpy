@@ -823,7 +823,7 @@ class Hardlinkable:
                 dest_mtime = dest_atime = dest_uid = dest_gid = None
                 if dest_stat_info.st_mtime > source_stat_info.st_mtime:
                     try:
-                        os.utime(src_pathname, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
+                        os.utime(source_pathname, (dest_stat_info.st_atime, dest_stat_info.st_mtime))
                         dest_atime = dest_stat_info.st_atime
                         dest_mtime = dest_stat_info.st_mtime
                     except Exception:
@@ -831,14 +831,14 @@ class Hardlinkable:
                         logging.warning("Failed to update file time attributes for %s\n%s" % (source_pathname, error))
 
                     try:
-                        os.chown(src_pathname, dest_stat_info.st_uid, dest_stat_info.st_gid)
+                        os.chown(source_pathname, dest_stat_info.st_uid, dest_stat_info.st_gid)
                         dest_uid = dest_stat_info.st_uid
                         dest_gid = dest_stat_info.st_gid
                     except Exception:
                         error = sys.exc_info()[1]
                         logging.warning("Failed to update file owner attributes for %s\n%s" % (source_pathname, error))
 
-                    self._update_stat_info(src_stat_info,
+                    self._update_stat_info(source_stat_info,
                                            mtime=dest_mtime,
                                            atime=dest_atime,
                                            uid=dest_uid,
