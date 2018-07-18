@@ -831,7 +831,7 @@ class _Statistics:
         else:
             s4 = "Total bytes saveable      : %s (%s)"
         print(s4 % (totalbytes, _humanize_number(totalbytes)))
-        print("Total run time            : %s seconds" % (_time.time() - self.starttime))
+        print("Total run time            : %s seconds" % round(_time.time() - self.starttime, 3))
         if self.options.debug_level > 0:
             print("Total file hash hits       : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
                                                                                   self.num_hash_misses,
