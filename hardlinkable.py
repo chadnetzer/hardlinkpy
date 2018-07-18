@@ -54,7 +54,7 @@ _MIRROR_PL_REGEX = _re.compile(r'^\.in\.')
 _RSYNC_TEMP_REGEX = _re.compile((r'^\..*\.\?{6,6}$'))
 
 
-def parse_command_line():
+def _parse_command_line():
     usage = "usage: %prog [options] directory [ directory ... ]"
     version = "%prog: " + _VERSION
     description = """\
@@ -192,7 +192,7 @@ including files becoming owned by another user.
 class Hardlinkable:
     def __init__(self, options):
         self.options = options
-        self.stats = Statistics(options)
+        self.stats = _Statistics(options)
         self._fsdevs = {}
 
     def linkables(self, directories):
@@ -255,9 +255,9 @@ class Hardlinkable:
 
                 # If excludes match any of the subdirs (or the current dir), skip
                 # them.
-                cull_excluded_directories(dirs, options.excludes)
+                _cull_excluded_directories(dirs, options.excludes)
                 cur_dir = _os.path.basename(dirpath)
-                if cur_dir and found_excluded(cur_dir, options.excludes):
+                if cur_dir and _found_excluded(cur_dir, options.excludes):
                     continue
 
                 gStats.found_directory()
@@ -265,11 +265,11 @@ class Hardlinkable:
                 # Loop through all the files in the directory
                 for filename in filenames:
                     assert filename
-                    if found_excluded(filename, options.excludes):
+                    if _found_excluded(filename, options.excludes):
                         continue
-                    if found_excluded_dotfile(filename):
+                    if _found_excluded_dotfile(filename):
                         continue
-                    if not found_matched_filename(filename, options.matches):
+                    if not _found_matched_filename(filename, options.matches):
                         continue
 
                     pathname = _os.path.normpath(_os.path.join(dirpath, filename))
@@ -320,7 +320,7 @@ class Hardlinkable:
         """Return an FSDev for given stat_info.st_dev"""
         fsdev = self._fsdevs.get(st_dev, None)
         if fsdev is None:
-            fsdev = FSDev(st_dev, max_nlinks)
+            fsdev = _FSDev(st_dev, max_nlinks)
             self._fsdevs[st_dev] = fsdev
         return fsdev
 
@@ -331,7 +331,7 @@ class Hardlinkable:
 
         self._prelink_inode_stats = self._inode_stats()
         for fsdev in self._fsdevs.values():
-            for linkable_set in linkable_inode_sets(fsdev.linked_inodes):
+            for linkable_set in _linkable_inode_sets(fsdev.linked_inodes):
                 nlinks_list = [(fsdev.ino_stat[ino].st_nlink, ino) for ino in linkable_set]
                 nlinks_list.sort(reverse=True)
                 assert len(nlinks_list) > 1
@@ -357,7 +357,7 @@ class Hardlinkable:
                         # we don't exceed the max_nlinks for the device.  We
                         # return the unmodified stat_infos because they may end
                         # up just being reported, not actually linked.
-                        for dest_dirname, dest_filename in namepairs_per_inode(fsdev.ino_pathnames[dest_ino]):
+                        for dest_dirname, dest_filename in _namepairs_per_inode(fsdev.ino_pathnames[dest_ino]):
                             src_tup = (src_dirname, src_filename, src_ino, fsdev)
                             dest_tup = (dest_dirname, dest_filename, dest_ino, fsdev)
                             yield (src_tup, dest_tup)
@@ -391,7 +391,7 @@ class Hardlinkable:
         file_info = (dirname, filename, stat_info)
         namepair = (dirname, filename)
 
-        file_hash = hash_value(stat_info, options)
+        file_hash = _hash_value(stat_info, options)
         if file_hash in fsdev.file_hashes:
             gStats.found_hash()
             # See if the new file has the same inode as one we've already seen.
@@ -449,7 +449,7 @@ class Hardlinkable:
         result = (
             # Must meet the following
             # criteria:
-            not is_already_hardlinked(st1, st2) and  # NOT already hard linked
+            not _is_already_hardlinked(st1, st2) and  # NOT already hard linked
 
             st1.st_size == st2.st_size and           # size is the same
 
@@ -620,7 +620,7 @@ class Hardlinkable:
         return hardlink_succeeded
 
 
-class FSDev:
+class _FSDev:
     """Per filesystem (ie. st_dev) operations"""
     def __init__(self, st_dev, max_nlinks):
         self.st_dev = st_dev
@@ -700,7 +700,7 @@ class FSDev:
         return count
 
 
-class Statistics:
+class _Statistics:
     def __init__(self, options):
         self.options = options
         self.dircount = 0                   # how many directories we find
@@ -781,8 +781,8 @@ class Statistics:
                 for namepair in file_list:
                     pathname = _os.path.join(*namepair)
                     print("                    : %s" % pathname)
-                print("Size per file: %s  Total saved: %s" % (humanize_number(size),
-                                                              humanize_number(size * len(file_list))))
+                print("Size per file: %s  Total saved: %s" % (_humanize_number(size),
+                                                              _humanize_number(size * len(file_list))))
             print("")
         if self.options.verbosity > 0 and self.hardlinkstats:
             if not self.options.linking_enabled:
@@ -811,13 +811,13 @@ class Statistics:
             s3 = "Additional bytes saved    : %s (%s)"
         else:
             s3 = "Additional bytes saveable : %s (%s)"
-        print(s3 % (self.bytes_saved_thisrun, humanize_number(self.bytes_saved_thisrun)))
+        print(s3 % (self.bytes_saved_thisrun, _humanize_number(self.bytes_saved_thisrun)))
         totalbytes = self.bytes_saved_thisrun + self.bytes_saved_previously
         if self.options.linking_enabled:
             s4 = "Total bytes saved         : %s (%s)"
         else:
             s4 = "Total bytes saveable      : %s (%s)"
-        print(s4 % (totalbytes, humanize_number(totalbytes)))
+        print(s4 % (totalbytes, _humanize_number(totalbytes)))
         print("Total run time            : %s seconds" % (_time.time() - self.starttime))
         if self.options.debug_level > 0:
             print("Total file hash hits       : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
@@ -833,7 +833,7 @@ class Statistics:
 
 ### Module functions ###
 
-def hash_value(stat_info, options):
+def _hash_value(stat_info, options):
     """Return a value appropriate for a python dict or shelve key, which can
     differentiate files which cannot be hardlinked."""
     size = stat_info.st_size
@@ -846,13 +846,13 @@ def hash_value(stat_info, options):
     return value
 
 
-def cull_excluded_directories(dirs, excludes):
+def _cull_excluded_directories(dirs, excludes):
     """Remove any excluded directories from dirs.
 
     Note that it modifies dirs in place, as required by os.walk()
     """
     for dirname in dirs[:]:
-        if found_excluded(dirname, excludes):
+        if _found_excluded(dirname, excludes):
             try:
                 dirs.remove(dirname)
             except ValueError:
@@ -861,7 +861,7 @@ def cull_excluded_directories(dirs, excludes):
             assert dirname not in dirs
 
 
-def found_excluded(name, excludes):
+def _found_excluded(name, excludes):
     """If excludes option is given, return True if name matches any regex."""
     for exclude in excludes:
         if _re.search(exclude, name):
@@ -869,7 +869,7 @@ def found_excluded(name, excludes):
     return False
 
 
-def found_excluded_dotfile(name):
+def _found_excluded_dotfile(name):
     """Return True if any excluded dotfile pattern is found."""
     # Look at files beginning with "."
     if name.startswith("."):
@@ -884,7 +884,7 @@ def found_excluded_dotfile(name):
     return False
 
 
-def found_matched_filename(name, matches):
+def _found_matched_filename(name, matches):
     """If matches option is given, return False if name doesn't match any
     patterns.  If no matches are given, return True."""
     if not matches:
@@ -895,7 +895,7 @@ def found_matched_filename(name, matches):
     return False
 
 
-def linkable_inode_sets(linked_inodes):
+def _linkable_inode_sets(linked_inodes):
     """Generate sets of inodes that can be connected.  Starts with a mapping of
     inode # keys, and set values, which are the inodes which are determined to
     be equal (and thus linkable) to the key inode."""
@@ -923,7 +923,7 @@ def linkable_inode_sets(linked_inodes):
         yield result_set
 
 
-def namepairs_per_inode(d):
+def _namepairs_per_inode(d):
     """Yield namepairs for each value in the dictionary d"""
     # A dictionary of {filename:[namepair]}, ie. a filename and list of
     # namepairs.
@@ -932,16 +932,15 @@ def namepairs_per_inode(d):
             yield namepair
 
 
-# If two files have the same inode and are on the same device then they are
-# already hardlinked.
-def is_already_hardlinked(st1,     # first file's status
-                          st2):    # second file's status
+def _is_already_hardlinked(st1, st2):
+    """If two files have the same inode and are on the same device then they
+    are already hardlinked."""
     result = (st1.st_ino == st2.st_ino and  # Inodes equal
               st1.st_dev == st2.st_dev)     # Devices equal
     return result
 
 
-def humanize_number(number):
+def _humanize_number(number):
     if number > 1024 ** 3:
         return ("%.3f GiB" % (number / (1024.0 ** 3)))
     if number > 1024 ** 2:
@@ -961,7 +960,7 @@ def main():
         _logging.basicConfig(format='%(levelname)s:%(message)s')
 
     # Parse our argument list and get our list of directories
-    options, directories = parse_command_line()
+    options, directories = _parse_command_line()
 
     hl = Hardlinkable(options)
     hl.run(directories)
