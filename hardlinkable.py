@@ -50,38 +50,6 @@ MIRROR_PL_REGEX = re.compile(r'^\.in\.')
 RSYNC_TEMP_REGEX = re.compile((r'^\..*\.\?{6,6}$'))
 
 
-def hash_value(stat_info, options):
-    """Return a value appropriate for a python dict or shelve key, which can
-    differentiate files which cannot be hardlinked."""
-    size = stat_info.st_size
-    if options.notimestamp or options.contentonly:
-        value = size
-    else:
-        mtime = int(stat_info.st_mtime)
-        value = size ^ mtime
-
-    return value
-
-
-# If two files have the same inode and are on the same device then they are
-# already hardlinked.
-def is_already_hardlinked(st1,     # first file's status
-                          st2):    # second file's status
-    result = (st1.st_ino == st2.st_ino and  # Inodes equal
-              st1.st_dev == st2.st_dev)     # Devices equal
-    return result
-
-
-def humanize_number(number):
-    if number > 1024 ** 3:
-        return ("%.3f GiB" % (number / (1024.0 ** 3)))
-    if number > 1024 ** 2:
-        return ("%.3f MiB" % (number / (1024.0 ** 2)))
-    if number > 1024:
-        return ("%.3f KiB" % (number / 1024.0))
-    return ("%d bytes" % number)
-
-
 def parse_command_line():
     usage = "usage: %prog [options] directory [ directory ... ]"
     version = "%prog: " + VERSION
@@ -215,223 +183,6 @@ including files becoming owned by another user.
                 parser.error("Use of deprecated numeric verbosity option (%s)." % ('-v ' + n_str))
 
     return options, args
-
-
-def cull_excluded_directories(dirs, excludes):
-    """Remove any excluded directories from dirs.
-
-    Note that it modifies dirs in place, as required by os.walk()
-    """
-    for dirname in dirs[:]:
-        if found_excluded(dirname, excludes):
-            try:
-                dirs.remove(dirname)
-            except ValueError:
-                break
-            # os.walk() will ensure no repeated dirnames
-            assert dirname not in dirs
-
-
-def found_excluded(name, excludes):
-    """If excludes option is given, return True if name matches any regex."""
-    for exclude in excludes:
-        if re.search(exclude, name):
-            return True
-    return False
-
-
-def found_excluded_dotfile(name):
-    """Return True if any excluded dotfile pattern is found."""
-    # Look at files beginning with "."
-    if name.startswith("."):
-        # Ignore any mirror.pl files.  These are the files that
-        # start with ".in."
-        if MIRROR_PL_REGEX.match(name):
-            return True
-        # Ignore any RSYNC files.  These are files that have the
-        # format .FILENAME.??????
-        if RSYNC_TEMP_REGEX.match(name):
-            return True
-    return False
-
-
-def found_matched_filename(name, matches):
-    """If matches option is given, return False if name doesn't match any
-    patterns.  If no matches are given, return True."""
-    if not matches:
-        return True
-    for match in matches:
-        if fnmatch.fnmatch(name, match):
-            return True
-    return False
-
-
-def linkable_inode_sets(linked_inodes):
-    """Generate sets of inodes that can be connected.  Starts with a mapping of
-    inode # keys, and set values, which are the inodes which are determined to
-    be equal (and thus linkable) to the key inode."""
-
-    remaining_inodes = linked_inodes.copy()
-    # iterate once over each inode key, building a set of it's connected
-    # inodes, by direct or indirect association
-    for start_ino in linked_inodes:
-        if start_ino not in remaining_inodes:
-            continue
-        result_set = set()
-        pending = [start_ino]
-        # We know this loop terminates because we always remove an item from
-        # the pending list, and a key from the remaining_inodes dict.  Since no
-        # additions are made to the remaining_inodes, eventually the pending
-        # list must empty.
-        while pending:
-            ino = pending.pop()
-            result_set.add(ino)
-            try:
-                connected_links = remaining_inodes.pop(ino)
-                pending.extend(connected_links)
-            except KeyError:
-                pass
-        yield result_set
-
-
-def namepairs_per_inode(d):
-    """Yield namepairs for each value in the dictionary d"""
-    # A dictionary of {filename:[namepair]}, ie. a filename and list of
-    # namepairs.
-    for filename, namepairs in d.copy().items():
-        for namepair in namepairs:
-            yield namepair
-
-
-class Statistics:
-    def __init__(self, options):
-        self.options = options
-        self.dircount = 0                   # how many directories we find
-        self.regularfiles = 0               # how many regular files we find
-        self.comparisons = 0                # how many file content comparisons
-        self.hardlinked_thisrun = 0         # hardlinks done this run
-        self.nlinks_to_zero_thisrun = 0     # how man nlinks actually went to zero
-        self.hardlinked_previously = 0      # hardlinks that are already existing
-        self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run
-        self.bytes_saved_previously = 0     # bytes saved by previous hardlinks
-        self.hardlinkstats = []             # list of files hardlinked this run
-        self.starttime = time.time()        # track how long it takes
-        self.previouslyhardlinked = {}      # list of files hardlinked previously
-
-        # Debugging stats
-        self.num_hash_hits = 0              # Amount of times a hash is found in file_hashes
-        self.num_hash_misses = 0            # Amount of times a hash is not found in file_hashes
-        self.num_hash_mismatches = 0        # Times a hash is found, but is not a file match
-        self.num_list_iterations = 0        # Number of iterations over a list in file_hashes
-
-    def found_directory(self):
-        self.dircount = self.dircount + 1
-
-    def found_regular_file(self):
-        self.regularfiles = self.regularfiles + 1
-
-    def did_comparison(self):
-        self.comparisons = self.comparisons + 1
-
-    def found_existing_hardlink(self, source_namepair, dest_namepair, stat_info):
-        assert len(source_namepair) == 2
-        assert len(dest_namepair) == 2
-        filesize = stat_info.st_size
-        self.hardlinked_previously = self.hardlinked_previously + 1
-        self.bytes_saved_previously = self.bytes_saved_previously + filesize
-        if self.options.verbosity > 1:
-            if source_namepair not in self.previouslyhardlinked:
-                self.previouslyhardlinked[source_namepair] = (filesize, [dest_namepair])
-            else:
-                self.previouslyhardlinked[source_namepair][1].append(dest_namepair)
-
-    def did_hardlink(self, src_namepair, dest_namepair, dest_stat_info):
-        # nlink count is not necessarily accurate at the moment
-        self.hardlinkstats.append((tuple(src_namepair),
-                                   tuple(dest_namepair)))
-        filesize = dest_stat_info.st_size
-        self.hardlinked_thisrun = self.hardlinked_thisrun + 1
-        if dest_stat_info.st_nlink == 1:
-            # We only save bytes if the last destination link was actually
-            # removed.
-            self.bytes_saved_thisrun = self.bytes_saved_thisrun + filesize
-            self.nlinks_to_zero_thisrun = self.nlinks_to_zero_thisrun + 1
-
-    def found_hash(self):
-        self.num_hash_hits += 1
-
-    def missed_hash(self):
-        """When a hash lookup isn't found"""
-        self.num_hash_misses += 1
-
-    def no_hash_match(self):
-        """When a hash lookup succeeds, but no matching value found"""
-        self.num_hash_mismatches += 1
-
-    def inc_hash_list_iteration(self):
-        self.num_list_iterations += 1
-
-    def print_stats(self):
-        print("Hard linking Statistics:")
-        # Print out the stats for the files we hardlinked, if any
-        if self.options.verbosity > 1 and self.previouslyhardlinked:
-            keys = list(self.previouslyhardlinked.keys())
-            keys.sort()  # Could use sorted() once we only support >= Python 2.4
-            print("Files Previously Hardlinked:")
-            for key in keys:
-                size, file_list = self.previouslyhardlinked[key]
-                print("Currently hardlinked: %s" % os.path.join(*key))
-                for namepair in file_list:
-                    pathname = os.path.join(*namepair)
-                    print("                    : %s" % pathname)
-                print("Size per file: %s  Total saved: %s" % (humanize_number(size),
-                                                              humanize_number(size * len(file_list))))
-            print("")
-        if self.options.verbosity > 0 and self.hardlinkstats:
-            if not self.options.linking_enabled:
-                print("Files that are hardlinkable:")
-            else:
-                print("Files that were hardlinked this run:")
-            for (source_namepair, dest_namepair) in self.hardlinkstats:
-                print("from: %s" % os.path.join(*source_namepair))
-                print("  to: %s" % os.path.join(*dest_namepair))
-            print("")
-        if not self.options.linking_enabled:
-            print("Statistics reflect what would result if actual linking were enabled")
-        print("Directories               : %s" % self.dircount)
-        print("Regular files             : %s" % self.regularfiles)
-        print("Comparisons               : %s" % self.comparisons)
-        if self.options.linking_enabled:
-            s1 = "Consolidated inodes       : %s"
-            s2 = "Hardlinked this run       : %s"
-        else:
-            s1 = "Consolidatable inodes     : %s"
-            s2 = "Hardlinkable files        : %s"
-        print(s1 % self.nlinks_to_zero_thisrun)
-        print(s2 % self.hardlinked_thisrun)
-        print("Total hardlinks           : %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
-        if self.options.linking_enabled:
-            s3 = "Additional bytes saved    : %s (%s)"
-        else:
-            s3 = "Additional bytes saveable : %s (%s)"
-        print(s3 % (self.bytes_saved_thisrun, humanize_number(self.bytes_saved_thisrun)))
-        totalbytes = self.bytes_saved_thisrun + self.bytes_saved_previously
-        if self.options.linking_enabled:
-            s4 = "Total bytes saved         : %s (%s)"
-        else:
-            s4 = "Total bytes saveable      : %s (%s)"
-        print(s4 % (totalbytes, humanize_number(totalbytes)))
-        print("Total run time            : %s seconds" % (time.time() - self.starttime))
-        if self.options.debug_level > 0:
-            print("Total file hash hits       : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
-                                                                                  self.num_hash_misses,
-                                                                                  (self.num_hash_hits +
-                                                                                   self.num_hash_misses)))
-            print("Total hash mismatches      : %s  (+ total hardlinks): %s" % (self.num_hash_mismatches,
-                                                                                    (self.num_hash_mismatches +
-                                                                                     self.hardlinked_previously +
-                                                                                     self.hardlinked_thisrun)))
-            print("Total hash list iterations : %s" % self.num_list_iterations)
 
 
 class Hardlinkable:
@@ -928,6 +679,257 @@ class FSDev:
         for pathnames in self.ino_pathnames[ino].values():
             count += len(pathnames)
         return count
+
+
+class Statistics:
+    def __init__(self, options):
+        self.options = options
+        self.dircount = 0                   # how many directories we find
+        self.regularfiles = 0               # how many regular files we find
+        self.comparisons = 0                # how many file content comparisons
+        self.hardlinked_thisrun = 0         # hardlinks done this run
+        self.nlinks_to_zero_thisrun = 0     # how man nlinks actually went to zero
+        self.hardlinked_previously = 0      # hardlinks that are already existing
+        self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run
+        self.bytes_saved_previously = 0     # bytes saved by previous hardlinks
+        self.hardlinkstats = []             # list of files hardlinked this run
+        self.starttime = time.time()        # track how long it takes
+        self.previouslyhardlinked = {}      # list of files hardlinked previously
+
+        # Debugging stats
+        self.num_hash_hits = 0              # Amount of times a hash is found in file_hashes
+        self.num_hash_misses = 0            # Amount of times a hash is not found in file_hashes
+        self.num_hash_mismatches = 0        # Times a hash is found, but is not a file match
+        self.num_list_iterations = 0        # Number of iterations over a list in file_hashes
+
+    def found_directory(self):
+        self.dircount = self.dircount + 1
+
+    def found_regular_file(self):
+        self.regularfiles = self.regularfiles + 1
+
+    def did_comparison(self):
+        self.comparisons = self.comparisons + 1
+
+    def found_existing_hardlink(self, source_namepair, dest_namepair, stat_info):
+        assert len(source_namepair) == 2
+        assert len(dest_namepair) == 2
+        filesize = stat_info.st_size
+        self.hardlinked_previously = self.hardlinked_previously + 1
+        self.bytes_saved_previously = self.bytes_saved_previously + filesize
+        if self.options.verbosity > 1:
+            if source_namepair not in self.previouslyhardlinked:
+                self.previouslyhardlinked[source_namepair] = (filesize, [dest_namepair])
+            else:
+                self.previouslyhardlinked[source_namepair][1].append(dest_namepair)
+
+    def did_hardlink(self, src_namepair, dest_namepair, dest_stat_info):
+        # nlink count is not necessarily accurate at the moment
+        self.hardlinkstats.append((tuple(src_namepair),
+                                   tuple(dest_namepair)))
+        filesize = dest_stat_info.st_size
+        self.hardlinked_thisrun = self.hardlinked_thisrun + 1
+        if dest_stat_info.st_nlink == 1:
+            # We only save bytes if the last destination link was actually
+            # removed.
+            self.bytes_saved_thisrun = self.bytes_saved_thisrun + filesize
+            self.nlinks_to_zero_thisrun = self.nlinks_to_zero_thisrun + 1
+
+    def found_hash(self):
+        self.num_hash_hits += 1
+
+    def missed_hash(self):
+        """When a hash lookup isn't found"""
+        self.num_hash_misses += 1
+
+    def no_hash_match(self):
+        """When a hash lookup succeeds, but no matching value found"""
+        self.num_hash_mismatches += 1
+
+    def inc_hash_list_iteration(self):
+        self.num_list_iterations += 1
+
+    def print_stats(self):
+        print("Hard linking Statistics:")
+        # Print out the stats for the files we hardlinked, if any
+        if self.options.verbosity > 1 and self.previouslyhardlinked:
+            keys = list(self.previouslyhardlinked.keys())
+            keys.sort()  # Could use sorted() once we only support >= Python 2.4
+            print("Files Previously Hardlinked:")
+            for key in keys:
+                size, file_list = self.previouslyhardlinked[key]
+                print("Currently hardlinked: %s" % os.path.join(*key))
+                for namepair in file_list:
+                    pathname = os.path.join(*namepair)
+                    print("                    : %s" % pathname)
+                print("Size per file: %s  Total saved: %s" % (humanize_number(size),
+                                                              humanize_number(size * len(file_list))))
+            print("")
+        if self.options.verbosity > 0 and self.hardlinkstats:
+            if not self.options.linking_enabled:
+                print("Files that are hardlinkable:")
+            else:
+                print("Files that were hardlinked this run:")
+            for (source_namepair, dest_namepair) in self.hardlinkstats:
+                print("from: %s" % os.path.join(*source_namepair))
+                print("  to: %s" % os.path.join(*dest_namepair))
+            print("")
+        if not self.options.linking_enabled:
+            print("Statistics reflect what would result if actual linking were enabled")
+        print("Directories               : %s" % self.dircount)
+        print("Regular files             : %s" % self.regularfiles)
+        print("Comparisons               : %s" % self.comparisons)
+        if self.options.linking_enabled:
+            s1 = "Consolidated inodes       : %s"
+            s2 = "Hardlinked this run       : %s"
+        else:
+            s1 = "Consolidatable inodes     : %s"
+            s2 = "Hardlinkable files        : %s"
+        print(s1 % self.nlinks_to_zero_thisrun)
+        print(s2 % self.hardlinked_thisrun)
+        print("Total hardlinks           : %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
+        if self.options.linking_enabled:
+            s3 = "Additional bytes saved    : %s (%s)"
+        else:
+            s3 = "Additional bytes saveable : %s (%s)"
+        print(s3 % (self.bytes_saved_thisrun, humanize_number(self.bytes_saved_thisrun)))
+        totalbytes = self.bytes_saved_thisrun + self.bytes_saved_previously
+        if self.options.linking_enabled:
+            s4 = "Total bytes saved         : %s (%s)"
+        else:
+            s4 = "Total bytes saveable      : %s (%s)"
+        print(s4 % (totalbytes, humanize_number(totalbytes)))
+        print("Total run time            : %s seconds" % (time.time() - self.starttime))
+        if self.options.debug_level > 0:
+            print("Total file hash hits       : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
+                                                                                  self.num_hash_misses,
+                                                                                  (self.num_hash_hits +
+                                                                                   self.num_hash_misses)))
+            print("Total hash mismatches      : %s  (+ total hardlinks): %s" % (self.num_hash_mismatches,
+                                                                                    (self.num_hash_mismatches +
+                                                                                     self.hardlinked_previously +
+                                                                                     self.hardlinked_thisrun)))
+            print("Total hash list iterations : %s" % self.num_list_iterations)
+
+
+### Module functions ###
+
+def hash_value(stat_info, options):
+    """Return a value appropriate for a python dict or shelve key, which can
+    differentiate files which cannot be hardlinked."""
+    size = stat_info.st_size
+    if options.notimestamp or options.contentonly:
+        value = size
+    else:
+        mtime = int(stat_info.st_mtime)
+        value = size ^ mtime
+
+    return value
+
+
+def cull_excluded_directories(dirs, excludes):
+    """Remove any excluded directories from dirs.
+
+    Note that it modifies dirs in place, as required by os.walk()
+    """
+    for dirname in dirs[:]:
+        if found_excluded(dirname, excludes):
+            try:
+                dirs.remove(dirname)
+            except ValueError:
+                break
+            # os.walk() will ensure no repeated dirnames
+            assert dirname not in dirs
+
+
+def found_excluded(name, excludes):
+    """If excludes option is given, return True if name matches any regex."""
+    for exclude in excludes:
+        if re.search(exclude, name):
+            return True
+    return False
+
+
+def found_excluded_dotfile(name):
+    """Return True if any excluded dotfile pattern is found."""
+    # Look at files beginning with "."
+    if name.startswith("."):
+        # Ignore any mirror.pl files.  These are the files that
+        # start with ".in."
+        if MIRROR_PL_REGEX.match(name):
+            return True
+        # Ignore any RSYNC files.  These are files that have the
+        # format .FILENAME.??????
+        if RSYNC_TEMP_REGEX.match(name):
+            return True
+    return False
+
+
+def found_matched_filename(name, matches):
+    """If matches option is given, return False if name doesn't match any
+    patterns.  If no matches are given, return True."""
+    if not matches:
+        return True
+    for match in matches:
+        if fnmatch.fnmatch(name, match):
+            return True
+    return False
+
+
+def linkable_inode_sets(linked_inodes):
+    """Generate sets of inodes that can be connected.  Starts with a mapping of
+    inode # keys, and set values, which are the inodes which are determined to
+    be equal (and thus linkable) to the key inode."""
+
+    remaining_inodes = linked_inodes.copy()
+    # iterate once over each inode key, building a set of it's connected
+    # inodes, by direct or indirect association
+    for start_ino in linked_inodes:
+        if start_ino not in remaining_inodes:
+            continue
+        result_set = set()
+        pending = [start_ino]
+        # We know this loop terminates because we always remove an item from
+        # the pending list, and a key from the remaining_inodes dict.  Since no
+        # additions are made to the remaining_inodes, eventually the pending
+        # list must empty.
+        while pending:
+            ino = pending.pop()
+            result_set.add(ino)
+            try:
+                connected_links = remaining_inodes.pop(ino)
+                pending.extend(connected_links)
+            except KeyError:
+                pass
+        yield result_set
+
+
+def namepairs_per_inode(d):
+    """Yield namepairs for each value in the dictionary d"""
+    # A dictionary of {filename:[namepair]}, ie. a filename and list of
+    # namepairs.
+    for filename, namepairs in d.copy().items():
+        for namepair in namepairs:
+            yield namepair
+
+
+# If two files have the same inode and are on the same device then they are
+# already hardlinked.
+def is_already_hardlinked(st1,     # first file's status
+                          st2):    # second file's status
+    result = (st1.st_ino == st2.st_ino and  # Inodes equal
+              st1.st_dev == st2.st_dev)     # Devices equal
+    return result
+
+
+def humanize_number(number):
+    if number > 1024 ** 3:
+        return ("%.3f GiB" % (number / (1024.0 ** 3)))
+    if number > 1024 ** 2:
+        return ("%.3f MiB" % (number / (1024.0 ** 2)))
+    if number > 1024:
+        return ("%.3f KiB" % (number / 1024.0))
+    return ("%d bytes" % number)
 
 
 def main():
