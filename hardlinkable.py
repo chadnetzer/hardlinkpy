@@ -495,7 +495,10 @@ class Hardlinkable:
             print("Comparing: %s" % pathname1)
             print("     to  : %s" % pathname2)
         gStats.did_comparison()
-        return _filecmp.cmp(pathname1, pathname2, shallow=False)
+        result = _filecmp.cmp(pathname1, pathname2, shallow=False)
+        if result:
+            gStats.found_equal_comparison()
+        return result
 
     # Determines if two files should be hard linked together.
     def _are_files_hardlinkable(self, file_info1, file_info2):
@@ -716,6 +719,7 @@ class _Statistics:
         self.dircount = 0                   # how many directories we find
         self.regularfiles = 0               # how many regular files we find
         self.comparisons = 0                # how many file content comparisons
+        self.equal_comparisons = 0          # how many file comparisons found equal
         self.hardlinked_thisrun = 0         # hardlinks done this run
         self.nlinks_to_zero_thisrun = 0     # how man nlinks actually went to zero
         self.hardlinked_previously = 0      # hardlinks that are already existing
@@ -739,6 +743,9 @@ class _Statistics:
 
     def did_comparison(self):
         self.comparisons = self.comparisons + 1
+
+    def found_equal_comparison(self):
+        self.equal_comparisons = self.equal_comparisons + 1
 
     def found_existing_hardlink(self, src_namepair, dst_namepair, stat_info):
         assert len(src_namepair) == 2
@@ -842,6 +849,7 @@ class _Statistics:
                                                                                      self.hardlinked_previously +
                                                                                      self.hardlinked_thisrun)))
             print("Total hash list iterations : %s" % self.num_list_iterations)
+            print("Total equal comparisons    : %s" % self.equal_comparisons)
 
 
 ### Module functions ###
