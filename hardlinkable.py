@@ -62,10 +62,6 @@ This is a tool to scan directories and report on the space that could be saved
 by hard linking identical files.  It can also perform the linking."""
 
     parser = _OptionParser(usage=usage, version=version, description=description)
-    parser.add_option("--enable-linking", dest="linking_enabled",
-                      help="Perform the actual hardlinking",
-                      action="store_true", default=False,)
-
     parser.add_option("-q", "--no-stats", dest="printstats",
                       help="Do not print the statistics",
                       action="store_false", default=True,)
@@ -73,6 +69,10 @@ by hard linking identical files.  It can also perform the linking."""
     parser.add_option("-v", "--verbose", dest="verbosity",
                       help="Increase verbosity level (Repeatable up to 3 times)",
                       action="count", default=0,)
+
+    parser.add_option("--enable-linking", dest="linking_enabled",
+                      help="Perform the actual hardlinking",
+                      action="store_true", default=False,)
 
     # hidden debug option, each repeat increases debug level (long option only)
     parser.add_option("-d", "--debug", dest="debug_level",
