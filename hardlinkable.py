@@ -22,7 +22,6 @@
 # Temple Place, Suite 330, Boston, MA  02111-1307, USA.
 
 import filecmp as _filecmp
-import fnmatch as _fnmatch
 import logging as _logging
 import os as _os
 import re as _re
@@ -33,6 +32,7 @@ import time as _time
 from optparse import OptionParser as _OptionParser
 from optparse import OptionGroup as _OptionGroup
 from optparse import SUPPRESS_HELP as _SUPPRESS_HELP
+from optparse import TitledHelpFormatter as _TitledHelpFormatter
 
 
 # Python 3 moved intern() to sys module
@@ -44,8 +44,6 @@ except NameError:
 __all__ = ["Hardlinkable"]
 
 # global declarations
-_OLD_VERBOSE_OPTION_ERROR = True
-
 __version__ = '0.8'
 _VERSION = "0.8 alpha - 2018-07-09 (09-Jul-2018)"
 
@@ -58,77 +56,71 @@ def _parse_command_line(get_default_options=False):
     usage = "usage: %prog [options] directory [ directory ... ]"
     version = "%prog: " + _VERSION
     description = """\
-This is a tool to scan directories and report identical files that could be
-hard-linked together in order to save space.  Linked files can save space, but
-a change to one hardlinked file changes them all."""
+This is a tool to scan directories and report on the space that could be saved
+by hard linking identical files.  It can also perform the linking."""
 
-    parser = _OptionParser(usage=usage, version=version, description=description)
-    parser.add_option("--enable-linking", dest="linking_enabled",
-                      help="Perform the actual hardlinking",
-                      action="store_true", default=False,)
-
+    formatter = _TitledHelpFormatter(max_help_position=26)
+    parser = _OptionParser(usage=usage,
+                           version=version,
+                           description=description,
+                           formatter=formatter)
     parser.add_option("-q", "--no-stats", dest="printstats",
                       help="Do not print the statistics",
                       action="store_false", default=True,)
 
     parser.add_option("-v", "--verbose", dest="verbosity",
-                      help="Increase verbosity level (Repeatable up to 3 times)",
+                      help="Increase verbosity level (Up to 3 times)",
                       action="count", default=0,)
+
+    parser.add_option("--enable-linking", dest="linking_enabled",
+                      help="Perform the actual hardlinking",
+                      action="store_true", default=False,)
 
     # hidden debug option, each repeat increases debug level (long option only)
     parser.add_option("-d", "--debug", dest="debug_level",
                       help=_SUPPRESS_HELP,
                       action="count", default=0,)
 
-    properties_description= """
-File content must always match exactly.  By default, ownership, permissions,
-and mtime must also match.
-Use --content-only with caution, as it can lead to surprising results,
-including files becoming owned by another user.
-"""
-    group = _OptionGroup(parser, title="File Matching",
-            description=properties_description,)
+    group = _OptionGroup(parser, title="File Matching", description="""\
+File content must always match exactly to be linkable.  Use --content-only with
+caution, as it can lead to surprising results, including files becoming owned
+by another user.
+""")
     parser.add_option_group(group)
+
+    group.add_option("-f", "--same-name", dest="samename",
+                     help="Filenames have to be identical",
+                     action="store_true", default=False,)
+
+    group.add_option("-p", "--ignore-perms", dest="nosameperm",
+                     help="File permissions do not need to match",
+                     action="store_true", default=False,)
+
+    group.add_option("-t", "--ignore-time", dest="notimestamp",
+                     help="File modification times do not need to match",
+                     action="store_true", default=False,)
+
+    group.add_option("-s", "--min-size", dest="min_file_size", metavar="SZ",
+                     help="Minimum file size (default: %default)",
+                     default="1",)
+
+    group.add_option("-S", "--max-size", dest="max_file_size", metavar="SZ",
+                     help="Maximum file size (Can add 'k', 'm', etc.)",
+                     default=None,)
 
     group.add_option("-c", "--content-only", dest="contentonly",
                      help="Only file contents have to match",
                      action="store_true", default=False,)
 
-    group.add_option("-f", "--filenames-equal", dest="samename",
-                     help="Filenames have to be identical",
-                     action="store_true", default=False,)
-
-    group.add_option("-s", "--min-size", dest="min_file_size", type="int",
-                     help="Minimum file size",
-                     action="store", default=0,)
-
-    group.add_option("-S", "--max-size", dest="max_file_size", type="int",
-                     help="Maximum file size",
-                     action="store", default=0,)
-
-    group.add_option("-t", "--ignore-timestamp", dest="notimestamp",
-                     help="File modification times do NOT have to be identical",
-                     action="store_true", default=False,)
-
-    group.add_option("--timestamp-ignore",
-                     dest="deprecated_timestamp_option_name",
-                     help=_SUPPRESS_HELP,
-                     action="store_true", default=False,)
-
-    # Can't think of a good short option.  Should be used rarely anyway.
-    group.add_option("--ignore-permissions", dest="nosameperm",
-                     help="File permissions do not need to match",
-                     action="store_true", default=False,)
-
-    group = _OptionGroup(parser, title="Name Matching",)
+    group = _OptionGroup(parser, title="Name Matching (may specify multiple times)",)
     parser.add_option_group(group)
 
-    group.add_option("-m", "--match", dest="matches", metavar="PATTERN",
-                     help="Shell patterns used to match files (may specify multiple times)",
+    group.add_option("-m", "--match", dest="matches", metavar="RE",
+                     help="Regular expression used to match files",
                      action="append", default=[],)
 
-    group.add_option("-x", "--exclude", dest="excludes", metavar="REGEX",
-                     help="Regular expression used to exclude files/dirs (may specify multiple times)",
+    group.add_option("-x", "--exclude", dest="excludes", metavar="RE",
+                     help="Regular expression used to exclude files/dirs",
                      action="append", default=[],)
 
     # Allow for a way to get a default options object (for Statistics)
@@ -139,16 +131,29 @@ including files becoming owned by another user.
     (options, args) = parser.parse_args()
     if not args:
         parser.print_help()
-        parser.error("Must supply one or more directories")
+        _sys.stderr.write("\nMust supply one or more directories\n")
+        _sys.exit(2)
     args = [_os.path.abspath(_os.path.expanduser(dirname)) for dirname in args]
     for dirname in args:
         if not _os.path.isdir(dirname):
             parser.error("%s is NOT a directory" % dirname)
+
+    # Convert "humanized" size inputs to integer bytes
+    try:
+        options.min_file_size = _humanized_number_to_bytes(options.min_file_size)
+    except ValueError:
+        parser.error("option -s: invalid integer value: '%s'" % options.min_file_size)
+    if options.max_file_size is not None:
+        try:
+            options.max_file_size = _humanized_number_to_bytes(options.max_file_size)
+        except ValueError:
+            parser.error("option -S: invalid integer value: '%s'" % options.max_file_size)
+    # Check validity of min/max size options
     if options.min_file_size < 0:
         parser.error("--min_size cannot be negative")
-    if options.max_file_size < 0:
+    if options.max_file_size is not None and options.max_file_size < 0:
         parser.error("--max_size cannot be negative")
-    if options.max_file_size and options.max_file_size < options.min_file_size:
+    if options.max_file_size is not None and options.max_file_size < options.min_file_size:
         parser.error("--max_size cannot be smaller than --min_size")
 
     # If linking is enabled, output a message early to indicate what is
@@ -157,39 +162,6 @@ including files becoming owned by another user.
     # definitively that the program is set to modify the filesystem.
     if options.linking_enabled:
         print("----- Hardlinking enabled.  The filesystem will be modified -----")
-
-    # Accept --timestamp-ignore for backwards compatibility
-    if options.deprecated_timestamp_option_name:
-        _logging.warning("Enabling --ignore-timestamp. "
-                         "Option name --timestamp-ignore is deprecated.")
-        options.notimestamp = True
-        del options.deprecated_timestamp_option_name
-
-    if _OLD_VERBOSE_OPTION_ERROR:
-        # When old style verbose options (-v 1) are parsed using the new
-        # verbosity option (as a counter), the numbers end up being interpreted
-        # as directories.  As long as the directories don't exist, the program
-        # will catch this and exit.  However, if there so happens to be a
-        # directory with a typical number value (ie. '0', '1', etc.), it could
-        # falsely be scanned for hardlinking.  So we directly check the
-        # sys.argv list and explicitly disallow this case.
-        #
-        # This could also reject a technically valid case where a new style
-        # verbosity argument is given, followed by a number-like directory name
-        # that is intentionally meant to be scanned.  Since it seems rare, we
-        # intentionally disallow it as protection against misinterpretation of
-        # the old style verbose option argument.  Eventually, when enough time
-        # has passed to assume that hardlinkable users have switched over to
-        # the new verbosity argument, we can remove this safeguard.
-
-        # Iterate over a reversed argument list, looking for options pairs of
-        # type ['-v', '<num>']
-        for i,s in enumerate(_sys.argv[::-1]):
-            if i == 0:
-                continue
-            n_str = _sys.argv[-i]
-            if s in ('-v', '--verbose') and n_str.isdigit():
-                parser.error("Use of deprecated numeric verbosity option (%s)." % ('-v ' + n_str))
 
     return options, args
 
@@ -263,7 +235,7 @@ class Hardlinkable:
                 # them.
                 _cull_excluded_directories(dirs, options.excludes)
                 cur_dir = _os.path.basename(dirpath)
-                if cur_dir and _found_excluded(cur_dir, options.excludes):
+                if cur_dir and _found_excluded_regex(cur_dir, options.excludes):
                     continue
 
                 self.stats.found_directory()
@@ -271,11 +243,11 @@ class Hardlinkable:
                 # Loop through all the files in the directory
                 for filename in filenames:
                     assert filename
-                    if _found_excluded(filename, options.excludes):
+                    if _found_excluded_regex(filename, options.excludes):
                         continue
                     if _found_excluded_dotfile(filename):
                         continue
-                    if not _found_matched_filename(filename, options.matches):
+                    if not _found_matched_filename_regex(filename, options.matches):
                         continue
 
                     pathname = _os.path.normpath(_os.path.join(dirpath, filename))
@@ -292,7 +264,7 @@ class Hardlinkable:
                         continue
 
                     # Is the file within the selected size range?
-                    if ((options.max_file_size and
+                    if ((options.max_file_size is not None and
                          stat_info.st_size > options.max_file_size) or
                         (stat_info.st_size < options.min_file_size)):
                         continue
@@ -457,8 +429,6 @@ class Hardlinkable:
             not _is_already_hardlinked(st1, st2) and  # NOT already hard linked
 
             st1.st_size == st2.st_size and           # size is the same
-
-            st1.st_size != 0 and                     # size is not zero
 
             (st1.st_mode == st2.st_mode or           # file mode is the same
              options.nosameperm or                   # OR we are ignoring file mode
@@ -831,7 +801,7 @@ class _Statistics:
         else:
             s4 = "Total bytes saveable      : %s (%s)"
         print(s4 % (totalbytes, _humanize_number(totalbytes)))
-        print("Total run time            : %s seconds" % (_time.time() - self.starttime))
+        print("Total run time            : %s seconds" % round(_time.time() - self.starttime, 3))
         if self.options.debug_level > 0:
             print("Total file hash hits       : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
                                                                                   self.num_hash_misses,
@@ -866,7 +836,7 @@ def _cull_excluded_directories(dirs, excludes):
     Note that it modifies dirs in place, as required by os.walk()
     """
     for dirname in dirs[:]:
-        if _found_excluded(dirname, excludes):
+        if _found_excluded_regex(dirname, excludes):
             try:
                 dirs.remove(dirname)
             except ValueError:
@@ -875,7 +845,7 @@ def _cull_excluded_directories(dirs, excludes):
             assert dirname not in dirs
 
 
-def _found_excluded(name, excludes):
+def _found_excluded_regex(name, excludes):
     """If excludes option is given, return True if name matches any regex."""
     for exclude in excludes:
         if _re.search(exclude, name):
@@ -898,13 +868,13 @@ def _found_excluded_dotfile(name):
     return False
 
 
-def _found_matched_filename(name, matches):
+def _found_matched_filename_regex(name, matches):
     """If matches option is given, return False if name doesn't match any
     patterns.  If no matches are given, return True."""
     if not matches:
         return True
     for match in matches:
-        if _fnmatch.fnmatch(name, match):
+        if _re.search(match, name):
             return True
     return False
 
@@ -955,13 +925,40 @@ def _is_already_hardlinked(st1, st2):
 
 
 def _humanize_number(number):
-    if number > 1024 ** 3:
+    if number >= 1024 ** 5:
+        return ("%.3f PiB" % (number / (1024.0 ** 5)))
+    if number >= 1024 ** 4:
+        return ("%.3f TiB" % (number / (1024.0 ** 4)))
+    if number >= 1024 ** 3:
         return ("%.3f GiB" % (number / (1024.0 ** 3)))
-    if number > 1024 ** 2:
+    if number >= 1024 ** 2:
         return ("%.3f MiB" % (number / (1024.0 ** 2)))
-    if number > 1024:
+    if number >= 1024:
         return ("%.3f KiB" % (number / 1024.0))
     return ("%d bytes" % number)
+
+def _humanized_number_to_bytes(s):
+    """Parses numbers with size specifiers like 'k', 'm', 'g', or 't'.
+    Deliberately ignores multi-letter abbrevs like 'kb' or 'kib'"""
+
+    # Assumes string/bytes input
+    if not s:
+        int(s) # Deliberately raise ValueError on empty input
+
+    s = s.lower()
+    multipliers = { 'k' : 1024,
+                    'm' : 1024**2,
+                    'g' : 1024**3,
+                    't' : 1024**4,
+                    'p' : 1024**5 }
+
+    last_char = s[-1]
+    if not last_char in multipliers:
+        return int(s)
+    else:
+        s = s[:-1]
+        multiplier = multipliers[last_char]
+        return multiplier * int(s)
 
 
 def main():

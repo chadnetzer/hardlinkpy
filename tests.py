@@ -13,13 +13,47 @@ from shutil import rmtree
 
 import hardlinkable
 
-testdata0 = "foo"  # Short so that filesystems may back into inodes
+testdata0 = ""
 testdata1 = "1234" * 1024 + "abc"
 testdata2 = "1234" * 1024 + "xyz"
+testdata3 = "foo"  # Short so that filesystems may back into inodes
 
 
 def get_inode(filename):
     return os.lstat(filename).st_ino
+
+class TestModuleFunctions(unittest.TestCase):
+    def test_humanize_number(self):
+        f = hardlinkable._humanize_number
+        self.assertEqual("0 bytes", f(0))
+        self.assertEqual("1 bytes", f(1))
+        self.assertEqual("1023 bytes", f(1023))
+        self.assertEqual("1.000 KiB", f(1024))
+        self.assertEqual("1.000 MiB", f(1024**2))
+        self.assertEqual("1.000 GiB", f(1024**3))
+        self.assertEqual("1.000 TiB", f(1024**4))
+        self.assertEqual("1.000 PiB", f(1024**5))
+
+    def test_humanized_number_to_bytes(self):
+        f = hardlinkable._humanized_number_to_bytes
+        self.assertEqual(0, f("0"))
+        self.assertEqual(1, f("1"))
+        self.assertEqual(1023, f("1023"))
+        self.assertEqual(1024, f("1024"))
+        self.assertEqual(1024, f("1k"))
+        self.assertEqual(1024, f("1K"))
+        self.assertEqual(2048, f("2k"))
+        self.assertEqual(1023*1024, f("1023k"))
+        self.assertEqual(1024**2, f("1m"))
+        self.assertEqual(1024**2, f("1M"))
+        self.assertEqual(1024**3, f("1g"))
+        self.assertEqual(1024**4, f("1t"))
+        self.assertEqual(1024**5, f("1p"))
+
+        self.assertRaises(ValueError, f, "")
+        self.assertRaises(ValueError, f, "1kk")
+        self.assertRaises(ValueError, f, "1j")
+        self.assertRaises(ValueError, f, "k")
 
 
 class BaseTests(unittest.TestCase):
@@ -129,8 +163,8 @@ class TestHappy(BaseTests):
         self.make_hardlinkable_file("dir3/name1.noext", testdata1)
         self.make_hardlinkable_file("dir4/name1.ext", testdata1)
         self.make_hardlinkable_file("dir5/name1.ext", testdata2)
-        self.make_hardlinkable_file("dir6/name1.ext", testdata0)
-        self.make_hardlinkable_file("dir6/name2.ext", testdata0)
+        self.make_hardlinkable_file("dir6/name1.ext", testdata3)
+        self.make_hardlinkable_file("dir6/name2.ext", testdata3)
 
         now = time.time()
         other = now - 2
@@ -208,7 +242,7 @@ class TestHappy(BaseTests):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
 
     def test_hardlink_tree_filenames_equal(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--filenames-equal", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--same-name", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -226,14 +260,14 @@ class TestHappy(BaseTests):
     def test_hardlink_tree_filenames_equal_reverse_iteration(self):
         """Since os.listdir() can return items in arbitrary order, this test
         confirms that if the iteration over the directories is reversed
-        (lexicographically), the --filenames-equal option still works."""
+        (lexicographically), the --same-name option still works."""
 
-        # This test confirms that the --filenames-equal option works whether
+        # This test confirms that the --same-name option works whether
         # dir1/name1.ext or dir2/name1.ext is found first.
         self.remove_file("dir1/link")
         self.make_linked_file("dir2/name1.ext", "dir1/link")
 
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--filenames-equal", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--same-name", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -255,7 +289,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_timestamp_ignore(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--ignore-timestamp", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--ignore-time", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -270,7 +304,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
 
     def test_hardlink_tree_ignore_permissions(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--ignore-permissions", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--ignore-perms", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -284,103 +318,8 @@ class TestHappy(BaseTests):
 
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
-    def test_hardlink_tree_minsize(self):
-        """Set a minimum size larger than the test data, inhibiting linking"""
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--min-size",
-                    str(len(testdata1) + 1), self.root]
-        hardlinkable.main()
-
-        self.verify_file_contents()
-
-        self.assertEqual(os.lstat("dir1/name1.ext").st_nlink, 2)  # Existing link
-        self.assertEqual(os.lstat("dir1/name2.ext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir1/name3.ext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir2/name1.ext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir3/name1.ext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir3/name1.noext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir4/name1.ext").st_nlink, 1)
-        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/link"))
-
-        self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
-
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--min-size",
-                    str(len(testdata0) - 1), self.root]
-        hardlinkable.main()
-
-        self.verify_file_contents()
-
-        self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
-
-    def test_hardlink_tree_maxsize(self):
-        """Set a maximum size smaller than the test data, inhibiting linking"""
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--max-size",
-                    str(len(testdata0) - 1), self.root]
-        hardlinkable.main()
-
-        self.verify_file_contents()
-
-        self.assertEqual(os.lstat("dir1/name1.ext").st_nlink, 2)  # Existing link
-        self.assertEqual(os.lstat("dir1/name2.ext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir1/name3.ext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir2/name1.ext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir3/name1.ext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir3/name1.noext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir4/name1.ext").st_nlink, 1)
-        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/link"))
-        self.assertEqual(os.lstat("dir6/name1.ext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir6/name2.ext").st_nlink, 1)
-
-        self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
-
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--max-size",
-                    str(len(testdata1) - 1), self.root]
-        hardlinkable.main()
-
-        self.verify_file_contents()
-
-        self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
-
-    def test_hardlink_tree_minsize_maxsize(self):
-        """Test using both min and max size restrictions"""
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q",
-                    "--min-size", str(len(testdata0) + 1),
-                    "--max-size", str(len(testdata1) - 1),
-                    self.root]
-        hardlinkable.main()
-
-        self.verify_file_contents()
-
-        self.assertEqual(os.lstat("dir1/name1.ext").st_nlink, 2)  # Existing link
-        self.assertEqual(os.lstat("dir1/name2.ext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir1/name3.ext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir2/name1.ext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir3/name1.ext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir3/name1.noext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir4/name1.ext").st_nlink, 1)
-        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/link"))
-        self.assertEqual(os.lstat("dir6/name1.ext").st_nlink, 1)
-        self.assertEqual(os.lstat("dir6/name2.ext").st_nlink, 1)
-
-        self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
-
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q",
-                    "--min-size", str(len(testdata0) - 1),
-                    "--max-size", str(len(testdata1) + 1),
-                    self.root]
-        hardlinkable.main()
-
-        self.verify_file_contents()
-
-        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
-        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
-        self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir3/name1.noext"))
-        self.assertEqual(get_inode("dir1/name3.ext"), get_inode("dir3/name1.ext"))
-        self.assertEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
-        self.assertEqual(os.lstat("dir6/name1.ext").st_nlink, 2)
-        self.assertEqual(os.lstat("dir6/name2.ext").st_nlink, 2)
-
     def test_hardlink_tree_match_extension(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--match", "*.ext", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--match", ".*\.ext$", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -394,7 +333,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_match_prefix(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--match", "name1*", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--match", "^name1.*", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -410,7 +349,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_multiple_matches(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-m", "name2*", "-m", "*.noext", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-m", "^name2.*", "-m", ".*\.noext$", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -440,6 +379,223 @@ class TestHappy(BaseTests):
         self.assertEqual(os.lstat("dir6/name2.ext").st_nlink, 2)
 
 
+class TestMinMaxSize(BaseTests):
+    def setUp(self):
+        self.setup_tempdir()
+
+        self.make_hardlinkable_file("zero_len_1", testdata0)
+        self.make_hardlinkable_file("zero_len_2", testdata0)
+        self.make_hardlinkable_file("zero_len_3", testdata0)
+
+        self.make_hardlinkable_file("small_file_1", testdata3)
+        self.make_hardlinkable_file("small_file_2", testdata3)
+        self.make_hardlinkable_file("small_file_3", testdata3)
+
+        self.make_hardlinkable_file("a1", testdata1)
+        self.make_hardlinkable_file("b1", testdata1)
+        self.make_hardlinkable_file("c1", testdata1)
+        self.make_hardlinkable_file("a2", testdata2)
+        self.make_hardlinkable_file("b2", testdata2)
+        self.make_hardlinkable_file("c2", testdata2)
+
+        self.verify_file_contents()
+
+        self.max_datasize = max(len(testdata0),
+                                len(testdata1),
+                                len(testdata2),
+                                len(testdata3))
+
+        self.min_datasize = min(len(testdata1),
+                                len(testdata2),
+                                len(testdata3))
+
+    def tearDown(self):
+        self.remove_tempdir()
+
+    def test_hardlink_tree_smaller_than_minsize(self):
+        """Set a minimum size larger than the test data, inhibiting linking"""
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-c",
+                    "--min-size", str(self.max_datasize + 1), self.root]
+        hardlinkable.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(os.lstat("zero_len_1").st_nlink, 1)
+        self.assertEqual(os.lstat("zero_len_2").st_nlink, 1)
+        self.assertEqual(os.lstat("zero_len_3").st_nlink, 1)
+
+        self.assertEqual(os.lstat("small_file_1").st_nlink, 1)
+        self.assertEqual(os.lstat("small_file_2").st_nlink, 1)
+        self.assertEqual(os.lstat("small_file_3").st_nlink, 1)
+
+        self.assertEqual(os.lstat("a1").st_nlink, 1)
+        self.assertEqual(os.lstat("b1").st_nlink, 1)
+        self.assertEqual(os.lstat("c1").st_nlink, 1)
+        self.assertEqual(os.lstat("a2").st_nlink, 1)
+        self.assertEqual(os.lstat("b2").st_nlink, 1)
+        self.assertEqual(os.lstat("c2").st_nlink, 1)
+
+    def test_hardlink_tree_default_minsize(self):
+        """By default, length zero files aren't hardlinked."""
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-c", self.root]
+        hardlinkable.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(os.lstat("zero_len_1").st_nlink, 1)
+        self.assertEqual(os.lstat("zero_len_2").st_nlink, 1)
+        self.assertEqual(os.lstat("zero_len_3").st_nlink, 1)
+
+        self.assertEqual(os.lstat("small_file_1").st_nlink, 3)
+        self.assertEqual(os.lstat("small_file_2").st_nlink, 3)
+        self.assertEqual(os.lstat("small_file_3").st_nlink, 3)
+        self.assertEqual(get_inode("small_file_1"), get_inode("small_file_2"))
+        self.assertEqual(get_inode("small_file_1"), get_inode("small_file_3"))
+
+        self.assertEqual(os.lstat("a1").st_nlink, 3)
+        self.assertEqual(os.lstat("b1").st_nlink, 3)
+        self.assertEqual(os.lstat("c1").st_nlink, 3)
+        self.assertEqual(os.lstat("a2").st_nlink, 3)
+        self.assertEqual(os.lstat("b2").st_nlink, 3)
+        self.assertEqual(os.lstat("c2").st_nlink, 3)
+        self.assertEqual(get_inode("a1"), get_inode("b1"))
+        self.assertEqual(get_inode("a1"), get_inode("c1"))
+        self.assertEqual(get_inode("a2"), get_inode("b2"))
+        self.assertEqual(get_inode("a2"), get_inode("c2"))
+        self.assertNotEqual(get_inode("a1"), get_inode("a2"))
+
+    def test_hardlink_tree_zero_minsize(self):
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-c",
+                    "--min-size", "0", self.root]
+        hardlinkable.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(os.lstat("zero_len_1").st_nlink, 3)
+        self.assertEqual(os.lstat("zero_len_2").st_nlink, 3)
+        self.assertEqual(os.lstat("zero_len_3").st_nlink, 3)
+        self.assertEqual(get_inode("zero_len_1"), get_inode("zero_len_2"))
+        self.assertEqual(get_inode("zero_len_1"), get_inode("zero_len_3"))
+
+        self.assertEqual(os.lstat("small_file_1").st_nlink, 3)
+        self.assertEqual(os.lstat("small_file_2").st_nlink, 3)
+        self.assertEqual(os.lstat("small_file_3").st_nlink, 3)
+        self.assertEqual(get_inode("small_file_1"), get_inode("small_file_2"))
+        self.assertEqual(get_inode("small_file_1"), get_inode("small_file_3"))
+
+        self.assertEqual(os.lstat("a1").st_nlink, 3)
+        self.assertEqual(os.lstat("b1").st_nlink, 3)
+        self.assertEqual(os.lstat("c1").st_nlink, 3)
+        self.assertEqual(os.lstat("a2").st_nlink, 3)
+        self.assertEqual(os.lstat("b2").st_nlink, 3)
+        self.assertEqual(os.lstat("c2").st_nlink, 3)
+        self.assertEqual(get_inode("a1"), get_inode("b1"))
+        self.assertEqual(get_inode("a1"), get_inode("c1"))
+        self.assertEqual(get_inode("a2"), get_inode("b2"))
+        self.assertEqual(get_inode("a2"), get_inode("c2"))
+        self.assertNotEqual(get_inode("a1"), get_inode("a2"))
+
+    def test_hardlink_tree_larger_than_maxsize(self):
+        """Set a minimum size larger than the test data, inhibiting linking (zero excluded)"""
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-c",
+                    "--max-size", str(self.min_datasize - 1), self.root]
+
+        hardlinkable.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(os.lstat("zero_len_1").st_nlink, 1)
+        self.assertEqual(os.lstat("zero_len_2").st_nlink, 1)
+        self.assertEqual(os.lstat("zero_len_3").st_nlink, 1)
+
+        self.assertEqual(os.lstat("small_file_1").st_nlink, 1)
+        self.assertEqual(os.lstat("small_file_2").st_nlink, 1)
+        self.assertEqual(os.lstat("small_file_3").st_nlink, 1)
+
+        self.assertEqual(os.lstat("a1").st_nlink, 1)
+        self.assertEqual(os.lstat("b1").st_nlink, 1)
+        self.assertEqual(os.lstat("c1").st_nlink, 1)
+        self.assertEqual(os.lstat("a2").st_nlink, 1)
+        self.assertEqual(os.lstat("b2").st_nlink, 1)
+        self.assertEqual(os.lstat("c2").st_nlink, 1)
+
+    def test_hardlink_tree_zero_minsize(self):
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-c",
+                    "--max-size", "0", "--min-size", "0", self.root]
+        hardlinkable.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(os.lstat("zero_len_1").st_nlink, 3)
+        self.assertEqual(os.lstat("zero_len_2").st_nlink, 3)
+        self.assertEqual(os.lstat("zero_len_3").st_nlink, 3)
+        self.assertEqual(get_inode("zero_len_1"), get_inode("zero_len_2"))
+        self.assertEqual(get_inode("zero_len_1"), get_inode("zero_len_3"))
+
+        self.assertEqual(os.lstat("small_file_1").st_nlink, 1)
+        self.assertEqual(os.lstat("small_file_2").st_nlink, 1)
+        self.assertEqual(os.lstat("small_file_3").st_nlink, 1)
+
+        self.assertEqual(os.lstat("a1").st_nlink, 1)
+        self.assertEqual(os.lstat("b1").st_nlink, 1)
+        self.assertEqual(os.lstat("c1").st_nlink, 1)
+        self.assertEqual(os.lstat("a2").st_nlink, 1)
+        self.assertEqual(os.lstat("b2").st_nlink, 1)
+        self.assertEqual(os.lstat("c2").st_nlink, 1)
+
+    def test_hardlink_tree_minsize_maxsize_excluding_all_files(self):
+        """Test using both min and max size restrictions"""
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q",
+                    "--min-size", str(len(testdata3) + 1),
+                    "--max-size", str(len(testdata1) - 1),
+                    self.root]
+        hardlinkable.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(os.lstat("zero_len_1").st_nlink, 1)
+        self.assertEqual(os.lstat("zero_len_2").st_nlink, 1)
+        self.assertEqual(os.lstat("zero_len_3").st_nlink, 1)
+
+        self.assertEqual(os.lstat("small_file_1").st_nlink, 1)
+        self.assertEqual(os.lstat("small_file_2").st_nlink, 1)
+        self.assertEqual(os.lstat("small_file_3").st_nlink, 1)
+
+        self.assertEqual(os.lstat("a1").st_nlink, 1)
+        self.assertEqual(os.lstat("b1").st_nlink, 1)
+        self.assertEqual(os.lstat("c1").st_nlink, 1)
+        self.assertEqual(os.lstat("a2").st_nlink, 1)
+        self.assertEqual(os.lstat("b2").st_nlink, 1)
+        self.assertEqual(os.lstat("c2").st_nlink, 1)
+
+    def test_hardlink_tree_minsize_maxsize_equal(self):
+        """Test equal max and min size restrictions"""
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q",
+                    "--min-size", str(len(testdata3)),
+                    "--max-size", str(len(testdata3)),
+                    self.root]
+        hardlinkable.main()
+
+        self.verify_file_contents()
+
+        self.assertEqual(os.lstat("zero_len_1").st_nlink, 1)
+        self.assertEqual(os.lstat("zero_len_2").st_nlink, 1)
+        self.assertEqual(os.lstat("zero_len_3").st_nlink, 1)
+
+        self.assertEqual(os.lstat("small_file_1").st_nlink, 3)
+        self.assertEqual(os.lstat("small_file_2").st_nlink, 3)
+        self.assertEqual(os.lstat("small_file_3").st_nlink, 3)
+        self.assertEqual(get_inode("small_file_1"), get_inode("small_file_2"))
+        self.assertEqual(get_inode("small_file_1"), get_inode("small_file_3"))
+
+        self.assertEqual(os.lstat("a1").st_nlink, 1)
+        self.assertEqual(os.lstat("b1").st_nlink, 1)
+        self.assertEqual(os.lstat("c1").st_nlink, 1)
+        self.assertEqual(os.lstat("a2").st_nlink, 1)
+        self.assertEqual(os.lstat("b2").st_nlink, 1)
+        self.assertEqual(os.lstat("c2").st_nlink, 1)
+
+
 @unittest.skip("Max nlinks tests are slow.  Skipping...")
 class TestMaxNLinks(BaseTests):
     def setUp(self):
@@ -452,10 +608,10 @@ class TestMaxNLinks(BaseTests):
 
         # Start off with an amount of "b"-prefixed files 1-greater than the max
         # nlinks.
-        self.make_hardlinkable_file("b", testdata0)
+        self.make_hardlinkable_file("b", testdata3)
         for i in range(self.max_nlinks):
             filename = "b"+str(i)
-            self.make_hardlinkable_file(filename, testdata0)
+            self.make_hardlinkable_file(filename, testdata3)
 
     def tearDown(self):
         self.remove_tempdir()
@@ -485,7 +641,7 @@ class TestMaxNLinks(BaseTests):
 
         # Make a new 'a' file, and confirm it gets linked to the leftover file
         # (which could be any of the original 'b' files)
-        self.make_hardlinkable_file("a", testdata0)
+        self.make_hardlinkable_file("a", testdata3)
         hardlinkable.main()
 
         self.assertEqual(len(self.find_nlinks(2)), 2)
@@ -503,7 +659,7 @@ class TestMaxNLinks(BaseTests):
 
         # Now make an 'a' that should be linked to the remaining files as a
         # cluster (at max link count)
-        self.make_hardlinkable_file("a", testdata0)
+        self.make_hardlinkable_file("a", testdata3)
         hardlinkable.main()
 
         self.assertEqual(os.lstat("a").st_nlink, self.max_nlinks)
@@ -513,8 +669,8 @@ class TestMaxNLinks(BaseTests):
         # Make two new files which may be linked to the max_nlinks cluster, or
         # to each other.
         self.remove_file("a")
-        self.make_hardlinkable_file("b", testdata0)
-        self.make_hardlinkable_file("c", testdata0)
+        self.make_hardlinkable_file("b", testdata3)
+        self.make_hardlinkable_file("c", testdata3)
         hardlinkable.main()
 
         self.assertTrue(os.lstat("b").st_nlink in [1, 2, self.max_nlinks])
@@ -531,7 +687,7 @@ class TestMaxNLinks(BaseTests):
         self.remove_file("b")
         self.remove_file("c")
         hardlinkable.main()
-        self.make_hardlinkable_file("b", testdata0)
+        self.make_hardlinkable_file("b", testdata3)
         hardlinkable.main()
 
         self.assertEqual(os.lstat("b").st_nlink, self.max_nlinks)
@@ -543,7 +699,7 @@ class TestMaxNLinks(BaseTests):
         num_c_links = 1000
         for i in range(num_c_links):
             filename = "c"+str(i)
-            self.make_hardlinkable_file(filename, testdata0)
+            self.make_hardlinkable_file(filename, testdata3)
         # Should link just the c's to each other
         hardlinkable.main()
 
@@ -621,10 +777,10 @@ class TestDifferentDevices(BaseTests):
         assert self.dev2_root is not None
 
         os.chdir(self.dev1_root)
-        self.make_hardlinkable_file('a', testdata0)
+        self.make_hardlinkable_file('a', testdata3)
         self.make_hardlinkable_file('b', testdata1)
         os.chdir(self.dev2_root)
-        self.make_hardlinkable_file('c', testdata0)
+        self.make_hardlinkable_file('c', testdata3)
         self.make_hardlinkable_file('d', testdata1)
 
         stat_a = os.lstat(self.path_a)
@@ -712,12 +868,12 @@ class TestNLinkOrderBug(BaseTests):
 
     def test_missed_link_opportunity(self):
         # Create 3 clusters
-        self.make_hardlinkable_file("a", testdata0)
+        self.make_hardlinkable_file("a", testdata3)
         self.make_linked_file("a", "b")
-        self.make_hardlinkable_file("m", testdata0)
+        self.make_hardlinkable_file("m", testdata3)
         self.make_linked_file("m", "n")
         self.make_linked_file("m", "o")
-        self.make_hardlinkable_file("z", testdata0)
+        self.make_hardlinkable_file("z", testdata3)
         self.make_linked_file("z", "y")
         self.make_linked_file("z", "x")
 
@@ -746,13 +902,13 @@ class TestNLinkOrderBug(BaseTests):
         exhibit the problem if the directory entries are traversed in reverse
         alphabetical order."""
         # Create 3 clusters
-        self.make_hardlinkable_file("a", testdata0)
+        self.make_hardlinkable_file("a", testdata3)
         self.make_linked_file("a", "b")
         self.make_linked_file("a", "c")
-        self.make_hardlinkable_file("m", testdata0)
+        self.make_hardlinkable_file("m", testdata3)
         self.make_linked_file("m", "n")
         self.make_linked_file("m", "o")
-        self.make_hardlinkable_file("z", testdata0)
+        self.make_hardlinkable_file("z", testdata3)
         self.make_linked_file("z", "y")
 
         self.assertEqual(os.lstat('a').st_nlink, 3)
