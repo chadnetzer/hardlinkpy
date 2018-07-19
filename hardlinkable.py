@@ -415,8 +415,6 @@ class Hardlinkable:
 
             st1.st_size == st2.st_size and           # size is the same
 
-            st1.st_size != 0 and                     # size is not zero
-
             (st1.st_mode == st2.st_mode or           # file mode is the same
              options.nosameperm or                   # OR we are ignoring file mode
              options.contentonly) and                # OR we are comparing content only
