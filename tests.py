@@ -22,6 +22,39 @@ testdata3 = "foo"  # Short so that filesystems may back into inodes
 def get_inode(filename):
     return os.lstat(filename).st_ino
 
+class TestModuleFunctions(unittest.TestCase):
+    def test_humanize_number(self):
+        f = hardlinkable._humanize_number
+        self.assertEqual("0 bytes", f(0))
+        self.assertEqual("1 bytes", f(1))
+        self.assertEqual("1023 bytes", f(1023))
+        self.assertEqual("1.000 KiB", f(1024))
+        self.assertEqual("1.000 MiB", f(1024**2))
+        self.assertEqual("1.000 GiB", f(1024**3))
+        self.assertEqual("1.000 TiB", f(1024**4))
+        self.assertEqual("1.000 PiB", f(1024**5))
+
+    def test_humanized_number_to_bytes(self):
+        f = hardlinkable._humanized_number_to_bytes
+        self.assertEqual(0, f("0"))
+        self.assertEqual(1, f("1"))
+        self.assertEqual(1023, f("1023"))
+        self.assertEqual(1024, f("1024"))
+        self.assertEqual(1024, f("1k"))
+        self.assertEqual(1024, f("1K"))
+        self.assertEqual(2048, f("2k"))
+        self.assertEqual(1023*1024, f("1023k"))
+        self.assertEqual(1024**2, f("1m"))
+        self.assertEqual(1024**2, f("1M"))
+        self.assertEqual(1024**3, f("1g"))
+        self.assertEqual(1024**4, f("1t"))
+        self.assertEqual(1024**5, f("1p"))
+
+        self.assertRaises(ValueError, f, "")
+        self.assertRaises(ValueError, f, "1kk")
+        self.assertRaises(ValueError, f, "1j")
+        self.assertRaises(ValueError, f, "k")
+
 
 class BaseTests(unittest.TestCase):
     # self.file_contents = { name: data }
