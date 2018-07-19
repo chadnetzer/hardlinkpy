@@ -57,6 +57,11 @@ class TestModuleFunctions(unittest.TestCase):
 class BaseTests(unittest.TestCase):
     # self.file_contents = { name: data }
 
+    def tearDown(self):
+        """Provide default tearDown() for all derived classes (for cleanup of
+        files and dirs)."""
+        self.remove_tempdir()
+
     def setup_tempdir(self):
         self.root = tempfile.mkdtemp()
         os.chdir(self.root)
@@ -148,9 +153,6 @@ class TestTester(BaseTests):
     def setUp(self):
         self.setup_tempdir()
 
-    def tearDown(self):
-        self.remove_tempdir()
-
     def test_setup(self):
         self.make_hardlinkable_file('dir1', None)
         self.make_hardlinkable_file('dir3', None)
@@ -209,9 +211,6 @@ class TestHappy(BaseTests):
         self.make_linked_file("dir1/name1.ext", "dir1/link")
 
         self.verify_file_contents()
-
-    def tearDown(self):
-        self.remove_tempdir()
 
     def test_hardlink_tree_dryrun(self):
         sys.argv = ["hardlinkable.py", "-q", self.root]
@@ -439,9 +438,6 @@ class TestMinMaxSize(BaseTests):
                                 len(testdata2),
                                 len(testdata3))
 
-    def tearDown(self):
-        self.remove_tempdir()
-
     def test_hardlink_tree_smaller_than_minsize(self):
         """Set a minimum size larger than the test data, inhibiting linking"""
         sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-c",
@@ -643,9 +639,6 @@ class TestMaxNLinks(BaseTests):
             filename = "b"+str(i)
             self.make_hardlinkable_file(filename, testdata3)
 
-    def tearDown(self):
-        self.remove_tempdir()
-
     def test_hardlink_max_nlinks_at_start(self):
         # Note that we re-run the hardlinker multiple times after making some
         # changes.  Saves on overhead of destroying and recreating the
@@ -760,9 +753,6 @@ class TestErrorLogging(BaseTests):
         self.assertEqual(os.lstat("b").st_nlink, 1)
 
         os.chmod(self.root, stat.S_IRWXU)
-
-    def tearDown(self):
-        self.remove_tempdir()
 
 
 @unittest.skip("Differing device tests require manual setup")
@@ -895,9 +885,6 @@ class TestNLinkOrderBug(BaseTests):
     """
     def setUp(self):
         self.setup_tempdir()
-
-    def tearDown(self):
-        self.remove_tempdir()
 
     def test_missed_link_opportunity(self):
         # Create 3 clusters
