@@ -14,7 +14,7 @@ hardlink.py inspired by:
 Contributions to hardlink.py:
     * Antti Kaihola (`@akaihola`_ at GitHub)
     * Carl Henrik Lunde (`@chlunde`_ at GitHub)
-    * (`@wolfospealain`_ at GitHub)
+    * Wolf Ó Spealáin (`@wolfospealain`_ at GitHub)
 
 .. _@JohnVillalovos: https://github.com/JohnVillalovos
 .. _@akaihola: https://github.com/akaihola
