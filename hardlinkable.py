@@ -133,7 +133,7 @@ by another user.
         parser.print_help()
         _sys.stderr.write("\nMust supply one or more directories\n")
         _sys.exit(2)
-    args = [_os.path.abspath(_os.path.expanduser(dirname)) for dirname in args]
+    args = [_os.path.normpath(_os.path.expanduser(dirname)) for dirname in args]
     for dirname in args:
         if not _os.path.isdir(dirname):
             parser.error("%s is NOT a directory" % dirname)
