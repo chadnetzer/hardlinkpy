@@ -13,9 +13,9 @@ from shutil import rmtree
 
 import hardlinkable
 
-testdata0 = "foo"  # Short so that filesystems may back into inodes
 testdata1 = "1234" * 1024 + "abc"
 testdata2 = "1234" * 1024 + "xyz"
+testdata3 = "foo"  # Short so that filesystems may back into inodes
 
 
 def get_inode(filename):
@@ -129,8 +129,8 @@ class TestHappy(BaseTests):
         self.make_hardlinkable_file("dir3/name1.noext", testdata1)
         self.make_hardlinkable_file("dir4/name1.ext", testdata1)
         self.make_hardlinkable_file("dir5/name1.ext", testdata2)
-        self.make_hardlinkable_file("dir6/name1.ext", testdata0)
-        self.make_hardlinkable_file("dir6/name2.ext", testdata0)
+        self.make_hardlinkable_file("dir6/name1.ext", testdata3)
+        self.make_hardlinkable_file("dir6/name2.ext", testdata3)
 
         now = time.time()
         other = now - 2
@@ -304,7 +304,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
 
         sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--min-size",
-                    str(len(testdata0) - 1), self.root]
+                    str(len(testdata3) - 1), self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -314,7 +314,7 @@ class TestHappy(BaseTests):
     def test_hardlink_tree_maxsize(self):
         """Set a maximum size smaller than the test data, inhibiting linking"""
         sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--max-size",
-                    str(len(testdata0) - 1), self.root]
+                    str(len(testdata3) - 1), self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -343,7 +343,7 @@ class TestHappy(BaseTests):
     def test_hardlink_tree_minsize_maxsize(self):
         """Test using both min and max size restrictions"""
         sys.argv = ["hardlinkable.py", "--enable-linking", "-q",
-                    "--min-size", str(len(testdata0) + 1),
+                    "--min-size", str(len(testdata3) + 1),
                     "--max-size", str(len(testdata1) - 1),
                     self.root]
         hardlinkable.main()
@@ -364,7 +364,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
 
         sys.argv = ["hardlinkable.py", "--enable-linking", "-q",
-                    "--min-size", str(len(testdata0) - 1),
+                    "--min-size", str(len(testdata3) - 1),
                     "--max-size", str(len(testdata1) + 1),
                     self.root]
         hardlinkable.main()
@@ -452,10 +452,10 @@ class TestMaxNLinks(BaseTests):
 
         # Start off with an amount of "b"-prefixed files 1-greater than the max
         # nlinks.
-        self.make_hardlinkable_file("b", testdata0)
+        self.make_hardlinkable_file("b", testdata3)
         for i in range(self.max_nlinks):
             filename = "b"+str(i)
-            self.make_hardlinkable_file(filename, testdata0)
+            self.make_hardlinkable_file(filename, testdata3)
 
     def tearDown(self):
         self.remove_tempdir()
@@ -485,7 +485,7 @@ class TestMaxNLinks(BaseTests):
 
         # Make a new 'a' file, and confirm it gets linked to the leftover file
         # (which could be any of the original 'b' files)
-        self.make_hardlinkable_file("a", testdata0)
+        self.make_hardlinkable_file("a", testdata3)
         hardlinkable.main()
 
         self.assertEqual(len(self.find_nlinks(2)), 2)
@@ -503,7 +503,7 @@ class TestMaxNLinks(BaseTests):
 
         # Now make an 'a' that should be linked to the remaining files as a
         # cluster (at max link count)
-        self.make_hardlinkable_file("a", testdata0)
+        self.make_hardlinkable_file("a", testdata3)
         hardlinkable.main()
 
         self.assertEqual(os.lstat("a").st_nlink, self.max_nlinks)
@@ -513,8 +513,8 @@ class TestMaxNLinks(BaseTests):
         # Make two new files which may be linked to the max_nlinks cluster, or
         # to each other.
         self.remove_file("a")
-        self.make_hardlinkable_file("b", testdata0)
-        self.make_hardlinkable_file("c", testdata0)
+        self.make_hardlinkable_file("b", testdata3)
+        self.make_hardlinkable_file("c", testdata3)
         hardlinkable.main()
 
         self.assertTrue(os.lstat("b").st_nlink in [1, 2, self.max_nlinks])
@@ -531,7 +531,7 @@ class TestMaxNLinks(BaseTests):
         self.remove_file("b")
         self.remove_file("c")
         hardlinkable.main()
-        self.make_hardlinkable_file("b", testdata0)
+        self.make_hardlinkable_file("b", testdata3)
         hardlinkable.main()
 
         self.assertEqual(os.lstat("b").st_nlink, self.max_nlinks)
@@ -543,7 +543,7 @@ class TestMaxNLinks(BaseTests):
         num_c_links = 1000
         for i in range(num_c_links):
             filename = "c"+str(i)
-            self.make_hardlinkable_file(filename, testdata0)
+            self.make_hardlinkable_file(filename, testdata3)
         # Should link just the c's to each other
         hardlinkable.main()
 
@@ -621,10 +621,10 @@ class TestDifferentDevices(BaseTests):
         assert self.dev2_root is not None
 
         os.chdir(self.dev1_root)
-        self.make_hardlinkable_file('a', testdata0)
+        self.make_hardlinkable_file('a', testdata3)
         self.make_hardlinkable_file('b', testdata1)
         os.chdir(self.dev2_root)
-        self.make_hardlinkable_file('c', testdata0)
+        self.make_hardlinkable_file('c', testdata3)
         self.make_hardlinkable_file('d', testdata1)
 
         stat_a = os.lstat(self.path_a)
@@ -712,12 +712,12 @@ class TestNLinkOrderBug(BaseTests):
 
     def test_missed_link_opportunity(self):
         # Create 3 clusters
-        self.make_hardlinkable_file("a", testdata0)
+        self.make_hardlinkable_file("a", testdata3)
         self.make_linked_file("a", "b")
-        self.make_hardlinkable_file("m", testdata0)
+        self.make_hardlinkable_file("m", testdata3)
         self.make_linked_file("m", "n")
         self.make_linked_file("m", "o")
-        self.make_hardlinkable_file("z", testdata0)
+        self.make_hardlinkable_file("z", testdata3)
         self.make_linked_file("z", "y")
         self.make_linked_file("z", "x")
 
@@ -746,13 +746,13 @@ class TestNLinkOrderBug(BaseTests):
         exhibit the problem if the directory entries are traversed in reverse
         alphabetical order."""
         # Create 3 clusters
-        self.make_hardlinkable_file("a", testdata0)
+        self.make_hardlinkable_file("a", testdata3)
         self.make_linked_file("a", "b")
         self.make_linked_file("a", "c")
-        self.make_hardlinkable_file("m", testdata0)
+        self.make_hardlinkable_file("m", testdata3)
         self.make_linked_file("m", "n")
         self.make_linked_file("m", "o")
-        self.make_hardlinkable_file("z", testdata0)
+        self.make_hardlinkable_file("z", testdata3)
         self.make_linked_file("z", "y")
 
         self.assertEqual(os.lstat('a').st_nlink, 3)
