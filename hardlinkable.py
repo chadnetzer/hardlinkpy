@@ -92,11 +92,11 @@ by another user.
                      help="Filenames have to be identical",
                      action="store_true", default=False,)
 
-    group.add_option("-p", "--ignore-perms", dest="nosameperm",
+    group.add_option("-p", "--ignore-perms", dest="ignore_perm",
                      help="File permissions do not need to match",
                      action="store_true", default=False,)
 
-    group.add_option("-t", "--ignore-time", dest="notimestamp",
+    group.add_option("-t", "--ignore-time", dest="ignore_time",
                      help="File modification times do not need to match",
                      action="store_true", default=False,)
 
@@ -431,7 +431,7 @@ class Hardlinkable:
             st1.st_size == st2.st_size and           # size is the same
 
             (st1.st_mode == st2.st_mode or           # file mode is the same
-             options.nosameperm or                   # OR we are ignoring file mode
+             options.ignore_perm or                  # OR we are ignoring file mode
              options.contentonly) and                # OR we are comparing content only
 
             (st1.st_uid == st2.st_uid or             # owner user id is the same
@@ -441,7 +441,7 @@ class Hardlinkable:
              options.contentonly) and                # OR we are comparing content only
 
             (st1.st_mtime == st2.st_mtime or         # modified time is the same
-             options.notimestamp or                  # OR date hashing is off
+             options.ignore_time or                  # OR date hashing is off
              options.contentonly) and                # OR we are comparing content only
 
             st1.st_dev == st2.st_dev                 # device is the same
@@ -821,7 +821,7 @@ def _hash_value(stat_info, options):
     """Return a value appropriate for a python dict or shelve key, which can
     differentiate files which cannot be hardlinked."""
     size = stat_info.st_size
-    if options.notimestamp or options.contentonly:
+    if options.ignore_time or options.contentonly:
         value = size
     else:
         mtime = int(stat_info.st_mtime)
