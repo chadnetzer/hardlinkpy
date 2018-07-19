@@ -22,7 +22,6 @@
 # Temple Place, Suite 330, Boston, MA  02111-1307, USA.
 
 import filecmp as _filecmp
-import fnmatch as _fnmatch
 import logging as _logging
 import os as _os
 import re as _re
@@ -112,11 +111,11 @@ by hard linking identical files.  It can also perform the linking."""
     group = _OptionGroup(parser, title="Name Matching (may specify multiple times)",)
     parser.add_option_group(group)
 
-    group.add_option("-m", "--match", dest="matches", metavar="PAT",
-                     help="Shell patterns used to match files",
+    group.add_option("-m", "--match", dest="matches", metavar="RE",
+                     help="Regular expression used to match files",
                      action="append", default=[],)
 
-    group.add_option("-x", "--exclude", dest="excludes", metavar="REGEX",
+    group.add_option("-x", "--exclude", dest="excludes", metavar="RE",
                      help="Regular expression used to exclude files/dirs",
                      action="append", default=[],)
 
@@ -232,7 +231,7 @@ class Hardlinkable:
                 # them.
                 _cull_excluded_directories(dirs, options.excludes)
                 cur_dir = _os.path.basename(dirpath)
-                if cur_dir and _found_excluded(cur_dir, options.excludes):
+                if cur_dir and _found_excluded_regex(cur_dir, options.excludes):
                     continue
 
                 self.stats.found_directory()
@@ -240,11 +239,11 @@ class Hardlinkable:
                 # Loop through all the files in the directory
                 for filename in filenames:
                     assert filename
-                    if _found_excluded(filename, options.excludes):
+                    if _found_excluded_regex(filename, options.excludes):
                         continue
                     if _found_excluded_dotfile(filename):
                         continue
-                    if not _found_matched_filename(filename, options.matches):
+                    if not _found_matched_filename_regex(filename, options.matches):
                         continue
 
                     pathname = _os.path.normpath(_os.path.join(dirpath, filename))
@@ -833,7 +832,7 @@ def _cull_excluded_directories(dirs, excludes):
     Note that it modifies dirs in place, as required by os.walk()
     """
     for dirname in dirs[:]:
-        if _found_excluded(dirname, excludes):
+        if _found_excluded_regex(dirname, excludes):
             try:
                 dirs.remove(dirname)
             except ValueError:
@@ -842,7 +841,7 @@ def _cull_excluded_directories(dirs, excludes):
             assert dirname not in dirs
 
 
-def _found_excluded(name, excludes):
+def _found_excluded_regex(name, excludes):
     """If excludes option is given, return True if name matches any regex."""
     for exclude in excludes:
         if _re.search(exclude, name):
@@ -865,13 +864,13 @@ def _found_excluded_dotfile(name):
     return False
 
 
-def _found_matched_filename(name, matches):
+def _found_matched_filename_regex(name, matches):
     """If matches option is given, return False if name doesn't match any
     patterns.  If no matches are given, return True."""
     if not matches:
         return True
     for match in matches:
-        if _fnmatch.fnmatch(name, match):
+        if _re.search(match, name):
             return True
     return False
 

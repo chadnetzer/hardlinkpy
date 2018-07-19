@@ -319,7 +319,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_match_extension(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--match", "*.ext", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--match", ".*\.ext$", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -333,7 +333,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_match_prefix(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--match", "name1*", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--match", "^name1.*", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -349,7 +349,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_multiple_matches(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-m", "name2*", "-m", "*.noext", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-m", "^name2.*", "-m", ".*\.noext$", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
