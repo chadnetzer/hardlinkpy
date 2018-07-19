@@ -81,12 +81,12 @@ by hard linking identical files.  It can also perform the linking."""
                       help=_SUPPRESS_HELP,
                       action="count", default=0,)
 
-    group = _OptionGroup(parser, title="File Matching",)
+    group = _OptionGroup(parser, title="File Matching", description="""\
+File content must always match exactly to be linkable.  Use --content-only with
+caution, as it can lead to surprising results, including files becoming owned
+by another user.
+""")
     parser.add_option_group(group)
-
-    group.add_option("-c", "--content-only", dest="contentonly",
-                     help="Only file contents have to match",
-                     action="store_true", default=False,)
 
     group.add_option("-f", "--same-name", dest="samename",
                      help="Filenames have to be identical",
@@ -107,6 +107,10 @@ by hard linking identical files.  It can also perform the linking."""
     group.add_option("-S", "--max-size", dest="max_file_size", metavar="SZ",
                      help="Maximum file size (Can add 'k', 'm', etc.)",
                      default=None,)
+
+    group.add_option("-c", "--content-only", dest="contentonly",
+                     help="Only file contents have to match",
+                     action="store_true", default=False,)
 
     group = _OptionGroup(parser, title="Name Matching (may specify multiple times)",)
     parser.add_option_group(group)
