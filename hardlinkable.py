@@ -922,6 +922,29 @@ def _humanize_number(number):
         return ("%.3f KiB" % (number / 1024.0))
     return ("%d bytes" % number)
 
+def _humanized_number_to_bytes(s):
+    """Parses numbers with size specifiers like 'k', 'm', 'g', or 't'.
+    Deliberately ignores multi-letter abbrevs like 'kb' or 'kib'"""
+
+    # Assumes string/bytes input
+    if not s:
+        int(s) # Deliberately raise ValueError on empty input
+
+    s = s.lower()
+    multipliers = { 'k' : 1024,
+                    'm' : 1024**2,
+                    'g' : 1024**3,
+                    't' : 1024**4,
+                    'p' : 1024**5 }
+
+    last_char = s[-1]
+    if not last_char in multipliers:
+        return int(s)
+    else:
+        s = s[:-1]
+        multiplier = multipliers[last_char]
+        return multiplier * int(s)
+
 
 def main():
     # 'logging' package forces at least Python 2.3
