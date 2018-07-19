@@ -103,11 +103,11 @@ by hard linking identical files.  It can also perform the linking."""
 
     group.add_option("-s", "--min-size", dest="min_file_size", metavar="SIZE",
                      help="Minimum file size (default: %default)",
-                     action="store", type="int", default=1,)
+                     default="1",)
 
     group.add_option("-S", "--max-size", dest="max_file_size", metavar="SIZE",
-                     help="Maximum file size",
-                     action="store", type="int", default=0,)
+                     help="Maximum file size (Can add 'k', 'm', etc.)",
+                     default=None,)
 
     group = _OptionGroup(parser, title="Name Matching (may specify multiple times)",)
     parser.add_option_group(group)
@@ -134,11 +134,23 @@ by hard linking identical files.  It can also perform the linking."""
     for dirname in args:
         if not _os.path.isdir(dirname):
             parser.error("%s is NOT a directory" % dirname)
+
+    # Convert "humanized" size inputs to integer bytes
+    try:
+        options.min_file_size = _humanized_number_to_bytes(options.min_file_size)
+    except ValueError:
+        parser.error("option -s: invalid integer value: '%s'" % options.min_file_size)
+    if options.max_file_size is not None:
+        try:
+            options.max_file_size = _humanized_number_to_bytes(options.max_file_size)
+        except ValueError:
+            parser.error("option -S: invalid integer value: '%s'" % options.max_file_size)
+    # Check validity of min/max size options
     if options.min_file_size < 0:
         parser.error("--min_size cannot be negative")
-    if options.max_file_size < 0:
+    if options.max_file_size is not None and options.max_file_size < 0:
         parser.error("--max_size cannot be negative")
-    if options.max_file_size and options.max_file_size < options.min_file_size:
+    if options.max_file_size is not None and options.max_file_size < options.min_file_size:
         parser.error("--max_size cannot be smaller than --min_size")
 
     # If linking is enabled, output a message early to indicate what is
@@ -249,7 +261,7 @@ class Hardlinkable:
                         continue
 
                     # Is the file within the selected size range?
-                    if ((options.max_file_size and
+                    if ((options.max_file_size is not None and
                          stat_info.st_size > options.max_file_size) or
                         (stat_info.st_size < options.min_file_size)):
                         continue
