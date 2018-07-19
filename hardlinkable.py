@@ -138,7 +138,7 @@ by another user.
         if not _os.path.isdir(dirname):
             parser.error("%s is NOT a directory" % dirname)
 
-    if options.debug_level > 0:
+    if options.debug_level > 1:
         _logging.getLogger().setLevel(_logging.DEBUG)
 
     # Convert "humanized" size inputs to integer bytes
@@ -704,41 +704,41 @@ class _Statistics:
 
     def found_regular_file(self, pathname):
         self.regularfiles = self.regularfiles + 1
-        if self.options.debug_level > 3:
+        if self.options.debug_level > 4:
             _logging.debug("File: %s" % pathname)
 
     def excluded_dirs(self, dirname, basenames):
         self.num_excluded_dirs += len(basenames)
-        if self.options.debug_level > 4:
+        if self.options.debug_level > 5:
             for name in basenames:
                 pathname = os.path.join(dirname, name)
                 _logging.debug("Excluded dir: %s" % pathname)
 
     def excluded_dir(self, pathname):
         self.num_excluded_dirs += 1
-        if self.options.debug_level > 4:
+        if self.options.debug_level > 5:
             _logging.debug("Excluded dir: %s" % pathname)
 
     def excluded_file(self, pathname):
         self.num_excluded_files += 1
-        if self.options.debug_level > 4:
+        if self.options.debug_level > 5:
             _logging.debug("Excluded file: %s" % pathname)
 
     def included_file(self, pathname):
         self.num_included_files += 1
-        if self.options.debug_level > 4:
+        if self.options.debug_level > 5:
             _logging.debug("Included file: %s" % pathname)
 
     def file_outside_size_range(self, pathname, filesize):
         if (self.options.max_file_size is not None and
             filesize > self.options.max_file_size):
             self.num_files_too_large += 1
-            if self.options.debug_level > 4:
+            if self.options.debug_level > 5:
                 _logging.debug("File too large: %s" % pathname)
 
         if filesize < self.options.min_file_size:
             self.num_files_too_small += 1
-            if self.options.debug_level > 4:
+            if self.options.debug_level > 5:
                 _logging.debug("File too small: %s" % pathname)
 
     def found_mismatched_time(self):
@@ -751,7 +751,7 @@ class _Statistics:
         self.mismatched_file_ownership += 1
 
     def did_comparison(self, pathname1, pathname2):
-        if self.options.debug_level > 1:
+        if self.options.debug_level > 2:
             _logging.debug("Comparing: %s" % pathname1)
             _logging.debug("     to  : %s" % pathname2)
         self.comparisons = self.comparisons + 1
@@ -762,7 +762,7 @@ class _Statistics:
     def found_existing_hardlink(self, src_namepair, dst_namepair, stat_info):
         assert len(src_namepair) == 2
         assert len(dst_namepair) == 2
-        if self.options.debug_level > 2:
+        if self.options.debug_level > 3:
             _logging.debug("Existing link: %s" % _os.path.join(*src_namepair))
             _logging.debug("        with : %s" % _os.path.join(*dst_namepair))
         filesize = stat_info.st_size
@@ -777,7 +777,7 @@ class _Statistics:
     def found_hardlinkable(self, src_namepair, dst_namepair):
         # We don't actually keep these stats, and we record the actual links
         # later, after the ordering by nlink count.  Just log.
-        if self.options.debug_level > 0:
+        if self.options.debug_level > 1:
             assert src_namepair != dst_namepair
             _logging.debug("Linkable: %s" % _os.path.join(*src_namepair))
             _logging.debug("      to: %s" % _os.path.join(*dst_namepair))
