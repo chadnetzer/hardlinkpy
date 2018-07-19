@@ -9,8 +9,6 @@ import tempfile
 import time
 import unittest
 
-from shutil import rmtree
-
 import hardlinkable
 
 testdata0 = ""
@@ -59,6 +57,11 @@ class TestModuleFunctions(unittest.TestCase):
 class BaseTests(unittest.TestCase):
     # self.file_contents = { name: data }
 
+    def tearDown(self):
+        """Provide default tearDown() for all derived classes (for cleanup of
+        files and dirs)."""
+        self.remove_tempdir()
+
     def setup_tempdir(self):
         self.root = tempfile.mkdtemp()
         os.chdir(self.root)
@@ -67,7 +70,29 @@ class BaseTests(unittest.TestCase):
         self.file_contents = {}
 
     def remove_tempdir(self):
-        rmtree(self.root)
+        for pathname in self.file_contents:
+            assert os.path.normpath(pathname) == pathname
+            assert not pathname.lstrip().startswith("/")
+            os.unlink(pathname)
+            dirname = os.path.dirname(pathname)
+
+            # This is last resort against an infinite loop, which shouldn't
+            # really happen anyway
+            len_dirname = len(dirname) + 1
+
+            # Loop until empty dirs deleted
+            while dirname and len_dirname != len(dirname):
+                try:
+                    os.rmdir(dirname)
+                except OSError:
+                    # If there's an exception, the dir isn't yet empty
+                    break
+
+                # Now remove the last component and try again
+                len_dirname = len(dirname)
+                dirname = os.path.dirname(dirname)
+
+        os.rmdir(self.root)
 
     def verify_file_contents(self):
         for pathname, contents in self.file_contents.items():
@@ -128,9 +153,6 @@ class TestTester(BaseTests):
     def setUp(self):
         self.setup_tempdir()
 
-    def tearDown(self):
-        self.remove_tempdir()
-
     def test_setup(self):
         self.make_hardlinkable_file('dir1', None)
         self.make_hardlinkable_file('dir3', None)
@@ -149,6 +171,10 @@ class TestTester(BaseTests):
         self.assertEqual(os.lstat('dir3/name2.ext').st_nlink, 1)
 
         self.verify_file_contents()
+
+        # Remove empty dirs for cleanup (not in file_contents)
+        os.rmdir('dir1')
+        os.rmdir('dir2')
 
 
 class TestHappy(BaseTests):
@@ -185,9 +211,6 @@ class TestHappy(BaseTests):
         self.make_linked_file("dir1/name1.ext", "dir1/link")
 
         self.verify_file_contents()
-
-    def tearDown(self):
-        self.remove_tempdir()
 
     def test_hardlink_tree_dryrun(self):
         sys.argv = ["hardlinkable.py", "-q", self.root]
@@ -229,6 +252,9 @@ class TestHappy(BaseTests):
                 ]
         hardlinkable.main()
 
+        # Save original file_contents dict
+        saved_file_contents = self.file_contents.copy()
+
         # remove unused directories from content check dictionary
         for pathname in self.file_contents.copy():
             if (pathname.startswith('dir1') or pathname.startswith('dir2')):
@@ -240,6 +266,9 @@ class TestHappy(BaseTests):
 
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir1/name2.ext"))
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
+
+        # Restore original file_contents for tearDown
+        self.file_contents = saved_file_contents
 
     def test_hardlink_tree_filenames_equal(self):
         sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--same-name", self.root]
@@ -408,9 +437,6 @@ class TestMinMaxSize(BaseTests):
         self.min_datasize = min(len(testdata1),
                                 len(testdata2),
                                 len(testdata3))
-
-    def tearDown(self):
-        self.remove_tempdir()
 
     def test_hardlink_tree_smaller_than_minsize(self):
         """Set a minimum size larger than the test data, inhibiting linking"""
@@ -613,9 +639,6 @@ class TestMaxNLinks(BaseTests):
             filename = "b"+str(i)
             self.make_hardlinkable_file(filename, testdata3)
 
-    def tearDown(self):
-        self.remove_tempdir()
-
     def test_hardlink_max_nlinks_at_start(self):
         # Note that we re-run the hardlinker multiple times after making some
         # changes.  Saves on overhead of destroying and recreating the
@@ -730,9 +753,6 @@ class TestErrorLogging(BaseTests):
         self.assertEqual(os.lstat("b").st_nlink, 1)
 
         os.chmod(self.root, stat.S_IRWXU)
-
-    def tearDown(self):
-        self.remove_tempdir()
 
 
 @unittest.skip("Differing device tests require manual setup")
