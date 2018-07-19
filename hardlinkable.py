@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # hardlinkable - Goes through a directory structure and reports files which are
 # identical and could be hard-linked together.  Optionally performs the
