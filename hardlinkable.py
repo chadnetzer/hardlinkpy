@@ -45,8 +45,6 @@ except NameError:
 __all__ = ["Hardlinkable"]
 
 # global declarations
-_OLD_VERBOSE_OPTION_ERROR = True
-
 __version__ = '0.8'
 _VERSION = "0.8 alpha - 2018-07-09 (09-Jul-2018)"
 
@@ -111,12 +109,6 @@ by hard linking identical files.  It can also perform the linking."""
                      help="Maximum file size",
                      action="store", type="int", default=0,)
 
-    # Hidden option for backwards compatability (w/ hardlinkpy)
-    group.add_option("--timestamp-ignore",
-                     dest="deprecated_timestamp_option_name",
-                     help=_SUPPRESS_HELP,
-                     action="store_true", default=False,)
-
     group = _OptionGroup(parser, title="Name Matching (may specify multiple times)",)
     parser.add_option_group(group)
 
@@ -155,39 +147,6 @@ by hard linking identical files.  It can also perform the linking."""
     # definitively that the program is set to modify the filesystem.
     if options.linking_enabled:
         print("----- Hardlinking enabled.  The filesystem will be modified -----")
-
-    # Accept --timestamp-ignore for backwards compatibility
-    if options.deprecated_timestamp_option_name:
-        _logging.warning("Enabling --ignore-timestamp. "
-                         "Option name --timestamp-ignore is deprecated.")
-        options.notimestamp = True
-        del options.deprecated_timestamp_option_name
-
-    if _OLD_VERBOSE_OPTION_ERROR:
-        # When old style verbose options (-v 1) are parsed using the new
-        # verbosity option (as a counter), the numbers end up being interpreted
-        # as directories.  As long as the directories don't exist, the program
-        # will catch this and exit.  However, if there so happens to be a
-        # directory with a typical number value (ie. '0', '1', etc.), it could
-        # falsely be scanned for hardlinking.  So we directly check the
-        # sys.argv list and explicitly disallow this case.
-        #
-        # This could also reject a technically valid case where a new style
-        # verbosity argument is given, followed by a number-like directory name
-        # that is intentionally meant to be scanned.  Since it seems rare, we
-        # intentionally disallow it as protection against misinterpretation of
-        # the old style verbose option argument.  Eventually, when enough time
-        # has passed to assume that hardlinkable users have switched over to
-        # the new verbosity argument, we can remove this safeguard.
-
-        # Iterate over a reversed argument list, looking for options pairs of
-        # type ['-v', '<num>']
-        for i,s in enumerate(_sys.argv[::-1]):
-            if i == 0:
-                continue
-            n_str = _sys.argv[-i]
-            if s in ('-v', '--verbose') and n_str.isdigit():
-                parser.error("Use of deprecated numeric verbosity option (%s)." % ('-v ' + n_str))
 
     return options, args
 
