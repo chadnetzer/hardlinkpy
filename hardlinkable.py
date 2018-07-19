@@ -138,6 +138,9 @@ by another user.
         if not _os.path.isdir(dirname):
             parser.error("%s is NOT a directory" % dirname)
 
+    if options.debug_level > 0:
+        _logging.getLogger().setLevel(_logging.DEBUG)
+
     # Convert "humanized" size inputs to integer bytes
     try:
         options.min_file_size = _humanized_number_to_bytes(options.min_file_size)
@@ -702,41 +705,41 @@ class _Statistics:
     def found_regular_file(self, pathname):
         self.regularfiles = self.regularfiles + 1
         if self.options.debug_level > 3:
-            print("File: %s" % pathname)
+            _logging.debug("File: %s" % pathname)
 
     def excluded_dirs(self, dirname, basenames):
         self.num_excluded_dirs += len(basenames)
         if self.options.debug_level > 4:
             for name in basenames:
                 pathname = os.path.join(dirname, name)
-                print("Excluded dir: %s" % pathname)
+                _logging.debug("Excluded dir: %s" % pathname)
 
     def excluded_dir(self, pathname):
         self.num_excluded_dirs += 1
         if self.options.debug_level > 4:
-            print("Excluded dir: %s" % pathname)
+            _logging.debug("Excluded dir: %s" % pathname)
 
     def excluded_file(self, pathname):
         self.num_excluded_files += 1
         if self.options.debug_level > 4:
-            print("Excluded file: %s" % pathname)
+            _logging.debug("Excluded file: %s" % pathname)
 
     def included_file(self, pathname):
         self.num_included_files += 1
         if self.options.debug_level > 4:
-            print("Included file: %s" % pathname)
+            _logging.debug("Included file: %s" % pathname)
 
     def file_outside_size_range(self, pathname, filesize):
         if (self.options.max_file_size is not None and
             filesize > self.options.max_file_size):
             self.num_files_too_large += 1
             if self.options.debug_level > 4:
-                print("File too large: %s" % pathname)
+                _logging.debug("File too large: %s" % pathname)
 
         if filesize < self.options.min_file_size:
             self.num_files_too_small += 1
             if self.options.debug_level > 4:
-                print("File too small: %s" % pathname)
+                _logging.debug("File too small: %s" % pathname)
 
     def found_mismatched_time(self):
         self.mismatched_file_times += 1
@@ -749,8 +752,8 @@ class _Statistics:
 
     def did_comparison(self, pathname1, pathname2):
         if self.options.debug_level > 1:
-            print("Comparing: %s" % pathname1)
-            print("     to  : %s" % pathname2)
+            _logging.debug("Comparing: %s" % pathname1)
+            _logging.debug("     to  : %s" % pathname2)
         self.comparisons = self.comparisons + 1
 
     def found_equal_comparison(self):
@@ -760,8 +763,8 @@ class _Statistics:
         assert len(src_namepair) == 2
         assert len(dst_namepair) == 2
         if self.options.debug_level > 2:
-            print("Existing link: %s" % _os.path.join(*src_namepair))
-            print("        with : %s" % _os.path.join(*dst_namepair))
+            _logging.debug("Existing link: %s" % _os.path.join(*src_namepair))
+            _logging.debug("        with : %s" % _os.path.join(*dst_namepair))
         filesize = stat_info.st_size
         self.hardlinked_previously = self.hardlinked_previously + 1
         self.bytes_saved_previously = self.bytes_saved_previously + filesize
@@ -776,8 +779,8 @@ class _Statistics:
         # later, after the ordering by nlink count.  Just log.
         if self.options.debug_level > 0:
             assert src_namepair != dst_namepair
-            print("Linkable: %s" % _os.path.join(*src_namepair))
-            print("      to: %s" % _os.path.join(*dst_namepair))
+            _logging.debug("Linkable: %s" % _os.path.join(*src_namepair))
+            _logging.debug("      to: %s" % _os.path.join(*dst_namepair))
 
     def did_hardlink(self, src_namepair, dst_namepair, dst_stat_info):
         # nlink count is not necessarily accurate at the moment
