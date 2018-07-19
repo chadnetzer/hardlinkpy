@@ -100,11 +100,11 @@ by hard linking identical files.  It can also perform the linking."""
                      help="File modification times do not need to match",
                      action="store_true", default=False,)
 
-    group.add_option("-s", "--min-size", dest="min_file_size", metavar="SIZE",
+    group.add_option("-s", "--min-size", dest="min_file_size", metavar="SZ",
                      help="Minimum file size (default: %default)",
                      default="1",)
 
-    group.add_option("-S", "--max-size", dest="max_file_size", metavar="SIZE",
+    group.add_option("-S", "--max-size", dest="max_file_size", metavar="SZ",
                      help="Maximum file size (Can add 'k', 'm', etc.)",
                      default=None,)
 
