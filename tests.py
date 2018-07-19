@@ -208,7 +208,7 @@ class TestHappy(BaseTests):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
 
     def test_hardlink_tree_filenames_equal(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--filenames-equal", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--same-name", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -226,14 +226,14 @@ class TestHappy(BaseTests):
     def test_hardlink_tree_filenames_equal_reverse_iteration(self):
         """Since os.listdir() can return items in arbitrary order, this test
         confirms that if the iteration over the directories is reversed
-        (lexicographically), the --filenames-equal option still works."""
+        (lexicographically), the --same-name option still works."""
 
-        # This test confirms that the --filenames-equal option works whether
+        # This test confirms that the --same-name option works whether
         # dir1/name1.ext or dir2/name1.ext is found first.
         self.remove_file("dir1/link")
         self.make_linked_file("dir2/name1.ext", "dir1/link")
 
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--filenames-equal", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--same-name", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -255,7 +255,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_timestamp_ignore(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--ignore-timestamp", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--ignore-time", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -270,7 +270,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
 
     def test_hardlink_tree_ignore_permissions(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--ignore-permissions", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--ignore-perms", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()

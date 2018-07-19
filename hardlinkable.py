@@ -72,7 +72,7 @@ by hard linking identical files.  It can also perform the linking."""
                       action="store_false", default=True,)
 
     parser.add_option("-v", "--verbose", dest="verbosity",
-                      help="Increase verbosity level (Repeatable up to 3 times)",
+                      help="Increase verbosity level (Up to 3 times)",
                       action="count", default=0,)
 
     parser.add_option("--enable-linking", dest="linking_enabled",
@@ -91,25 +91,25 @@ by hard linking identical files.  It can also perform the linking."""
                      help="Only file contents have to match",
                      action="store_true", default=False,)
 
-    group.add_option("-f", "--filenames-equal", dest="samename",
+    group.add_option("-f", "--same-name", dest="samename",
                      help="Filenames have to be identical",
                      action="store_true", default=False,)
 
-    group.add_option("-p", "--ignore-permissions", dest="nosameperm",
+    group.add_option("-p", "--ignore-perms", dest="nosameperm",
                      help="File permissions do not need to match",
                      action="store_true", default=False,)
 
-    group.add_option("-t", "--ignore-timestamp", dest="notimestamp",
+    group.add_option("-t", "--ignore-time", dest="notimestamp",
                      help="File modification times do not need to match",
                      action="store_true", default=False,)
 
-    group.add_option("-s", "--min-size", dest="min_file_size", type="int",
+    group.add_option("-s", "--min-size", dest="min_file_size", metavar="SIZE",
                      help="Minimum file size (default: %default)",
-                     action="store", default=1,)
+                     action="store", type="int", default=1,)
 
-    group.add_option("-S", "--max-size", dest="max_file_size", type="int",
+    group.add_option("-S", "--max-size", dest="max_file_size", metavar="SIZE",
                      help="Maximum file size",
-                     action="store", default=0,)
+                     action="store", type="int", default=0,)
 
     # Hidden option for backwards compatability (w/ hardlinkpy)
     group.add_option("--timestamp-ignore",
@@ -120,7 +120,7 @@ by hard linking identical files.  It can also perform the linking."""
     group = _OptionGroup(parser, title="Name Matching (may specify multiple times)",)
     parser.add_option_group(group)
 
-    group.add_option("-m", "--match", dest="matches", metavar="PATTERN",
+    group.add_option("-m", "--match", dest="matches", metavar="PAT",
                      help="Shell patterns used to match files",
                      action="append", default=[],)
 
