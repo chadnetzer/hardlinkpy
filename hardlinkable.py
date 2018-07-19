@@ -705,29 +705,29 @@ class _Statistics:
     def found_regular_file(self, pathname):
         self.regularfiles = self.regularfiles + 1
         if self.options.debug_level > 4:
-            _logging.debug("File: %s" % pathname)
+            _logging.debug("File          : %s" % pathname)
 
     def excluded_dirs(self, dirname, basenames):
         self.num_excluded_dirs += len(basenames)
         if self.options.debug_level > 5:
             for name in basenames:
                 pathname = os.path.join(dirname, name)
-                _logging.debug("Excluded dir: %s" % pathname)
+                _logging.debug("Excluded dir  : %s" % pathname)
 
     def excluded_dir(self, pathname):
         self.num_excluded_dirs += 1
         if self.options.debug_level > 5:
-            _logging.debug("Excluded dir: %s" % pathname)
+            _logging.debug("Excluded dir  : %s" % pathname)
 
     def excluded_file(self, pathname):
         self.num_excluded_files += 1
         if self.options.debug_level > 5:
-            _logging.debug("Excluded file: %s" % pathname)
+            _logging.debug("Excluded file : %s" % pathname)
 
     def included_file(self, pathname):
         self.num_included_files += 1
         if self.options.debug_level > 5:
-            _logging.debug("Included file: %s" % pathname)
+            _logging.debug("Included file : %s" % pathname)
 
     def file_outside_size_range(self, pathname, filesize):
         if (self.options.max_file_size is not None and
@@ -752,8 +752,8 @@ class _Statistics:
 
     def did_comparison(self, pathname1, pathname2):
         if self.options.debug_level > 2:
-            _logging.debug("Comparing: %s" % pathname1)
-            _logging.debug("     to  : %s" % pathname2)
+            _logging.debug("Comparing     : %s" % pathname1)
+            _logging.debug(" to           : %s" % pathname2)
         self.comparisons = self.comparisons + 1
 
     def found_equal_comparison(self):
@@ -763,8 +763,8 @@ class _Statistics:
         assert len(src_namepair) == 2
         assert len(dst_namepair) == 2
         if self.options.debug_level > 3:
-            _logging.debug("Existing link: %s" % _os.path.join(*src_namepair))
-            _logging.debug("        with : %s" % _os.path.join(*dst_namepair))
+            _logging.debug("Existing link : %s" % _os.path.join(*src_namepair))
+            _logging.debug(" with         : %s" % _os.path.join(*dst_namepair))
         filesize = stat_info.st_size
         self.hardlinked_previously = self.hardlinked_previously + 1
         self.bytes_saved_previously = self.bytes_saved_previously + filesize
@@ -779,8 +779,8 @@ class _Statistics:
         # later, after the ordering by nlink count.  Just log.
         if self.options.debug_level > 1:
             assert src_namepair != dst_namepair
-            _logging.debug("Linkable: %s" % _os.path.join(*src_namepair))
-            _logging.debug("      to: %s" % _os.path.join(*dst_namepair))
+            _logging.debug("Linkable      : %s" % _os.path.join(*src_namepair))
+            _logging.debug(" to           : %s" % _os.path.join(*dst_namepair))
 
     def did_hardlink(self, src_namepair, dst_namepair, dst_stat_info):
         # nlink count is not necessarily accurate at the moment
