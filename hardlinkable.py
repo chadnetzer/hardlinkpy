@@ -910,11 +910,15 @@ def _is_already_hardlinked(st1, st2):
 
 
 def _humanize_number(number):
-    if number > 1024 ** 3:
+    if number >= 1024 ** 5:
+        return ("%.3f PiB" % (number / (1024.0 ** 5)))
+    if number >= 1024 ** 4:
+        return ("%.3f TiB" % (number / (1024.0 ** 4)))
+    if number >= 1024 ** 3:
         return ("%.3f GiB" % (number / (1024.0 ** 3)))
-    if number > 1024 ** 2:
+    if number >= 1024 ** 2:
         return ("%.3f MiB" % (number / (1024.0 ** 2)))
-    if number > 1024:
+    if number >= 1024:
         return ("%.3f KiB" % (number / 1024.0))
     return ("%d bytes" % number)
 
