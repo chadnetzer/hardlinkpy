@@ -233,9 +233,12 @@ class Hardlinkable:
 
                 # If excludes match any of the subdirs (or the current dir), skip
                 # them.
+                unculled_dirs = dirs[:]
                 _cull_excluded_directories(dirs, options.excludes)
+                self.stats.excluded_dirs(dirpath, set(unculled_dirs) - set(dirs))
                 cur_dir = _os.path.basename(dirpath)
                 if cur_dir and _found_excluded_regex(cur_dir, options.excludes):
+                    self.stats.excluded_dir(dirpath)
                     continue
 
                 self.stats.found_directory()
@@ -243,14 +246,17 @@ class Hardlinkable:
                 # Loop through all the files in the directory
                 for filename in filenames:
                     assert filename
+                    pathname = _os.path.normpath(_os.path.join(dirpath, filename))
                     if _found_excluded_regex(filename, options.excludes):
+                        self.stats.excluded_file(pathname)
                         continue
                     if _found_excluded_dotfile(filename):
+                        self.stats.excluded_file(pathname)
                         continue
                     if not _found_matched_filename_regex(filename, options.matches):
+                        self.stats.included_file(pathname)
                         continue
 
-                    pathname = _os.path.normpath(_os.path.join(dirpath, filename))
                     try:
                         stat_info = _os.lstat(pathname)
                     except OSError:
@@ -267,6 +273,7 @@ class Hardlinkable:
                     if ((options.max_file_size is not None and
                          stat_info.st_size > options.max_file_size) or
                         (stat_info.st_size < options.min_file_size)):
+                        self.stats.file_outside_size_range(pathname, stat_info.st_size)
                         continue
 
                     if stat_info.st_dev not in self._fsdevs:
@@ -281,9 +288,7 @@ class Hardlinkable:
                         fsdev.max_nlinks = max_nlinks
 
                     # Bump statistics count of regular files found.
-                    self.stats.found_regular_file()
-                    if options.debug_level > 3:
-                        print("File: %s" % pathname)
+                    self.stats.found_regular_file(pathname)
 
                     # Extract the normalized path directory name
                     dirname = _os.path.dirname(pathname)
@@ -375,10 +380,6 @@ class Hardlinkable:
             if ino in fsdev.ino_stat:
                 prev_namepair = fsdev._arbitrary_namepair_from_ino(ino)
                 pathname = _os.path.join(dirname, filename)
-                if options.debug_level > 2:
-                    prev_pathname = _os.path.join(*prev_namepair)
-                    print("Existing link: %s" % prev_pathname)
-                    print("        with : %s" % pathname)
                 prev_stat_info = fsdev.ino_stat[ino]
                 self.stats.found_existing_hardlink(prev_namepair, namepair, prev_stat_info)
             # We have file(s) that have the same hash as our current file.
@@ -423,29 +424,17 @@ class Hardlinkable:
     # considered for hardlinking if this function returns true.
     def _eligible_for_hardlink(self, st1, st2):
         options = self.options
-        result = (
-            # Must meet the following
-            # criteria:
-            not _is_already_hardlinked(st1, st2) and  # NOT already hard linked
+        # A chain of required criteria:
+        result = (not _is_already_hardlinked(st1, st2) and
+                  st1.st_dev == st2.st_dev and
+                  st1.st_size == st2.st_size)
 
-            st1.st_size == st2.st_size and           # size is the same
+        if not options.contentonly:
+            result = (result and
+                    (options.ignore_time or st1.st_mtime == st2.st_mtime) and
+                    (options.ignore_perm or st1.st_mode == st2.st_mode)   and
+                    (st1.st_uid == st2.st_uid and st1.st_gid == st2.st_gid))
 
-            (st1.st_mode == st2.st_mode or           # file mode is the same
-             options.ignore_perm or                  # OR we are ignoring file mode
-             options.contentonly) and                # OR we are comparing content only
-
-            (st1.st_uid == st2.st_uid or             # owner user id is the same
-             options.contentonly) and                # OR we are comparing content only
-
-            (st1.st_gid == st2.st_gid or             # owner group id is the same
-             options.contentonly) and                # OR we are comparing content only
-
-            (st1.st_mtime == st2.st_mtime or         # modified time is the same
-             options.ignore_time or                  # OR date hashing is off
-             options.contentonly) and                # OR we are comparing content only
-
-            st1.st_dev == st2.st_dev                 # device is the same
-        )
         fsdev = self._get_fsdev(st1.st_dev)
         if result and (fsdev.max_nlinks is not None):
             # The justification for not linking a pair of files if their nlinks sum
@@ -453,14 +442,20 @@ class Hardlinkable:
             # the overall link count, meaning no space saving is possible overall
             # even when all their filenames are found and re-linked.
             result = ((st1.st_nlink + st2.st_nlink) <= fsdev.max_nlinks)
+
+        # Add some stats on the factors which may have falsified result
+        if st1.st_mtime != st2.st_mtime:
+            self.stats.found_mismatched_time()
+        if st1.st_mode != st2.st_mode:
+            self.stats.found_mismatched_mode()
+        if (st1.st_uid != st2.st_uid or st1.st_gid != st2.st_gid):
+            self.stats.found_mismatched_ownership()
+
         return result
 
     def _are_file_contents_equal(self, pathname1, pathname2):
         """Determine if the contents of two files are equal"""
-        if self.options.debug_level > 1:
-            print("Comparing: %s" % pathname1)
-            print("     to  : %s" % pathname2)
-        self.stats.did_comparison()
+        self.stats.did_comparison(pathname1, pathname2)
         result = _filecmp.cmp(pathname1, pathname2, shallow=False)
         if result:
             self.stats.found_equal_comparison()
@@ -482,17 +477,12 @@ class Hardlinkable:
         src_dirname, src_filename, src_stat_info = src_file_info
         dst_dirname, dst_filename, dst_stat_info = dst_file_info
 
+        self.stats.found_hardlinkable((src_dirname, src_filename),
+                                      (dst_dirname, dst_filename))
+
         assert src_stat_info.st_dev == dst_stat_info.st_dev
         fsdev = self._get_fsdev(src_stat_info.st_dev)
         fsdev._add_linked_inodes(src_stat_info.st_ino, dst_stat_info.st_ino)
-
-        # update our stats (Note: dst_stat_info is from pre-link())
-        if self.options.debug_level > 0:
-            src_pathname = _os.path.join(src_dirname, src_filename)
-            dst_pathname = _os.path.join(dst_dirname, dst_filename)
-            assert src_pathname != dst_pathname
-            print("Linkable: %s" % src_pathname)
-            print("      to: %s" % dst_pathname)
 
     def _update_stat_info(self, stat_info, nlink=None, mtime=None, atime=None, uid=None, gid=None):
         """Updates an ino_stat stat_info with the given values."""
@@ -681,6 +671,14 @@ class _Statistics:
     def reset(self):
         self.dircount = 0                   # how many directories we find
         self.regularfiles = 0               # how many regular files we find
+        self.num_excluded_dirs = 0          # how many directories we exclude
+        self.num_excluded_files = 0         # how many files we exclude (by regex)
+        self.num_included_files = 0         # how many files we include (by regex)
+        self.num_files_too_large = 0        # how many files are too large
+        self.num_files_too_small = 0        # how many files are too small
+        self.mismatched_file_times = 0      # same sized files with different mtimes
+        self.mismatched_file_modes = 0      # same sized files with different perms
+        self.mismatched_file_ownership = 0  # same sized files with different ownership
         self.comparisons = 0                # how many file content comparisons
         self.equal_comparisons = 0          # how many file comparisons found equal
         self.hardlinked_thisrun = 0         # hardlinks done this run
@@ -701,10 +699,58 @@ class _Statistics:
     def found_directory(self):
         self.dircount = self.dircount + 1
 
-    def found_regular_file(self):
+    def found_regular_file(self, pathname):
         self.regularfiles = self.regularfiles + 1
+        if self.options.debug_level > 3:
+            print("File: %s" % pathname)
 
-    def did_comparison(self):
+    def excluded_dirs(self, dirname, basenames):
+        self.num_excluded_dirs += len(basenames)
+        if self.options.debug_level > 4:
+            for name in basenames:
+                pathname = os.path.join(dirname, name)
+                print("Excluded dir: %s" % pathname)
+
+    def excluded_dir(self, pathname):
+        self.num_excluded_dirs += 1
+        if self.options.debug_level > 4:
+            print("Excluded dir: %s" % pathname)
+
+    def excluded_file(self, pathname):
+        self.num_excluded_files += 1
+        if self.options.debug_level > 4:
+            print("Excluded file: %s" % pathname)
+
+    def included_file(self, pathname):
+        self.num_included_files += 1
+        if self.options.debug_level > 4:
+            print("Included file: %s" % pathname)
+
+    def file_outside_size_range(self, pathname, filesize):
+        if (self.options.max_file_size is not None and
+            filesize > self.options.max_file_size):
+            self.num_files_too_large += 1
+            if self.options.debug_level > 4:
+                print("File too large: %s" % pathname)
+
+        if filesize < self.options.min_file_size:
+            self.num_files_too_small += 1
+            if self.options.debug_level > 4:
+                print("File too small: %s" % pathname)
+
+    def found_mismatched_time(self):
+        self.mismatched_file_times += 1
+
+    def found_mismatched_mode(self):
+        self.mismatched_file_modes += 1
+
+    def found_mismatched_ownership(self):
+        self.mismatched_file_ownership += 1
+
+    def did_comparison(self, pathname1, pathname2):
+        if self.options.debug_level > 1:
+            print("Comparing: %s" % pathname1)
+            print("     to  : %s" % pathname2)
         self.comparisons = self.comparisons + 1
 
     def found_equal_comparison(self):
@@ -713,6 +759,9 @@ class _Statistics:
     def found_existing_hardlink(self, src_namepair, dst_namepair, stat_info):
         assert len(src_namepair) == 2
         assert len(dst_namepair) == 2
+        if self.options.debug_level > 2:
+            print("Existing link: %s" % _os.path.join(*src_namepair))
+            print("        with : %s" % _os.path.join(*dst_namepair))
         filesize = stat_info.st_size
         self.hardlinked_previously = self.hardlinked_previously + 1
         self.bytes_saved_previously = self.bytes_saved_previously + filesize
@@ -721,6 +770,14 @@ class _Statistics:
                 self.previouslyhardlinked[src_namepair] = (filesize, [dst_namepair])
             else:
                 self.previouslyhardlinked[src_namepair][1].append(dst_namepair)
+
+    def found_hardlinkable(self, src_namepair, dst_namepair):
+        # We don't actually keep these stats, and we record the actual links
+        # later, after the ordering by nlink count.  Just log.
+        if self.options.debug_level > 0:
+            assert src_namepair != dst_namepair
+            print("Linkable: %s" % _os.path.join(*src_namepair))
+            print("      to: %s" % _os.path.join(*dst_namepair))
 
     def did_hardlink(self, src_namepair, dst_namepair, dst_stat_info):
         # nlink count is not necessarily accurate at the moment
@@ -801,18 +858,26 @@ class _Statistics:
         else:
             s4 = "Total bytes saveable      : %s (%s)"
         print(s4 % (totalbytes, _humanize_number(totalbytes)))
-        print("Total run time            : %s seconds" % round(_time.time() - self.starttime, 3))
         if self.options.debug_level > 0:
-            print("Total file hash hits       : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
-                                                                                  self.num_hash_misses,
-                                                                                  (self.num_hash_hits +
-                                                                                   self.num_hash_misses)))
-            print("Total hash mismatches      : %s  (+ total hardlinks): %s" % (self.num_hash_mismatches,
-                                                                                    (self.num_hash_mismatches +
-                                                                                     self.hardlinked_previously +
-                                                                                     self.hardlinked_thisrun)))
-            print("Total hash list iterations : %s" % self.num_list_iterations)
-            print("Total equal comparisons    : %s" % self.equal_comparisons)
+            print("Total run time                : %s seconds" % round(_time.time() - self.starttime, 3))
+            print("Total file hash hits          : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
+                                                                                     self.num_hash_misses,
+                                                                                     (self.num_hash_hits +
+                                                                                      self.num_hash_misses)))
+            print("Total hash mismatches         : %s  (+ total hardlinks): %s" % (self.num_hash_mismatches,
+                                                                                   (self.num_hash_mismatches +
+                                                                                    self.hardlinked_previously +
+                                                                                    self.hardlinked_thisrun)))
+            print("Total hash list iterations    : %s" % self.num_list_iterations)
+            print("Total equal comparisons       : %s" % self.equal_comparisons)
+            print("Total excluded dirs           : %s" % self.num_excluded_dirs)
+            print("Total excluded files          : %s" % self.num_excluded_files)
+            print("Total included files          : %s" % self.num_included_files)
+            print("Total too large files         : %s" % self.num_files_too_large)
+            print("Total too small files         : %s" % self.num_files_too_small)
+            print("Total mismatched file times   : %s" % self.mismatched_file_times)
+            print("Total mismatched file modes   : %s" % self.mismatched_file_modes)
+            print("Total mismatched file uid/gid : %s" % self.mismatched_file_ownership)
 
 
 ### Module functions ###
