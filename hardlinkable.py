@@ -842,32 +842,32 @@ class _Statistics:
             print("-----------------------")
         if not self.options.linking_enabled:
             print("Statistics reflect what would result if actual linking were enabled")
-        print("Directories               : %s" % self.dircount)
-        print("Regular files             : %s" % self.regularfiles)
-        print("Comparisons               : %s" % self.comparisons)
+        print("Directories                : %s" % self.dircount)
+        print("Regular files              : %s" % self.regularfiles)
+        print("Comparisons                : %s" % self.comparisons)
         if self.options.linking_enabled:
-            s1 = "Consolidated inodes       : %s"
-            s2 = "Hardlinked this run       : %s"
+            s1 = "Consolidated inodes        : %s"
+            s2 = "Hardlinked this run        : %s"
         else:
-            s1 = "Consolidatable inodes     : %s"
-            s2 = "Hardlinkable files        : %s"
-        print("Inodes found              : %s" % self.num_inodes)
+            s1 = "Consolidatable inodes found: %s"
+            s2 = "Hardlinkable files found   : %s"
+        print("Inodes found               : %s" % self.num_inodes)
         print(s1 % self.nlinks_to_zero_thisrun)
-        print("Current hardlinks         : %s" % (self.hardlinked_previously))
+        print("Current hardlinks          : %s" % (self.hardlinked_previously))
         print(s2 % self.hardlinked_thisrun)
-        print("Total hardlinks           : %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
-        print("Current bytes saved       : %s (%s)" % (self.bytes_saved_previously,
+        print("Total old and new hardlinks: %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
+        print("Current bytes saved        : %s (%s)" % (self.bytes_saved_previously,
                                                        _humanize_number(self.bytes_saved_previously)))
         if self.options.linking_enabled:
-            s3 = "Additional bytes saved    : %s (%s)"
+            s3 = "Additional bytes saved     : %s (%s)"
         else:
-            s3 = "Additional bytes saveable : %s (%s)"
+            s3 = "Additional bytes saveable  : %s (%s)"
         print(s3 % (self.bytes_saved_thisrun, _humanize_number(self.bytes_saved_thisrun)))
         totalbytes = self.bytes_saved_thisrun + self.bytes_saved_previously
         if self.options.linking_enabled:
-            s4 = "Total bytes saved         : %s (%s)"
+            s4 = "Total bytes saved          : %s (%s)"
         else:
-            s4 = "Total bytes saveable      : %s (%s)"
+            s4 = "Total bytes saveable       : %s (%s)"
         print(s4 % (totalbytes, _humanize_number(totalbytes)))
         if self.options.verbosity > 0 or self.options.debug_level > 0:
             if self.num_excluded_dirs:
