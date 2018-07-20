@@ -843,7 +843,7 @@ class _Statistics:
         if not self.options.linking_enabled:
             print("Statistics reflect what would result if actual linking were enabled")
         print("Directories                : %s" % self.dircount)
-        print("Regular files              : %s" % self.regularfiles)
+        print("Files                      : %s" % self.regularfiles)
         print("Comparisons                : %s" % self.comparisons)
         if self.options.linking_enabled:
             s1 = "Consolidated inodes        : %s"
