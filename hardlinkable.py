@@ -47,10 +47,6 @@ __all__ = ["Hardlinkable"]
 __version__ = '0.8'
 _VERSION = "0.8 alpha - 2018-07-09 (09-Jul-2018)"
 
-# Compile up our regexes ahead of time
-_MIRROR_PL_REGEX = _re.compile(r'^\.in\.')
-_RSYNC_TEMP_REGEX = _re.compile((r'^\..*\.\?{6,6}$'))
-
 
 def _parse_command_line(get_default_options=False):
     usage = "usage: %prog [options] directory [ directory ... ]"
@@ -251,9 +247,6 @@ class Hardlinkable:
                     assert filename
                     pathname = _os.path.normpath(_os.path.join(dirpath, filename))
                     if _found_excluded_regex(filename, options.excludes):
-                        self.stats.excluded_file(pathname)
-                        continue
-                    if _found_excluded_dotfile(filename):
                         self.stats.excluded_file(pathname)
                         continue
                     if not _found_matched_filename_regex(filename, options.matches):
@@ -936,21 +929,6 @@ def _found_excluded_regex(name, excludes):
     """If excludes option is given, return True if name matches any regex."""
     for exclude in excludes:
         if _re.search(exclude, name):
-            return True
-    return False
-
-
-def _found_excluded_dotfile(name):
-    """Return True if any excluded dotfile pattern is found."""
-    # Look at files beginning with "."
-    if name.startswith("."):
-        # Ignore any mirror.pl files.  These are the files that
-        # start with ".in."
-        if _MIRROR_PL_REGEX.match(name):
-            return True
-        # Ignore any RSYNC files.  These are files that have the
-        # format .FILENAME.??????
-        if _RSYNC_TEMP_REGEX.match(name):
             return True
     return False
 
