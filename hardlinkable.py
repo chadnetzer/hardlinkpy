@@ -798,14 +798,12 @@ class _Statistics:
         self.num_inodes += 1
 
     def did_hardlink(self, src_namepair, dst_namepair, dst_stat_info):
-        # nlink count is not necessarily accurate at the moment
         self.hardlinkstats.append((tuple(src_namepair),
                                    tuple(dst_namepair)))
         filesize = dst_stat_info.st_size
         self.hardlinked_thisrun += 1
         if dst_stat_info.st_nlink == 1:
-            # We only save bytes if the last destination link was actually
-            # removed.
+            # We only save bytes if the last link was actually removed.
             self.bytes_saved_thisrun += filesize
             self.nlinks_to_zero_thisrun += 1
 
