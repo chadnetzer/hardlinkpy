@@ -201,8 +201,8 @@ class Hardlinkable:
                     aborted_early = True
                     break
 
-            if not aborted_early:
-                self.update_hardlink_caches(src_tup, dst_tup)
+            assert not aborted_early
+            self.update_hardlink_caches(src_tup, dst_tup)
 
         if self.options.printstats:
             self.stats.print_stats(aborted_early)
