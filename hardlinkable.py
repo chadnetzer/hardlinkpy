@@ -570,8 +570,8 @@ class Hardlinkable:
                     _logging.critical("Failed to remove temp filename: %s\n%s" % (tmp_pathname, error))
                     _sys.exit(3)
 
-                # Use the destination file attributes if it's most recently modified
-                dst_mtime = dst_atime = dst_uid = dst_gid = None
+                # Use the destination file times if it's most recently modified
+                dst_mtime = dst_atime = None
                 if dst_stat_info.st_mtime > src_stat_info.st_mtime:
                     try:
                         _os.utime(src_pathname, (dst_stat_info.st_atime, dst_stat_info.st_mtime))
@@ -581,19 +581,9 @@ class Hardlinkable:
                         error = _sys.exc_info()[1]
                         _logging.warning("Failed to update file time attributes for %s\n%s" % (src_pathname, error))
 
-                    try:
-                        _os.chown(src_pathname, dst_stat_info.st_uid, dst_stat_info.st_gid)
-                        dst_uid = dst_stat_info.st_uid
-                        dst_gid = dst_stat_info.st_gid
-                    except Exception:
-                        error = _sys.exc_info()[1]
-                        _logging.warning("Failed to update file owner attributes for %s\n%s" % (src_pathname, error))
-
                     self._update_stat_info(src_stat_info,
                                            mtime=dst_mtime,
-                                           atime=dst_atime,
-                                           uid=dst_uid,
-                                           gid=dst_gid)
+                                           atime=dst_atime)
         return hardlink_succeeded
 
 
