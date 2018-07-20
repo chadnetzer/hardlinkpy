@@ -207,12 +207,8 @@ class Hardlinkable:
         if self.options.printstats:
             self.stats.print_stats(aborted_early)
 
-        # double check figures based on direct inode stats
-        postlink_inode_stats = self._inode_stats()
-        totalsavedbytes = self.stats.bytes_saved_thisrun + self.stats.bytes_saved_previously
-        bytes_saved_thisrun = postlink_inode_stats['total_saved_bytes'] - self._prelink_inode_stats['total_saved_bytes']
-        assert totalsavedbytes == postlink_inode_stats['total_saved_bytes'], (totalsavedbytes, postlink_inode_stats['total_saved_bytes'])
-        assert self.stats.bytes_saved_thisrun == bytes_saved_thisrun
+        if not aborted_early:
+            self._postlink_inode_stats_sanity_check(self._prelink_inode_stats)
 
         return self.stats
 
@@ -339,20 +335,6 @@ class Hardlinkable:
                             src_nlink += 1
                             dst_nlink -= 1
                             assert dst_nlink >= 0
-
-    def _inode_stats(self):
-        total_inodes = 0
-        total_bytes = 0
-        total_saved_bytes = 0 # Each nlink > 1 is counted as "saved" space
-        for fsdev in self._fsdevs.values():
-            for ino, stat_info in fsdev.ino_stat.items():
-                total_inodes += 1
-                total_bytes += stat_info.st_size
-                count = fsdev._count_nlinks_this_inode(ino)
-                total_saved_bytes += (stat_info.st_size * (count - 1))
-        return {'total_inodes' : total_inodes,
-                'total_bytes': total_bytes,
-                'total_saved_bytes': total_saved_bytes}
 
     # dirname is the directory component and filename is just the file name
     # component (ie. the basename) without the path.  The tree walking provides
@@ -589,6 +571,30 @@ class Hardlinkable:
                                            mtime=dst_mtime,
                                            atime=dst_atime)
         return hardlink_succeeded
+
+    def _inode_stats(self):
+        """Gather some basic inode stats from caches."""
+        total_inodes = 0
+        total_bytes = 0
+        total_saved_bytes = 0 # Each nlink > 1 is counted as "saved" space
+        for fsdev in self._fsdevs.values():
+            for ino, stat_info in fsdev.ino_stat.items():
+                total_inodes += 1
+                total_bytes += stat_info.st_size
+                count = fsdev._count_nlinks_this_inode(ino)
+                total_saved_bytes += (stat_info.st_size * (count - 1))
+        return {'total_inodes' : total_inodes,
+                'total_bytes': total_bytes,
+                'total_saved_bytes': total_saved_bytes}
+
+    def _postlink_inode_stats_sanity_check(self, prelink_inode_stats):
+        """Check stats directly from inode data."""
+        # double check figures based on direct inode stats
+        postlink_inode_stats = self._inode_stats()
+        totalsavedbytes = self.stats.bytes_saved_thisrun + self.stats.bytes_saved_previously
+        bytes_saved_thisrun = postlink_inode_stats['total_saved_bytes'] - prelink_inode_stats['total_saved_bytes']
+        assert totalsavedbytes == postlink_inode_stats['total_saved_bytes'], (totalsavedbytes, postlink_inode_stats['total_saved_bytes'])
+        assert self.stats.bytes_saved_thisrun == bytes_saved_thisrun
 
 
 class _FSDev:
