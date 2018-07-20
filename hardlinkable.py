@@ -376,6 +376,9 @@ class Hardlinkable:
         file_info = (dirname, filename, stat_info)
         namepair = (dirname, filename)
 
+        if ino not in fsdev.ino_stat:
+            self.stats.found_inode()
+
         file_hash = _hash_value(stat_info, options)
         if file_hash in fsdev.file_hashes:
             self.stats.found_hash()
@@ -679,12 +682,13 @@ class _Statistics:
         self.num_included_files = 0         # how many files we include (by regex)
         self.num_files_too_large = 0        # how many files are too large
         self.num_files_too_small = 0        # how many files are too small
-        self.mismatched_file_times = 0      # same sized files with different mtimes
-        self.mismatched_file_modes = 0      # same sized files with different perms
-        self.mismatched_file_ownership = 0  # same sized files with different ownership
+        self.num_mismatched_file_times = 0  # same sized files with different mtimes
+        self.num_mismatched_file_modes = 0  # same sized files with different perms
+        self.num_mismatched_file_ownership = 0 # same sized files with different ownership
         self.comparisons = 0                # how many file content comparisons
         self.equal_comparisons = 0          # how many file comparisons found equal
         self.hardlinked_thisrun = 0         # hardlinks done this run
+        self.num_inodes = 0                 # inodes found this run
         self.nlinks_to_zero_thisrun = 0     # how man nlinks actually went to zero
         self.hardlinked_previously = 0      # hardlinks that are already existing
         self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run
@@ -700,10 +704,10 @@ class _Statistics:
         self.num_list_iterations = 0        # Number of iterations over a list in file_hashes
 
     def found_directory(self):
-        self.dircount = self.dircount + 1
+        self.dircount += 1
 
     def found_regular_file(self, pathname):
-        self.regularfiles = self.regularfiles + 1
+        self.regularfiles += 1
         if self.options.debug_level > 4:
             _logging.debug("File          : %s" % pathname)
 
@@ -742,22 +746,22 @@ class _Statistics:
                 _logging.debug("File too small: %s" % pathname)
 
     def found_mismatched_time(self):
-        self.mismatched_file_times += 1
+        self.num_mismatched_file_times += 1
 
     def found_mismatched_mode(self):
-        self.mismatched_file_modes += 1
+        self.num_mismatched_file_modes += 1
 
     def found_mismatched_ownership(self):
-        self.mismatched_file_ownership += 1
+        self.num_mismatched_file_ownership += 1
 
     def did_comparison(self, pathname1, pathname2):
         if self.options.debug_level > 2:
             _logging.debug("Comparing     : %s" % pathname1)
             _logging.debug(" to           : %s" % pathname2)
-        self.comparisons = self.comparisons + 1
+        self.comparisons += 1
 
     def found_equal_comparison(self):
-        self.equal_comparisons = self.equal_comparisons + 1
+        self.equal_comparisons += 1
 
     def found_existing_hardlink(self, src_namepair, dst_namepair, stat_info):
         assert len(src_namepair) == 2
@@ -766,8 +770,8 @@ class _Statistics:
             _logging.debug("Existing link : %s" % _os.path.join(*src_namepair))
             _logging.debug(" with         : %s" % _os.path.join(*dst_namepair))
         filesize = stat_info.st_size
-        self.hardlinked_previously = self.hardlinked_previously + 1
-        self.bytes_saved_previously = self.bytes_saved_previously + filesize
+        self.hardlinked_previously += 1
+        self.bytes_saved_previously += filesize
         if self.options.verbosity > 1:
             if src_namepair not in self.previouslyhardlinked:
                 self.previouslyhardlinked[src_namepair] = (filesize, [dst_namepair])
@@ -782,17 +786,20 @@ class _Statistics:
             _logging.debug("Linkable      : %s" % _os.path.join(*src_namepair))
             _logging.debug(" to           : %s" % _os.path.join(*dst_namepair))
 
+    def found_inode(self):
+        self.num_inodes += 1
+
     def did_hardlink(self, src_namepair, dst_namepair, dst_stat_info):
         # nlink count is not necessarily accurate at the moment
         self.hardlinkstats.append((tuple(src_namepair),
                                    tuple(dst_namepair)))
         filesize = dst_stat_info.st_size
-        self.hardlinked_thisrun = self.hardlinked_thisrun + 1
+        self.hardlinked_thisrun += 1
         if dst_stat_info.st_nlink == 1:
             # We only save bytes if the last destination link was actually
             # removed.
-            self.bytes_saved_thisrun = self.bytes_saved_thisrun + filesize
-            self.nlinks_to_zero_thisrun = self.nlinks_to_zero_thisrun + 1
+            self.bytes_saved_thisrun += filesize
+            self.nlinks_to_zero_thisrun += 1
 
     def found_hash(self):
         self.num_hash_hits += 1
@@ -835,52 +842,64 @@ class _Statistics:
             print("-----------------------")
         if not self.options.linking_enabled:
             print("Statistics reflect what would result if actual linking were enabled")
-        print("Directories               : %s" % self.dircount)
-        print("Regular files             : %s" % self.regularfiles)
-        print("Comparisons               : %s" % self.comparisons)
+        print("Directories                : %s" % self.dircount)
+        print("Files                      : %s" % self.regularfiles)
+        print("Comparisons                : %s" % self.comparisons)
         if self.options.linking_enabled:
-            s1 = "Consolidated inodes       : %s"
-            s2 = "Hardlinked this run       : %s"
+            s1 = "Consolidated inodes        : %s"
+            s2 = "Hardlinked this run        : %s"
         else:
-            s1 = "Consolidatable inodes     : %s"
-            s2 = "Hardlinkable files        : %s"
+            s1 = "Consolidatable inodes found: %s"
+            s2 = "Hardlinkable files found   : %s"
+        print("Inodes found               : %s" % self.num_inodes)
         print(s1 % self.nlinks_to_zero_thisrun)
-        print("Current hardlinks         : %s" % (self.hardlinked_previously))
+        print("Current hardlinks          : %s" % (self.hardlinked_previously))
         print(s2 % self.hardlinked_thisrun)
-        print("Total hardlinks           : %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
-        print("Current bytes saved       : %s (%s)" % (self.bytes_saved_previously,
+        print("Total old and new hardlinks: %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
+        print("Current bytes saved        : %s (%s)" % (self.bytes_saved_previously,
                                                        _humanize_number(self.bytes_saved_previously)))
         if self.options.linking_enabled:
-            s3 = "Additional bytes saved    : %s (%s)"
+            s3 = "Additional bytes saved     : %s (%s)"
         else:
-            s3 = "Additional bytes saveable : %s (%s)"
+            s3 = "Additional bytes saveable  : %s (%s)"
         print(s3 % (self.bytes_saved_thisrun, _humanize_number(self.bytes_saved_thisrun)))
         totalbytes = self.bytes_saved_thisrun + self.bytes_saved_previously
         if self.options.linking_enabled:
-            s4 = "Total bytes saved         : %s (%s)"
+            s4 = "Total bytes saved          : %s (%s)"
         else:
-            s4 = "Total bytes saveable      : %s (%s)"
+            s4 = "Total bytes saveable       : %s (%s)"
         print(s4 % (totalbytes, _humanize_number(totalbytes)))
+        if self.options.verbosity > 0 or self.options.debug_level > 0:
+            if self.num_excluded_dirs:
+                print("Total excluded dirs        : %s" % self.num_excluded_dirs)
+            if self.num_excluded_files:
+                print("Total excluded files       : %s" % self.num_excluded_files)
+            if self.num_included_files:
+                print("Total included files       : %s" % self.num_included_files)
+            if self.num_files_too_large:
+                print("Total too large files      : %s" % self.num_files_too_large)
+            if self.num_files_too_small:
+                print("Total too small files      : %s" % self.num_files_too_small)
+            if self.num_mismatched_file_times:
+                print("Total unequal file times   : %s" % self.num_mismatched_file_times)
+            if self.num_mismatched_file_modes:
+                print("Total unequal file modes   : %s" % self.num_mismatched_file_modes)
+            if self.num_mismatched_file_ownership:
+                print("Total unequal file uid/gid : %s" % self.num_mismatched_file_ownership)
+            print("Total remaining inodes     : %s" % (self.num_inodes - self.nlinks_to_zero_thisrun))
+            assert (self.num_inodes - self.nlinks_to_zero_thisrun) > 0
         if self.options.debug_level > 0:
-            print("Total run time                : %s seconds" % round(_time.time() - self.starttime, 3))
-            print("Total file hash hits          : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
-                                                                                     self.num_hash_misses,
-                                                                                     (self.num_hash_hits +
-                                                                                      self.num_hash_misses)))
-            print("Total hash mismatches         : %s  (+ total hardlinks): %s" % (self.num_hash_mismatches,
-                                                                                   (self.num_hash_mismatches +
-                                                                                    self.hardlinked_previously +
-                                                                                    self.hardlinked_thisrun)))
-            print("Total hash list iterations    : %s" % self.num_list_iterations)
-            print("Total equal comparisons       : %s" % self.equal_comparisons)
-            print("Total excluded dirs           : %s" % self.num_excluded_dirs)
-            print("Total excluded files          : %s" % self.num_excluded_files)
-            print("Total included files          : %s" % self.num_included_files)
-            print("Total too large files         : %s" % self.num_files_too_large)
-            print("Total too small files         : %s" % self.num_files_too_small)
-            print("Total mismatched file times   : %s" % self.mismatched_file_times)
-            print("Total mismatched file modes   : %s" % self.mismatched_file_modes)
-            print("Total mismatched file uid/gid : %s" % self.mismatched_file_ownership)
+            print("Total run time             : %s seconds" % round(_time.time() - self.starttime, 3))
+            print("Total file hash hits       : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
+                                                                                  self.num_hash_misses,
+                                                                                  (self.num_hash_hits +
+                                                                                   self.num_hash_misses)))
+            print("Total hash mismatches      : %s  (+ total hardlinks): %s" % (self.num_hash_mismatches,
+                                                                                (self.num_hash_mismatches +
+                                                                                 self.hardlinked_previously +
+                                                                                 self.hardlinked_thisrun)))
+            print("Total hash list iterations : %s" % self.num_list_iterations)
+            print("Total equal comparisons    : %s" % self.equal_comparisons)
 
 
 ### Module functions ###
