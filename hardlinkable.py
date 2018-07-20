@@ -376,6 +376,9 @@ class Hardlinkable:
         file_info = (dirname, filename, stat_info)
         namepair = (dirname, filename)
 
+        if ino not in fsdev.ino_stat:
+            self.stats.found_inode()
+
         file_hash = _hash_value(stat_info, options)
         if file_hash in fsdev.file_hashes:
             self.stats.found_hash()
@@ -685,6 +688,7 @@ class _Statistics:
         self.comparisons = 0                # how many file content comparisons
         self.equal_comparisons = 0          # how many file comparisons found equal
         self.hardlinked_thisrun = 0         # hardlinks done this run
+        self.num_inodes = 0                 # inodes found this run
         self.nlinks_to_zero_thisrun = 0     # how man nlinks actually went to zero
         self.hardlinked_previously = 0      # hardlinks that are already existing
         self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run
@@ -782,6 +786,9 @@ class _Statistics:
             _logging.debug("Linkable      : %s" % _os.path.join(*src_namepair))
             _logging.debug(" to           : %s" % _os.path.join(*dst_namepair))
 
+    def found_inode(self):
+        self.num_inodes += 1
+
     def did_hardlink(self, src_namepair, dst_namepair, dst_stat_info):
         # nlink count is not necessarily accurate at the moment
         self.hardlinkstats.append((tuple(src_namepair),
@@ -844,6 +851,7 @@ class _Statistics:
         else:
             s1 = "Consolidatable inodes     : %s"
             s2 = "Hardlinkable files        : %s"
+        print("Inodes found              : %s" % self.num_inodes)
         print(s1 % self.nlinks_to_zero_thisrun)
         print("Current hardlinks         : %s" % (self.hardlinked_previously))
         print(s2 % self.hardlinked_thisrun)
