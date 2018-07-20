@@ -704,10 +704,10 @@ class _Statistics:
         self.num_list_iterations = 0        # Number of iterations over a list in file_hashes
 
     def found_directory(self):
-        self.dircount = self.dircount + 1
+        self.dircount += 1
 
     def found_regular_file(self, pathname):
-        self.regularfiles = self.regularfiles + 1
+        self.regularfiles += 1
         if self.options.debug_level > 4:
             _logging.debug("File          : %s" % pathname)
 
@@ -758,10 +758,10 @@ class _Statistics:
         if self.options.debug_level > 2:
             _logging.debug("Comparing     : %s" % pathname1)
             _logging.debug(" to           : %s" % pathname2)
-        self.comparisons = self.comparisons + 1
+        self.comparisons += 1
 
     def found_equal_comparison(self):
-        self.equal_comparisons = self.equal_comparisons + 1
+        self.equal_comparisons += 1
 
     def found_existing_hardlink(self, src_namepair, dst_namepair, stat_info):
         assert len(src_namepair) == 2
@@ -770,8 +770,8 @@ class _Statistics:
             _logging.debug("Existing link : %s" % _os.path.join(*src_namepair))
             _logging.debug(" with         : %s" % _os.path.join(*dst_namepair))
         filesize = stat_info.st_size
-        self.hardlinked_previously = self.hardlinked_previously + 1
-        self.bytes_saved_previously = self.bytes_saved_previously + filesize
+        self.hardlinked_previously += 1
+        self.bytes_saved_previously += filesize
         if self.options.verbosity > 1:
             if src_namepair not in self.previouslyhardlinked:
                 self.previouslyhardlinked[src_namepair] = (filesize, [dst_namepair])
@@ -794,12 +794,12 @@ class _Statistics:
         self.hardlinkstats.append((tuple(src_namepair),
                                    tuple(dst_namepair)))
         filesize = dst_stat_info.st_size
-        self.hardlinked_thisrun = self.hardlinked_thisrun + 1
+        self.hardlinked_thisrun += 1
         if dst_stat_info.st_nlink == 1:
             # We only save bytes if the last destination link was actually
             # removed.
-            self.bytes_saved_thisrun = self.bytes_saved_thisrun + filesize
-            self.nlinks_to_zero_thisrun = self.nlinks_to_zero_thisrun + 1
+            self.bytes_saved_thisrun += filesize
+            self.nlinks_to_zero_thisrun += 1
 
     def found_hash(self):
         self.num_hash_hits += 1
