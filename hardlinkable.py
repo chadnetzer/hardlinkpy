@@ -4,8 +4,8 @@
 # identical and could be hard-linked together.  Optionally performs the
 # hardlinking.
 #
-# Copyright     2007 - 2018  Chad Netzer and contributors
-# Copyright (C) 2003 - 2018  John L. Villalovos, Hillsboro, Oregon
+# Copyright 2007-2018  Antti Kaihola, Carl Henrik Lunde, Chad Netzer, et al
+# Copyright 2003-2018  John L. Villalovos, Hillsboro, Oregon
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -13,13 +13,13 @@
 # version.
 #
 # This program is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
-# more details.
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+# details.
 #
-# You should have received a copy of the GNU General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc., 59
-# Temple Place, Suite 330, Boston, MA  02111-1307, USA.
+# You should have received a copy of the GNU General Public License along with
+# this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+# Place, Suite 330, Boston, MA  02111-1307, USA.
 
 import filecmp as _filecmp
 import logging as _logging
