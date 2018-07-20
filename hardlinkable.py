@@ -525,6 +525,15 @@ class Hardlinkable:
         dst_dirname, dst_filename, dst_ino, dst_fsdev = dst_tup
         src_pathname = _os.path.join(src_dirname, src_filename)
         dst_pathname = _os.path.join(dst_dirname, dst_filename)
+        src_stat_info = src_fsdev.ino_stat[src_ino]
+        dst_stat_info = dst_fsdev.ino_stat[dst_ino]
+
+        # Quit early if the src or dst files have been updated since we first
+        # lstat()-ed them. The cached mtime needs to be kept up to date for
+        # this to work correctly.
+        if (file_has_been_modified(src_pathname, src_stat_info) or
+            file_has_been_modified(dst_pathname, dst_stat_info)):
+            return False
 
         hardlink_succeeded = False
         # rename the destination file to save it
@@ -560,9 +569,6 @@ class Hardlinkable:
                     # attempts to link to it in the future.
                     _logging.critical("Failed to remove temp filename: %s\n%s" % (tmp_pathname, error))
                     _sys.exit(3)
-
-                src_stat_info = src_fsdev.ino_stat[src_ino]
-                dst_stat_info = dst_fsdev.ino_stat[dst_ino]
 
                 # Use the destination file attributes if it's most recently modified
                 dst_mtime = dst_atime = dst_uid = dst_gid = None
@@ -999,6 +1005,25 @@ def _is_already_hardlinked(st1, st2):
     result = (st1.st_ino == st2.st_ino and  # Inodes equal
               st1.st_dev == st2.st_dev)     # Devices equal
     return result
+
+
+def file_has_been_modified(pathname, stat_info):
+    """Return True if file is known to have been modified."""
+    try:
+        current_stat = _os.lstat(pathname)
+    except OSError:
+        error = _sys.exc_info()[1]
+        _logging.error("Failed to stat: %s\n%s" % (pathname, error))
+        return False
+
+    # Check inode stats to see an indication that the file (or possibly the
+    # inode) was updated.
+    if (current_stat.st_mtime != stat_info.st_mtime or
+        current_stat.st_size != stat_info.st_size or
+        current_stat.st_mode != stat_info.st_mode or
+        current_stat.st_uid != stat_info.st_uid or
+        current_stat.st_gid != stat_info.st_gid):
+        return False
 
 
 def _humanize_number(number):
