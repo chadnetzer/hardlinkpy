@@ -202,20 +202,7 @@ class Hardlinkable:
                     break
 
             if not aborted_early:
-                assert src_tup[3] == dst_tup[3]
-                fsdev = src_tup[3]
-
-                src_namepair, dst_namepair = src_tup[:2], dst_tup[:2]
-                src_ino, dst_ino = src_tup[2], dst_tup[2]
-
-                src_stat_info = fsdev.ino_stat[src_ino]
-                dst_stat_info = fsdev.ino_stat[dst_ino]
-
-                self.stats.did_hardlink(src_namepair, dst_namepair, dst_stat_info)
-
-                self._update_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
-                self._update_stat_info(dst_stat_info, nlink=dst_stat_info.st_nlink - 1)
-                fsdev._move_linked_namepair(dst_namepair, src_ino, dst_ino)
+                self.update_hardlink_caches(src_tup, dst_tup)
 
         if self.options.printstats:
             self.stats.print_stats(aborted_early)
@@ -427,6 +414,23 @@ class Hardlinkable:
 
         fsdev.ino_stat[ino] = stat_info
         fsdev._ino_append_namepair(ino, filename, namepair)
+
+    def update_hardlink_caches(self, src_tup, dst_tup):
+        """Update cached data after hardlink is done."""
+        assert src_tup[3] == dst_tup[3] # Same fs device
+        fsdev = src_tup[3]
+
+        src_namepair, dst_namepair = src_tup[:2], dst_tup[:2]
+        src_ino, dst_ino = src_tup[2], dst_tup[2]
+
+        src_stat_info = fsdev.ino_stat[src_ino]
+        dst_stat_info = fsdev.ino_stat[dst_ino]
+
+        self.stats.did_hardlink(src_namepair, dst_namepair, dst_stat_info)
+
+        self._update_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
+        self._update_stat_info(dst_stat_info, nlink=dst_stat_info.st_nlink - 1)
+        fsdev._move_linked_namepair(dst_namepair, src_ino, dst_ino)
 
     # Determine if a file is eligibile for hardlinking.  Files will only be
     # considered for hardlinking if this function returns true.
