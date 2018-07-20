@@ -519,7 +519,7 @@ class Hardlinkable:
 
         hardlink_succeeded = False
         # rename the destination file to save it
-        tmp_pathname = dst_pathname + ".$$$___cleanit___$$$"
+        tmp_pathname = dst_pathname + "._tmp_while_linking"
         try:
             _os.rename(dst_pathname, tmp_pathname)
         except OSError:
