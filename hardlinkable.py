@@ -185,14 +185,23 @@ class Hardlinkable:
 
     def run(self, directories):
         """Run link scan, and perform linking if requested.  Return stats."""
+        aborted_early = False
         for (src_tup, dst_tup) in self._sorted_links(directories):
-            hardlink_succeeded = False
             if self.options.linking_enabled:
                 # DO NOT call hardlink_files() unless link creation
                 # is selected. It unconditionally performs links.
                 hardlink_succeeded = self._hardlink_files(src_tup, dst_tup)
 
-            if not self.options.linking_enabled or hardlink_succeeded:
+                # If hardlinking fails, we assume the worst and abort early.
+                # This is partly because it could mean the filesystem tree is
+                # being modified underneath us, which we aren't prepared to
+                # deal with.
+                if not hardlink_succeeded:
+                    _logging.error("Hardlinking failed. Aborting early... Statistics may be incomplete")
+                    aborted_early = True
+                    break
+
+            if not aborted_early:
                 assert src_tup[3] == dst_tup[3]
                 fsdev = src_tup[3]
 
@@ -209,7 +218,7 @@ class Hardlinkable:
                 fsdev._move_linked_namepair(dst_namepair, src_ino, dst_ino)
 
         if self.options.printstats:
-            self.stats.print_stats()
+            self.stats.print_stats(aborted_early)
 
         # double check figures based on direct inode stats
         postlink_inode_stats = self._inode_stats()
@@ -808,8 +817,11 @@ class _Statistics:
     def inc_hash_list_iteration(self):
         self.num_list_iterations += 1
 
-    def print_stats(self):
-        print("Hard linking statistics")
+    def print_stats(self, possibly_incomplete=False):
+        if possibly_incomplete:
+            print("Hard linking statistics (possibly incomplete due to errors)")
+        else:
+            print("Hard linking statistics")
         print("-----------------------")
         # Print out the stats for the files we hardlinked, if any
         if self.options.verbosity > 1 and self.previouslyhardlinked:
