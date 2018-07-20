@@ -185,38 +185,30 @@ class Hardlinkable:
 
     def run(self, directories):
         """Run link scan, and perform linking if requested.  Return stats."""
+        aborted_early = False
         for (src_tup, dst_tup) in self._sorted_links(directories):
-            hardlink_succeeded = False
             if self.options.linking_enabled:
                 # DO NOT call hardlink_files() unless link creation
                 # is selected. It unconditionally performs links.
                 hardlink_succeeded = self._hardlink_files(src_tup, dst_tup)
 
-            if not self.options.linking_enabled or hardlink_succeeded:
-                assert src_tup[3] == dst_tup[3]
-                fsdev = src_tup[3]
+                # If hardlinking fails, we assume the worst and abort early.
+                # This is partly because it could mean the filesystem tree is
+                # being modified underneath us, which we aren't prepared to
+                # deal with.
+                if not hardlink_succeeded:
+                    _logging.error("Hardlinking failed. Aborting early... Statistics may be incomplete")
+                    aborted_early = True
+                    break
 
-                src_namepair, dst_namepair = src_tup[:2], dst_tup[:2]
-                src_ino, dst_ino = src_tup[2], dst_tup[2]
-
-                src_stat_info = fsdev.ino_stat[src_ino]
-                dst_stat_info = fsdev.ino_stat[dst_ino]
-
-                self.stats.did_hardlink(src_namepair, dst_namepair, dst_stat_info)
-
-                self._update_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
-                self._update_stat_info(dst_stat_info, nlink=dst_stat_info.st_nlink - 1)
-                fsdev._move_linked_namepair(dst_namepair, src_ino, dst_ino)
+            assert not aborted_early
+            self.update_hardlink_caches(src_tup, dst_tup)
 
         if self.options.printstats:
-            self.stats.print_stats()
+            self.stats.print_stats(aborted_early)
 
-        # double check figures based on direct inode stats
-        postlink_inode_stats = self._inode_stats()
-        totalsavedbytes = self.stats.bytes_saved_thisrun + self.stats.bytes_saved_previously
-        bytes_saved_thisrun = postlink_inode_stats['total_saved_bytes'] - self._prelink_inode_stats['total_saved_bytes']
-        assert totalsavedbytes == postlink_inode_stats['total_saved_bytes'], (totalsavedbytes, postlink_inode_stats['total_saved_bytes'])
-        assert self.stats.bytes_saved_thisrun == bytes_saved_thisrun
+        if not aborted_early:
+            self._postlink_inode_stats_sanity_check(self._prelink_inode_stats)
 
         return self.stats
 
@@ -344,20 +336,6 @@ class Hardlinkable:
                             dst_nlink -= 1
                             assert dst_nlink >= 0
 
-    def _inode_stats(self):
-        total_inodes = 0
-        total_bytes = 0
-        total_saved_bytes = 0 # Each nlink > 1 is counted as "saved" space
-        for fsdev in self._fsdevs.values():
-            for ino, stat_info in fsdev.ino_stat.items():
-                total_inodes += 1
-                total_bytes += stat_info.st_size
-                count = fsdev._count_nlinks_this_inode(ino)
-                total_saved_bytes += (stat_info.st_size * (count - 1))
-        return {'total_inodes' : total_inodes,
-                'total_bytes': total_bytes,
-                'total_saved_bytes': total_saved_bytes}
-
     # dirname is the directory component and filename is just the file name
     # component (ie. the basename) without the path.  The tree walking provides
     # this, so we don't have to extract it with _os.path.split()
@@ -418,6 +396,23 @@ class Hardlinkable:
 
         fsdev.ino_stat[ino] = stat_info
         fsdev._ino_append_namepair(ino, filename, namepair)
+
+    def update_hardlink_caches(self, src_tup, dst_tup):
+        """Update cached data after hardlink is done."""
+        assert src_tup[3] == dst_tup[3] # Same fs device
+        fsdev = src_tup[3]
+
+        src_namepair, dst_namepair = src_tup[:2], dst_tup[:2]
+        src_ino, dst_ino = src_tup[2], dst_tup[2]
+
+        src_stat_info = fsdev.ino_stat[src_ino]
+        dst_stat_info = fsdev.ino_stat[dst_ino]
+
+        self.stats.did_hardlink(src_namepair, dst_namepair, dst_stat_info)
+
+        self._update_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
+        self._update_stat_info(dst_stat_info, nlink=dst_stat_info.st_nlink - 1)
+        fsdev._move_linked_namepair(dst_namepair, src_ino, dst_ino)
 
     # Determine if a file is eligibile for hardlinking.  Files will only be
     # considered for hardlinking if this function returns true.
@@ -516,6 +511,15 @@ class Hardlinkable:
         dst_dirname, dst_filename, dst_ino, dst_fsdev = dst_tup
         src_pathname = _os.path.join(src_dirname, src_filename)
         dst_pathname = _os.path.join(dst_dirname, dst_filename)
+        src_stat_info = src_fsdev.ino_stat[src_ino]
+        dst_stat_info = dst_fsdev.ino_stat[dst_ino]
+
+        # Quit early if the src or dst files have been updated since we first
+        # lstat()-ed them. The cached mtime needs to be kept up to date for
+        # this to work correctly.
+        if (file_has_been_modified(src_pathname, src_stat_info) or
+            file_has_been_modified(dst_pathname, dst_stat_info)):
+            return False
 
         hardlink_succeeded = False
         # rename the destination file to save it
@@ -552,11 +556,8 @@ class Hardlinkable:
                     _logging.critical("Failed to remove temp filename: %s\n%s" % (tmp_pathname, error))
                     _sys.exit(3)
 
-                src_stat_info = src_fsdev.ino_stat[src_ino]
-                dst_stat_info = dst_fsdev.ino_stat[dst_ino]
-
-                # Use the destination file attributes if it's most recently modified
-                dst_mtime = dst_atime = dst_uid = dst_gid = None
+                # Use the destination file times if it's most recently modified
+                dst_mtime = dst_atime = None
                 if dst_stat_info.st_mtime > src_stat_info.st_mtime:
                     try:
                         _os.utime(src_pathname, (dst_stat_info.st_atime, dst_stat_info.st_mtime))
@@ -566,20 +567,34 @@ class Hardlinkable:
                         error = _sys.exc_info()[1]
                         _logging.warning("Failed to update file time attributes for %s\n%s" % (src_pathname, error))
 
-                    try:
-                        _os.chown(src_pathname, dst_stat_info.st_uid, dst_stat_info.st_gid)
-                        dst_uid = dst_stat_info.st_uid
-                        dst_gid = dst_stat_info.st_gid
-                    except Exception:
-                        error = _sys.exc_info()[1]
-                        _logging.warning("Failed to update file owner attributes for %s\n%s" % (src_pathname, error))
-
                     self._update_stat_info(src_stat_info,
                                            mtime=dst_mtime,
-                                           atime=dst_atime,
-                                           uid=dst_uid,
-                                           gid=dst_gid)
+                                           atime=dst_atime)
         return hardlink_succeeded
+
+    def _inode_stats(self):
+        """Gather some basic inode stats from caches."""
+        total_inodes = 0
+        total_bytes = 0
+        total_saved_bytes = 0 # Each nlink > 1 is counted as "saved" space
+        for fsdev in self._fsdevs.values():
+            for ino, stat_info in fsdev.ino_stat.items():
+                total_inodes += 1
+                total_bytes += stat_info.st_size
+                count = fsdev._count_nlinks_this_inode(ino)
+                total_saved_bytes += (stat_info.st_size * (count - 1))
+        return {'total_inodes' : total_inodes,
+                'total_bytes': total_bytes,
+                'total_saved_bytes': total_saved_bytes}
+
+    def _postlink_inode_stats_sanity_check(self, prelink_inode_stats):
+        """Check stats directly from inode data."""
+        # double check figures based on direct inode stats
+        postlink_inode_stats = self._inode_stats()
+        totalsavedbytes = self.stats.bytes_saved_thisrun + self.stats.bytes_saved_previously
+        bytes_saved_thisrun = postlink_inode_stats['total_saved_bytes'] - prelink_inode_stats['total_saved_bytes']
+        assert totalsavedbytes == postlink_inode_stats['total_saved_bytes'], (totalsavedbytes, postlink_inode_stats['total_saved_bytes'])
+        assert self.stats.bytes_saved_thisrun == bytes_saved_thisrun
 
 
 class _FSDev:
@@ -783,14 +798,12 @@ class _Statistics:
         self.num_inodes += 1
 
     def did_hardlink(self, src_namepair, dst_namepair, dst_stat_info):
-        # nlink count is not necessarily accurate at the moment
         self.hardlinkstats.append((tuple(src_namepair),
                                    tuple(dst_namepair)))
         filesize = dst_stat_info.st_size
         self.hardlinked_thisrun += 1
         if dst_stat_info.st_nlink == 1:
-            # We only save bytes if the last destination link was actually
-            # removed.
+            # We only save bytes if the last link was actually removed.
             self.bytes_saved_thisrun += filesize
             self.nlinks_to_zero_thisrun += 1
 
@@ -808,8 +821,11 @@ class _Statistics:
     def inc_hash_list_iteration(self):
         self.num_list_iterations += 1
 
-    def print_stats(self):
-        print("Hard linking statistics")
+    def print_stats(self, possibly_incomplete=False):
+        if possibly_incomplete:
+            print("Hard linking statistics (possibly incomplete due to errors)")
+        else:
+            print("Hard linking statistics")
         print("-----------------------")
         # Print out the stats for the files we hardlinked, if any
         if self.options.verbosity > 1 and self.previouslyhardlinked:
@@ -987,6 +1003,25 @@ def _is_already_hardlinked(st1, st2):
     result = (st1.st_ino == st2.st_ino and  # Inodes equal
               st1.st_dev == st2.st_dev)     # Devices equal
     return result
+
+
+def file_has_been_modified(pathname, stat_info):
+    """Return True if file is known to have been modified."""
+    try:
+        current_stat = _os.lstat(pathname)
+    except OSError:
+        error = _sys.exc_info()[1]
+        _logging.error("Failed to stat: %s\n%s" % (pathname, error))
+        return False
+
+    # Check inode stats to see an indication that the file (or possibly the
+    # inode) was updated.
+    if (current_stat.st_mtime != stat_info.st_mtime or
+        current_stat.st_size != stat_info.st_size or
+        current_stat.st_mode != stat_info.st_mode or
+        current_stat.st_uid != stat_info.st_uid or
+        current_stat.st_gid != stat_info.st_gid):
+        return False
 
 
 def _humanize_number(number):
