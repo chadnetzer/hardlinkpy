@@ -350,8 +350,8 @@ class Hardlinkable:
         if ino not in fsdev.ino_stat:
             self.stats.found_inode()
 
-        file_hash = _hash_value(stat_info, options)
-        if file_hash in fsdev.file_hashes:
+        inode_hash = _hash_value(stat_info, options)
+        if inode_hash in fsdev.inode_hashes:
             self.stats.found_hash()
             # See if the new file has the same inode as one we've already seen.
             if ino in fsdev.ino_stat:
@@ -362,13 +362,13 @@ class Hardlinkable:
             # We have file(s) that have the same hash as our current file.
             # Let's go through the list of files with the same hash and see if
             # we are already hardlinked to any of them.
-            found_cached_ino = (ino in fsdev.file_hashes[file_hash])
+            found_cached_ino = (ino in fsdev.inode_hashes[inode_hash])
             if (not found_cached_ino or
                 (options.samename and not fsdev._ino_has_filename(ino, filename))):
                 # We did not find this file as hardlinked to any other file
                 # yet.  So now lets see if our file should be hardlinked to any
                 # of the other files with the same hash.
-                for cached_ino in fsdev.file_hashes[file_hash]:
+                for cached_ino in fsdev.inode_hashes[inode_hash]:
                     self.stats.inc_hash_list_iteration()
                     if (options.samename and not fsdev._ino_has_filename(cached_ino, filename)):
                         continue
@@ -384,13 +384,13 @@ class Hardlinkable:
                     # The file should NOT be hardlinked to any of the other
                     # files with the same hash.  So we will add it to the list
                     # of files.
-                    fsdev.file_hashes[file_hash].add(ino)
+                    fsdev.inode_hashes[inode_hash].add(ino)
                     fsdev.ino_stat[ino] = stat_info
                     self.stats.no_hash_match()
-        else: # if file_hash NOT in file_hashes
+        else: # if inode_hash NOT in inode_hashes
             # There weren't any other files with the same hash value so we will
             # create a new entry and store our file.
-            fsdev.file_hashes[file_hash] = set([ino])
+            fsdev.inode_hashes[inode_hash] = set([ino])
             assert ino not in fsdev.ino_stat
             self.stats.missed_hash()
 
@@ -604,8 +604,8 @@ class _FSDev:
         self.max_nlinks = max_nlinks  # Can be None
 
         # For each hash value, track inode (and optionally filename)
-        # file_hashes <- {hash_val: set(ino)}
-        self.file_hashes = {}
+        # inode_hashes <- {hash_val: set(ino)}
+        self.inode_hashes = {}
 
         # Keep track of per-inode stat info
         # ino_stat <- {st_ino: stat_info}
@@ -706,10 +706,10 @@ class _Statistics:
         self.previouslyhardlinked = {}      # list of files hardlinked previously
 
         # Debugging stats
-        self.num_hash_hits = 0              # Amount of times a hash is found in file_hashes
-        self.num_hash_misses = 0            # Amount of times a hash is not found in file_hashes
+        self.num_hash_hits = 0              # Amount of times a hash is found in inode_hashes
+        self.num_hash_misses = 0            # Amount of times a hash is not found in inode_hashes
         self.num_hash_mismatches = 0        # Times a hash is found, but is not a file match
-        self.num_list_iterations = 0        # Number of iterations over a list in file_hashes
+        self.num_list_iterations = 0        # Number of iterations over a list in inode_hashes
 
     def found_directory(self):
         self.dircount += 1
