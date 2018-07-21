@@ -349,7 +349,7 @@ class Hardlinkable:
         if ino not in fsdev.ino_stat:
             self.stats.found_inode()
 
-        inode_hash = _hash_value(stat_info, options)
+        inode_hash = _stat_hash_value(stat_info, options)
         if inode_hash in fsdev.inode_hashes:
             self.stats.found_hash()
             # See if the new file has the same inode as one we've already seen.
@@ -928,7 +928,7 @@ class _Statistics:
 
 ### Module functions ###
 
-def _hash_value(stat_info, options):
+def _stat_hash_value(stat_info, options):
     """Return a value appropriate for a python dict or shelve key, which can
     differentiate files which cannot be hardlinked."""
     size = stat_info.st_size
