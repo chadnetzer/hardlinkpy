@@ -204,8 +204,7 @@ class Hardlinkable:
             assert not aborted_early
             self.update_hardlink_caches(src_tup, dst_tup)
 
-        if self.options.printstats:
-            self.stats.print_stats(aborted_early)
+        self.stats.print_stats(aborted_early)
 
         if not aborted_early:
             self._postlink_inode_stats_sanity_check(self._prelink_inode_stats)
@@ -822,13 +821,15 @@ class _Statistics:
         self.num_list_iterations += 1
 
     def print_stats(self, possibly_incomplete=False):
+        if not self.options.printstats:
+            return
+
         if possibly_incomplete:
-            print("Hard linking statistics (possibly incomplete due to errors)")
-        else:
-            print("Hard linking statistics")
-        print("-----------------------")
-        # Print out the stats for the files we hardlinked, if any
+            print("Statistics possibly incomplete due to errors")
+
         if self.options.verbosity > 1 and self.previouslyhardlinked:
+            print("Currently hardlinked files")
+            print("-----------------------")
             keys = list(self.previouslyhardlinked.keys())
             keys.sort()  # Could use sorted() once we only support >= Python 2.4
             for key in keys:
@@ -839,16 +840,20 @@ class _Statistics:
                     print("                    : %s" % pathname)
                 print("Size per file: %s  Total saved: %s" % (_humanize_number(size),
                                                               _humanize_number(size * len(file_list))))
-            print("-----------------------")
+            print("")
+        # Print out the stats for the files we hardlinked, if any
         if self.options.verbosity > 0 and self.hardlinkstats:
-            if not self.options.linking_enabled:
-                print("Files that are hardlinkable:")
+            if self.options.linking_enabled:
+                print("Files that were hardlinked this run")
             else:
-                print("Files that were hardlinked this run:")
+                print("Files that are hardlinkable")
+            print("-----------------------")
             for (src_namepair, dst_namepair) in self.hardlinkstats:
                 print("from: %s" % _os.path.join(*src_namepair))
                 print("  to: %s" % _os.path.join(*dst_namepair))
-            print("-----------------------")
+            print("")
+        print("Hard linking statistics")
+        print("-----------------------")
         if not self.options.linking_enabled:
             print("Statistics reflect what would result if actual linking were enabled")
         print("Directories                : %s" % self.dircount)
