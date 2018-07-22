@@ -47,7 +47,7 @@ try:
 except NameError:
     _intern = _sys.intern
 
-__all__ = ["Hardlinkable"]
+__all__ = ["Hardlinkable", "LinkingStats"]
 
 # global declarations
 __version__ = '0.8'
@@ -176,7 +176,7 @@ class Hardlinkable:
         if options is None:
             options = _parse_command_line(get_default_options=True)
         self.options = options
-        self.stats = _Statistics(options)
+        self.stats = LinkingStats(options)
         self._fsdevs = {}
 
     def linkables(self, directories):
@@ -690,7 +690,7 @@ class _FSDev:
         return count
 
 
-class _Statistics:
+class LinkingStats:
     def __init__(self, options):
         self.options = options
         self.reset()
