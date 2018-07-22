@@ -47,7 +47,7 @@ try:
 except NameError:
     _intern = _sys.intern
 
-__all__ = ["Hardlinkable"]
+__all__ = ["Hardlinkable", "LinkingStats"]
 
 # global declarations
 __version__ = '0.8'
@@ -176,7 +176,7 @@ class Hardlinkable:
         if options is None:
             options = _parse_command_line(get_default_options=True)
         self.options = options
-        self.stats = _Statistics(options)
+        self.stats = LinkingStats(options)
         self._fsdevs = {}
 
     def linkables(self, directories):
@@ -208,7 +208,7 @@ class Hardlinkable:
                     break
 
             assert not aborted_early
-            self.update_hardlink_caches(src_tup, dst_tup)
+            self._update_hardlink_caches(src_tup, dst_tup)
 
         self.stats.print_stats(aborted_early)
 
@@ -292,14 +292,6 @@ class Hardlinkable:
                     filename = _intern(filename)
                     yield (dirname, filename, stat_info)
 
-    def _get_fsdev(self, st_dev, max_nlinks=None):
-        """Return an FSDev for given stat_info.st_dev"""
-        fsdev = self._fsdevs.get(st_dev, None)
-        if fsdev is None:
-            fsdev = _FSDev(st_dev, max_nlinks)
-            self._fsdevs[st_dev] = fsdev
-        return fsdev
-
     def _sorted_links(self, directories):
         """Perform the walk, collect and sort linking data, and yield link tuples."""
         for dirname, filename, stat_info in self.matched_file_info(directories):
@@ -320,7 +312,7 @@ class Hardlinkable:
                     # terminate.
                     src_nlink, src_ino = nlinks_list[0]
                     nlinks_list = nlinks_list[1:]
-                    src_dirname, src_filename = fsdev._arbitrary_namepair_from_ino(src_ino)
+                    src_dirname, src_filename = fsdev.arbitrary_namepair_from_ino(src_ino)
                     while nlinks_list:
                         # Always removes last element, so loop must terminate
                         dst_nlink, dst_ino = nlinks_list.pop()
@@ -365,7 +357,7 @@ class Hardlinkable:
             self.stats.found_hash()
             # See if the new file has the same inode as one we've already seen.
             if ino in fsdev.ino_stat:
-                prev_namepair = fsdev._arbitrary_namepair_from_ino(ino)
+                prev_namepair = fsdev.arbitrary_namepair_from_ino(ino)
                 prev_stat_info = fsdev.ino_stat[ino]
                 self.stats.found_existing_hardlink(prev_namepair, namepair, prev_stat_info)
             # We have file(s) that have the same hash as our current file.  If
@@ -386,8 +378,8 @@ class Hardlinkable:
                         continue
 
                     # Get cached file_info, mindful of samename matching
-                    cached_file_info = fsdev._fileinfo_from_ino(cached_ino,
-                                                                options.samename and filename)
+                    cached_file_info = fsdev.fileinfo_from_ino(cached_ino,
+                                                               options.samename and filename)
 
                     if self._are_files_hardlinkable(cached_file_info, file_info):
                         self._found_hardlinkable_file(cached_file_info, file_info)
@@ -402,121 +394,7 @@ class Hardlinkable:
 
         # Always add the new file to the stored inode information
         fsdev.ino_stat[ino] = stat_info
-        fsdev._ino_append_namepair(ino, filename, namepair)
-
-    def _ino_missing_samename(self, fsdev, ino, filename):
-        if self.options.samename:
-            if not fsdev._ino_has_filename(ino, filename):
-                return True
-        return False
-
-    def update_hardlink_caches(self, src_tup, dst_tup):
-        """Update cached data after hardlink is done."""
-        assert src_tup[3] == dst_tup[3] # Same fs device
-        fsdev = src_tup[3]
-
-        src_namepair, dst_namepair = src_tup[:2], dst_tup[:2]
-        src_ino, dst_ino = src_tup[2], dst_tup[2]
-
-        src_stat_info = fsdev.ino_stat[src_ino]
-        dst_stat_info = fsdev.ino_stat[dst_ino]
-
-        self.stats.did_hardlink(src_namepair, dst_namepair, dst_stat_info)
-
-        self._update_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
-        self._update_stat_info(dst_stat_info, nlink=dst_stat_info.st_nlink - 1)
-        fsdev._move_linked_namepair(dst_namepair, src_ino, dst_ino)
-
-    # Determine if a file is eligibile for hardlinking.  Files will only be
-    # considered for hardlinking if this function returns true.
-    def _eligible_for_hardlink(self, st1, st2):
-        options = self.options
-        # A chain of required criteria:
-        result = (not _is_already_hardlinked(st1, st2) and
-                  st1.st_dev == st2.st_dev and
-                  st1.st_size == st2.st_size)
-
-        if not options.contentonly:
-            result = (result and
-                    (options.ignore_time or st1.st_mtime == st2.st_mtime) and
-                    (options.ignore_perm or st1.st_mode == st2.st_mode)   and
-                    (st1.st_uid == st2.st_uid and st1.st_gid == st2.st_gid))
-
-        fsdev = self._get_fsdev(st1.st_dev)
-        if result and (fsdev.max_nlinks is not None):
-            # The justification for not linking a pair of files if their nlinks sum
-            # to more than the device maximum, is that linking them won't change
-            # the overall link count, meaning no space saving is possible overall
-            # even when all their filenames are found and re-linked.
-            result = ((st1.st_nlink + st2.st_nlink) <= fsdev.max_nlinks)
-
-        # Add some stats on the factors which may have falsified result
-        if st1.st_mtime != st2.st_mtime:
-            self.stats.found_mismatched_time()
-        if st1.st_mode != st2.st_mode:
-            self.stats.found_mismatched_mode()
-        if (st1.st_uid != st2.st_uid or st1.st_gid != st2.st_gid):
-            self.stats.found_mismatched_ownership()
-
-        return result
-
-    def _are_file_contents_equal(self, pathname1, pathname2):
-        """Determine if the contents of two files are equal"""
-        self.stats.did_comparison(pathname1, pathname2)
-        result = _filecmp.cmp(pathname1, pathname2, shallow=False)
-        if result:
-            self.stats.found_equal_comparison()
-        return result
-
-    # Determines if two files should be hard linked together.
-    def _are_files_hardlinkable(self, file_info1, file_info2):
-        dirname1,filename1,stat1 = file_info1
-        dirname2,filename2,stat2 = file_info2
-        assert not self.options.samename or filename1 == filename2
-        if not self._eligible_for_hardlink(stat1, stat2):
-            result = False
-        else:
-            result = self._are_file_contents_equal(_os.path.join(dirname1,filename1),
-                                                   _os.path.join(dirname2,filename2))
-        return result
-
-    def _found_hardlinkable_file(self, src_file_info, dst_file_info):
-        src_dirname, src_filename, src_stat_info = src_file_info
-        dst_dirname, dst_filename, dst_stat_info = dst_file_info
-
-        self.stats.found_hardlinkable((src_dirname, src_filename),
-                                      (dst_dirname, dst_filename))
-
-        assert src_stat_info.st_dev == dst_stat_info.st_dev
-        fsdev = self._get_fsdev(src_stat_info.st_dev)
-        fsdev._add_linked_inodes(src_stat_info.st_ino, dst_stat_info.st_ino)
-
-    def _update_stat_info(self, stat_info, nlink=None, mtime=None, atime=None, uid=None, gid=None):
-        """Updates an ino_stat stat_info with the given values."""
-        l = list(stat_info)
-        if nlink is not None:
-            l[_stat.ST_NLINK] = nlink
-        if mtime is not None:
-            l[_stat.ST_MTIME] = mtime
-        if atime is not None:
-            l[_stat.ST_ATIME] = atime
-        if uid is not None:
-            l[_stat.ST_UID] = uid
-        if gid is not None:
-            l[_stat.ST_GID] = gid
-
-        fsdev = self._get_fsdev(stat_info.st_dev)
-        fsdev.ino_stat[stat_info.st_ino] = stat_info.__class__(l)
-        if fsdev.ino_stat[stat_info.st_ino].st_nlink < 1:
-            assert fsdev.ino_stat[stat_info.st_ino].st_nlink == 0
-            del fsdev.ino_stat[stat_info.st_ino]
-
-    def _updated_file_info(self, file_info):
-        """Return a file_info tuple with the current stat_info value."""
-        dirname, filename, stat_info = file_info
-        fsdev = self._get_fsdev(stat_info.st_dev)
-        new_file_info = (dirname, filename, fsdev.ino_stat[stat_info.st_ino])
-        return new_file_info
+        fsdev.ino_append_namepair(ino, filename, namepair)
 
     def _hardlink_files(self, src_tup, dst_tup):
         """Actually perform the filesystem hardlinking of two files."""
@@ -585,6 +463,128 @@ class Hardlinkable:
                                            atime=dst_atime)
         return hardlink_succeeded
 
+    def _get_fsdev(self, st_dev, max_nlinks=None):
+        """Return an FSDev for given stat_info.st_dev"""
+        fsdev = self._fsdevs.get(st_dev, None)
+        if fsdev is None:
+            fsdev = _FSDev(st_dev, max_nlinks)
+            self._fsdevs[st_dev] = fsdev
+        return fsdev
+
+    def _ino_missing_samename(self, fsdev, ino, filename):
+        if self.options.samename:
+            if not fsdev.ino_has_filename(ino, filename):
+                return True
+        return False
+
+    def _update_hardlink_caches(self, src_tup, dst_tup):
+        """Update cached data after hardlink is done."""
+        assert src_tup[3] == dst_tup[3] # Same fs device
+        fsdev = src_tup[3]
+
+        src_namepair, dst_namepair = src_tup[:2], dst_tup[:2]
+        src_ino, dst_ino = src_tup[2], dst_tup[2]
+
+        src_stat_info = fsdev.ino_stat[src_ino]
+        dst_stat_info = fsdev.ino_stat[dst_ino]
+
+        self.stats.did_hardlink(src_namepair, dst_namepair, dst_stat_info)
+
+        self._update_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
+        self._update_stat_info(dst_stat_info, nlink=dst_stat_info.st_nlink - 1)
+        fsdev.move_linked_namepair(dst_namepair, src_ino, dst_ino)
+
+    # Determine if a file is eligibile for hardlinking.  Files will only be
+    # considered for hardlinking if this function returns true.
+    def _eligible_for_hardlink(self, st1, st2):
+        options = self.options
+        # A chain of required criteria:
+        result = (not _is_already_hardlinked(st1, st2) and
+                  st1.st_dev == st2.st_dev and
+                  st1.st_size == st2.st_size)
+
+        if not options.contentonly:
+            result = (result and
+                    (options.ignore_time or st1.st_mtime == st2.st_mtime) and
+                    (options.ignore_perm or st1.st_mode == st2.st_mode)   and
+                    (st1.st_uid == st2.st_uid and st1.st_gid == st2.st_gid))
+
+        fsdev = self._get_fsdev(st1.st_dev)
+        if result and (fsdev.max_nlinks is not None):
+            # The justification for not linking a pair of files if their nlinks sum
+            # to more than the device maximum, is that linking them won't change
+            # the overall link count, meaning no space saving is possible overall
+            # even when all their filenames are found and re-linked.
+            result = ((st1.st_nlink + st2.st_nlink) <= fsdev.max_nlinks)
+
+        # Add some stats on the factors which may have falsified result
+        if st1.st_mtime != st2.st_mtime:
+            self.stats.found_mismatched_time()
+        if st1.st_mode != st2.st_mode:
+            self.stats.found_mismatched_mode()
+        if (st1.st_uid != st2.st_uid or st1.st_gid != st2.st_gid):
+            self.stats.found_mismatched_ownership()
+
+        return result
+
+    def _are_file_contents_equal(self, pathname1, pathname2):
+        """Determine if the contents of two files are equal"""
+        self.stats.did_comparison(pathname1, pathname2)
+        result = _filecmp.cmp(pathname1, pathname2, shallow=False)
+        if result:
+            self.stats.found_equal_comparison()
+        return result
+
+    # Determines if two files should be hard linked together.
+    def _are_files_hardlinkable(self, file_info1, file_info2):
+        dirname1,filename1,stat1 = file_info1
+        dirname2,filename2,stat2 = file_info2
+        assert not self.options.samename or filename1 == filename2
+        if not self._eligible_for_hardlink(stat1, stat2):
+            result = False
+        else:
+            result = self._are_file_contents_equal(_os.path.join(dirname1,filename1),
+                                                   _os.path.join(dirname2,filename2))
+        return result
+
+    def _found_hardlinkable_file(self, src_file_info, dst_file_info):
+        src_dirname, src_filename, src_stat_info = src_file_info
+        dst_dirname, dst_filename, dst_stat_info = dst_file_info
+
+        self.stats.found_hardlinkable((src_dirname, src_filename),
+                                      (dst_dirname, dst_filename))
+
+        assert src_stat_info.st_dev == dst_stat_info.st_dev
+        fsdev = self._get_fsdev(src_stat_info.st_dev)
+        fsdev.add_linked_inodes(src_stat_info.st_ino, dst_stat_info.st_ino)
+
+    def _update_stat_info(self, stat_info, nlink=None, mtime=None, atime=None, uid=None, gid=None):
+        """Updates an ino_stat stat_info with the given values."""
+        l = list(stat_info)
+        if nlink is not None:
+            l[_stat.ST_NLINK] = nlink
+        if mtime is not None:
+            l[_stat.ST_MTIME] = mtime
+        if atime is not None:
+            l[_stat.ST_ATIME] = atime
+        if uid is not None:
+            l[_stat.ST_UID] = uid
+        if gid is not None:
+            l[_stat.ST_GID] = gid
+
+        fsdev = self._get_fsdev(stat_info.st_dev)
+        fsdev.ino_stat[stat_info.st_ino] = stat_info.__class__(l)
+        if fsdev.ino_stat[stat_info.st_ino].st_nlink < 1:
+            assert fsdev.ino_stat[stat_info.st_ino].st_nlink == 0
+            del fsdev.ino_stat[stat_info.st_ino]
+
+    def _updated_file_info(self, file_info):
+        """Return a file_info tuple with the current stat_info value."""
+        dirname, filename, stat_info = file_info
+        fsdev = self._get_fsdev(stat_info.st_dev)
+        new_file_info = (dirname, filename, fsdev.ino_stat[stat_info.st_ino])
+        return new_file_info
+
     def _inode_stats(self):
         """Gather some basic inode stats from caches."""
         total_inodes = 0
@@ -594,7 +594,7 @@ class Hardlinkable:
             for ino, stat_info in fsdev.ino_stat.items():
                 total_inodes += 1
                 total_bytes += stat_info.st_size
-                count = fsdev._count_nlinks_this_inode(ino)
+                count = fsdev.count_nlinks_this_inode(ino)
                 total_saved_bytes += (stat_info.st_size * (count - 1))
         return {'total_inodes' : total_inodes,
                 'total_bytes': total_bytes,
@@ -635,19 +635,19 @@ class _FSDev:
         # linked_inodes = {largest_ino_num: set(ino_nums)}
         self.linked_inodes = {}
 
-    def _arbitrary_namepair_from_ino(self, ino):
+    def arbitrary_namepair_from_ino(self, ino):
         # Get the dict of filename: [pathnames] for ino_key
         d = self.ino_pathnames[ino]
         # Get an arbitrary pathnames list
         l = next(iter(d.values()))
         return l[0]
 
-    def _ino_append_namepair(self, ino, filename, namepair):
+    def ino_append_namepair(self, ino, filename, namepair):
         d = self.ino_pathnames.setdefault(ino, {})
         l = d.setdefault(filename, [])
         l.append(namepair)
 
-    def _fileinfo_from_ino(self, ino, filename=None):
+    def fileinfo_from_ino(self, ino, filename=None):
         """When filename is None, chooses an arbitrary namepair linked to the inode"""
         if filename:
             assert ino in self.ino_pathnames
@@ -655,14 +655,14 @@ class _FSDev:
             l = self.ino_pathnames[ino][filename]
             dirname, filename = l[0]
         else:
-            dirname, filename = self._arbitrary_namepair_from_ino(ino)
+            dirname, filename = self.arbitrary_namepair_from_ino(ino)
         return (dirname, filename, self.ino_stat[ino])
 
-    def _ino_has_filename(self, ino, filename):
+    def ino_has_filename(self, ino, filename):
         """Return true if the given ino has 'filename' linked to it."""
         return (filename in self.ino_pathnames[ino])
 
-    def _add_linked_inodes(self, ino1, ino2):
+    def add_linked_inodes(self, ino1, ino2):
         """Adds to the dictionary of ino1 to ino2 mappings."""
         assert ino1 != ino2
         s = self.linked_inodes.setdefault(ino1, set())
@@ -670,7 +670,7 @@ class _FSDev:
         s = self.linked_inodes.setdefault(ino2, set())
         s.add(ino1)
 
-    def _move_linked_namepair(self, namepair, src_ino, dst_ino):
+    def move_linked_namepair(self, namepair, src_ino, dst_ino):
         """Move namepair from dst_ino to src_ino (yes, backwards)"""
         dirname, filename = namepair
         pathnames = self.ino_pathnames[dst_ino][filename]
@@ -678,9 +678,9 @@ class _FSDev:
         assert namepair not in pathnames
         if not pathnames:
             del self.ino_pathnames[dst_ino][filename]
-        self._ino_append_namepair(src_ino, filename, namepair)
+        self.ino_append_namepair(src_ino, filename, namepair)
 
-    def _count_nlinks_this_inode(self, ino):
+    def count_nlinks_this_inode(self, ino):
         """Because of file matching and exclusions, the number of links that we
         care about may not equal the total nlink count for the inode."""
         # Count the number of links to this inode that we have discovered
@@ -690,7 +690,7 @@ class _FSDev:
         return count
 
 
-class _Statistics:
+class LinkingStats:
     def __init__(self, options):
         self.options = options
         self.reset()
