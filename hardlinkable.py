@@ -292,14 +292,6 @@ class Hardlinkable:
                     filename = _intern(filename)
                     yield (dirname, filename, stat_info)
 
-    def _get_fsdev(self, st_dev, max_nlinks=None):
-        """Return an FSDev for given stat_info.st_dev"""
-        fsdev = self._fsdevs.get(st_dev, None)
-        if fsdev is None:
-            fsdev = _FSDev(st_dev, max_nlinks)
-            self._fsdevs[st_dev] = fsdev
-        return fsdev
-
     def _sorted_links(self, directories):
         """Perform the walk, collect and sort linking data, and yield link tuples."""
         for dirname, filename, stat_info in self.matched_file_info(directories):
@@ -403,6 +395,14 @@ class Hardlinkable:
         # Always add the new file to the stored inode information
         fsdev.ino_stat[ino] = stat_info
         fsdev.ino_append_namepair(ino, filename, namepair)
+
+    def _get_fsdev(self, st_dev, max_nlinks=None):
+        """Return an FSDev for given stat_info.st_dev"""
+        fsdev = self._fsdevs.get(st_dev, None)
+        if fsdev is None:
+            fsdev = _FSDev(st_dev, max_nlinks)
+            self._fsdevs[st_dev] = fsdev
+        return fsdev
 
     def _ino_missing_samename(self, fsdev, ino, filename):
         if self.options.samename:
