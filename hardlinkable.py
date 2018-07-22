@@ -350,7 +350,12 @@ class Hardlinkable:
             self.stats.found_inode()
 
         inode_hash = _stat_hash_value(stat_info, options)
-        if inode_hash in fsdev.inode_hashes:
+        if inode_hash not in fsdev.inode_hashes:
+            self.stats.missed_hash()
+            # Create a new entry for this hash value and store inode number.
+            fsdev.inode_hashes[inode_hash] = set([ino])
+            assert ino not in fsdev.ino_stat
+        else:
             self.stats.found_hash()
             # See if the new file has the same inode as one we've already seen.
             if ino in fsdev.ino_stat:
@@ -389,12 +394,6 @@ class Hardlinkable:
                     fsdev.inode_hashes[inode_hash].add(ino)
                     fsdev.ino_stat[ino] = stat_info
                     self.stats.no_hash_match()
-        else: # if inode_hash NOT in inode_hashes
-            # There weren't any other files with the same hash value so we will
-            # create a new entry and store our file.
-            fsdev.inode_hashes[inode_hash] = set([ino])
-            assert ino not in fsdev.ino_stat
-            self.stats.missed_hash()
 
         fsdev.ino_stat[ino] = stat_info
         fsdev._ino_append_namepair(ino, filename, namepair)
