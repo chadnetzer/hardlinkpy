@@ -390,11 +390,12 @@ class Hardlinkable:
                 else:  # nobreak
                     self.stats.no_hash_match()
                     # The file should NOT be hardlinked to any of the other
-                    # files with the same hash.  So we will add it to the list
-                    # of files.
+                    # files with the same hash. Add to the list of unlinked
+                    # inodes for this hash value.
                     fsdev.inode_hashes[inode_hash].add(ino)
                     fsdev.ino_stat[ino] = stat_info
 
+        # Always add the new file to the stored inode information
         fsdev.ino_stat[ino] = stat_info
         fsdev._ino_append_namepair(ino, filename, namepair)
 
