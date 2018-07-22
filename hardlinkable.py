@@ -208,7 +208,7 @@ class Hardlinkable:
                     break
 
             assert not aborted_early
-            self.update_hardlink_caches(src_tup, dst_tup)
+            self._update_hardlink_caches(src_tup, dst_tup)
 
         self.stats.print_stats(aborted_early)
 
@@ -410,7 +410,7 @@ class Hardlinkable:
                 return True
         return False
 
-    def update_hardlink_caches(self, src_tup, dst_tup):
+    def _update_hardlink_caches(self, src_tup, dst_tup):
         """Update cached data after hardlink is done."""
         assert src_tup[3] == dst_tup[3] # Same fs device
         fsdev = src_tup[3]
