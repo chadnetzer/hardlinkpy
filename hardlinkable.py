@@ -358,15 +358,18 @@ class Hardlinkable:
                 pathname = _os.path.join(dirname, filename)
                 prev_stat_info = fsdev.ino_stat[ino]
                 self.stats.found_existing_hardlink(prev_namepair, namepair, prev_stat_info)
-            # We have file(s) that have the same hash as our current file.
-            # Let's go through the list of files with the same hash and see if
-            # we are already hardlinked to any of them.
-            found_cached_ino = (ino in fsdev.inode_hashes[inode_hash])
+            # We have file(s) that have the same hash as our current file.  If
+            # our inode is already cached, we might be able to use past
+            # comparison work to avoid further file comparisons, by looking to
+            # see if it's an inode we've already seen and linked to others.
+            # Equal filenames matching complicates things, however.
+            linked_inodes = _linked_inode_set(ino, fsdev.linked_inodes)
+            found_cached_ino = (len(linked_inodes & fsdev.inode_hashes[inode_hash]) > 0)
             if (not found_cached_ino or
                 (options.samename and not fsdev._ino_has_filename(ino, filename))):
-                # We did not find this file as hardlinked to any other file
-                # yet.  So now lets see if our file should be hardlinked to any
-                # of the other files with the same hash.
+                # We did not find this file as linked to any other cached
+                # inodes yet.  So now lets see if our file should be hardlinked
+                # to any of the other files with the same hash.
                 self.stats.search_hash_list()
                 for cached_ino in fsdev.inode_hashes[inode_hash]:
                     self.stats.inc_hash_list_iteration()
@@ -972,6 +975,28 @@ def _found_matched_filename_regex(name, matches):
     return False
 
 
+def _linked_inode_set(ino, linked_inodes):
+    """Return set of inodes that are connected to given inode"""
+
+    if ino not in linked_inodes:
+        return set([ino])
+    remaining_inodes = linked_inodes.copy()
+    result_set = set()
+    pending = [ino]
+    while pending:
+        ino = pending.pop()
+        result_set.add(ino)
+        try:
+            connected_links = remaining_inodes.pop(ino)
+            pending.extend(connected_links)
+        except KeyError:
+            pass
+    return result_set
+
+
+# Note that this function is similar to the above, but doesn't rely upon it for
+# it's implementation.  This is partly to avoid making unnecessary copies of
+# the linked_inodes dictionary, and to keep the calling args simple.
 def _linkable_inode_sets(linked_inodes):
     """Generate sets of inodes that can be connected.  Starts with a mapping of
     inode # keys, and set values, which are the inodes which are determined to
