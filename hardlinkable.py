@@ -388,12 +388,12 @@ class Hardlinkable:
                         self._found_hardlinkable_file(cached_file_info, file_info)
                         break
                 else:  # nobreak
+                    self.stats.no_hash_match()
                     # The file should NOT be hardlinked to any of the other
                     # files with the same hash.  So we will add it to the list
                     # of files.
                     fsdev.inode_hashes[inode_hash].add(ino)
                     fsdev.ino_stat[ino] = stat_info
-                    self.stats.no_hash_match()
 
         fsdev.ino_stat[ino] = stat_info
         fsdev._ino_append_namepair(ino, filename, namepair)
