@@ -35,6 +35,12 @@ from optparse import SUPPRESS_HELP as _SUPPRESS_HELP
 from optparse import TitledHelpFormatter as _TitledHelpFormatter
 
 
+# Python 2.3 has the sets module, not the set type
+try:
+    set
+except NameError:
+    from sets import Set as set
+
 # Python 3 moved intern() to sys module
 try:
     _intern = intern
