@@ -35,6 +35,12 @@ from optparse import SUPPRESS_HELP as _SUPPRESS_HELP
 from optparse import TitledHelpFormatter as _TitledHelpFormatter
 
 
+# Python 2.3 has the sets module, not the set type
+try:
+    set
+except NameError:
+    from sets import Set as set
+
 # Python 3 moved intern() to sys module
 try:
     _intern = intern
@@ -349,13 +355,17 @@ class Hardlinkable:
         if ino not in fsdev.ino_stat:
             self.stats.found_inode()
 
-        inode_hash = _hash_value(stat_info, options)
-        if inode_hash in fsdev.inode_hashes:
+        inode_hash = _stat_hash_value(stat_info, options)
+        if inode_hash not in fsdev.inode_hashes:
+            self.stats.missed_hash()
+            # Create a new entry for this hash value and store inode number.
+            fsdev.inode_hashes[inode_hash] = set([ino])
+            assert ino not in fsdev.ino_stat
+        else:
             self.stats.found_hash()
             # See if the new file has the same inode as one we've already seen.
             if ino in fsdev.ino_stat:
                 prev_namepair = fsdev._arbitrary_namepair_from_ino(ino)
-                pathname = _os.path.join(dirname, filename)
                 prev_stat_info = fsdev.ino_stat[ino]
                 self.stats.found_existing_hardlink(prev_namepair, namepair, prev_stat_info)
             # We have file(s) that have the same hash as our current file.  If
@@ -384,19 +394,14 @@ class Hardlinkable:
                         self._found_hardlinkable_file(cached_file_info, file_info)
                         break
                 else:  # nobreak
+                    self.stats.no_hash_match()
                     # The file should NOT be hardlinked to any of the other
-                    # files with the same hash.  So we will add it to the list
-                    # of files.
+                    # files with the same hash. Add to the list of unlinked
+                    # inodes for this hash value.
                     fsdev.inode_hashes[inode_hash].add(ino)
                     fsdev.ino_stat[ino] = stat_info
-                    self.stats.no_hash_match()
-        else: # if inode_hash NOT in inode_hashes
-            # There weren't any other files with the same hash value so we will
-            # create a new entry and store our file.
-            fsdev.inode_hashes[inode_hash] = set([ino])
-            assert ino not in fsdev.ino_stat
-            self.stats.missed_hash()
 
+        # Always add the new file to the stored inode information
         fsdev.ino_stat[ino] = stat_info
         fsdev._ino_append_namepair(ino, filename, namepair)
 
@@ -928,7 +933,7 @@ class _Statistics:
 
 ### Module functions ###
 
-def _hash_value(stat_info, options):
+def _stat_hash_value(stat_info, options):
     """Return a value appropriate for a python dict or shelve key, which can
     differentiate files which cannot be hardlinked."""
     size = stat_info.st_size
