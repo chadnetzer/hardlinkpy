@@ -375,15 +375,14 @@ class Hardlinkable:
             # Equal filenames matching complicates things, however.
             linked_inodes = _linked_inode_set(ino, fsdev.linked_inodes)
             found_cached_ino = (len(linked_inodes & fsdev.inode_hashes[inode_hash]) > 0)
-            if (not found_cached_ino or
-                (options.samename and not fsdev._ino_has_filename(ino, filename))):
+            if (not found_cached_ino or self._ino_missing_samename(fsdev, ino, filename)):
                 # We did not find this file as linked to any other cached
                 # inodes yet.  So now lets see if our file should be hardlinked
                 # to any of the other files with the same hash.
                 self.stats.search_hash_list()
                 for cached_ino in fsdev.inode_hashes[inode_hash]:
                     self.stats.inc_hash_list_iteration()
-                    if (options.samename and not fsdev._ino_has_filename(cached_ino, filename)):
+                    if self._ino_missing_samename(fsdev, cached_ino, filename):
                         continue
 
                     if options.samename:
@@ -404,6 +403,12 @@ class Hardlinkable:
         # Always add the new file to the stored inode information
         fsdev.ino_stat[ino] = stat_info
         fsdev._ino_append_namepair(ino, filename, namepair)
+
+    def _ino_missing_samename(self, fsdev, ino, filename):
+        if self.options.samename:
+            if not fsdev._ino_has_filename(ino, filename):
+                return True
+        return False
 
     def update_hardlink_caches(self, src_tup, dst_tup):
         """Update cached data after hardlink is done."""
