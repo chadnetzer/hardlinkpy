@@ -385,10 +385,10 @@ class Hardlinkable:
                     if self._ino_missing_samename(fsdev, cached_ino, filename):
                         continue
 
-                    if options.samename:
-                        cached_file_info = fsdev._fileinfo_from_ino(cached_ino, filename)
-                    else:
-                        cached_file_info = fsdev._fileinfo_from_ino(cached_ino)
+                    # Get cached file_info, mindful of samename matching
+                    cached_file_info = fsdev._fileinfo_from_ino(cached_ino,
+                                                                options.samename and filename)
+
                     if self._are_files_hardlinkable(cached_file_info, file_info):
                         self._found_hardlinkable_file(cached_file_info, file_info)
                         break
@@ -649,7 +649,7 @@ class _FSDev:
 
     def _fileinfo_from_ino(self, ino, filename=None):
         """When filename is None, chooses an arbitrary namepair linked to the inode"""
-        if filename is not None:
+        if filename:
             assert ino in self.ino_pathnames
             assert filename in self.ino_pathnames[ino]
             l = self.ino_pathnames[ino][filename]
