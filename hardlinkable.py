@@ -396,6 +396,73 @@ class Hardlinkable:
         fsdev.ino_stat[ino] = stat_info
         fsdev.ino_append_namepair(ino, filename, namepair)
 
+    def _hardlink_files(self, src_tup, dst_tup):
+        """Actually perform the filesystem hardlinking of two files."""
+        src_dirname, src_filename, src_ino, src_fsdev = src_tup
+        dst_dirname, dst_filename, dst_ino, dst_fsdev = dst_tup
+        src_pathname = _os.path.join(src_dirname, src_filename)
+        dst_pathname = _os.path.join(dst_dirname, dst_filename)
+        src_stat_info = src_fsdev.ino_stat[src_ino]
+        dst_stat_info = dst_fsdev.ino_stat[dst_ino]
+
+        # Quit early if the src or dst files have been updated since we first
+        # lstat()-ed them. The cached mtime needs to be kept up to date for
+        # this to work correctly.
+        if (file_has_been_modified(src_pathname, src_stat_info) or
+            file_has_been_modified(dst_pathname, dst_stat_info)):
+            return False
+
+        hardlink_succeeded = False
+        # rename the destination file to save it
+        tmp_pathname = dst_pathname + "._tmp_while_linking"
+        try:
+            _os.rename(dst_pathname, tmp_pathname)
+        except OSError:
+            error = _sys.exc_info()[1]
+            _logging.error("Failed to rename: %s to %s\n%s" % (dst_pathname, tmp_pathname, error))
+        else:
+            # Now link the sourcefile to the destination file
+            try:
+                _os.link(src_pathname, dst_pathname)
+            except Exception:
+                error = _sys.exc_info()[1]
+                _logging.error("Failed to hardlink: %s to %s\n%s" % (src_pathname, dst_pathname, error))
+                # Try to recover
+                try:
+                    _os.rename(tmp_pathname, dst_pathname)
+                except Exception:
+                    error = _sys.exc_info()[1]
+                    _logging.critical("Failed to rename temp filename %s back to %s\n%s" % (tmp_pathname, dst_pathname, error))
+                    _sys.exit(3)
+            else:
+                hardlink_succeeded = True
+
+                # Delete the renamed version since we don't need it.
+                try:
+                    _os.unlink(tmp_pathname)
+                except Exception:
+                    error = _sys.exc_info()[1]
+                    # Failing to remove the temp file could lead to endless
+                    # attempts to link to it in the future.
+                    _logging.critical("Failed to remove temp filename: %s\n%s" % (tmp_pathname, error))
+                    _sys.exit(3)
+
+                # Use the destination file times if it's most recently modified
+                dst_mtime = dst_atime = None
+                if dst_stat_info.st_mtime > src_stat_info.st_mtime:
+                    try:
+                        _os.utime(src_pathname, (dst_stat_info.st_atime, dst_stat_info.st_mtime))
+                        dst_atime = dst_stat_info.st_atime
+                        dst_mtime = dst_stat_info.st_mtime
+                    except Exception:
+                        error = _sys.exc_info()[1]
+                        _logging.warning("Failed to update file time attributes for %s\n%s" % (src_pathname, error))
+
+                    self._update_stat_info(src_stat_info,
+                                           mtime=dst_mtime,
+                                           atime=dst_atime)
+        return hardlink_succeeded
+
     def _get_fsdev(self, st_dev, max_nlinks=None):
         """Return an FSDev for given stat_info.st_dev"""
         fsdev = self._fsdevs.get(st_dev, None)
@@ -517,73 +584,6 @@ class Hardlinkable:
         fsdev = self._get_fsdev(stat_info.st_dev)
         new_file_info = (dirname, filename, fsdev.ino_stat[stat_info.st_ino])
         return new_file_info
-
-    def _hardlink_files(self, src_tup, dst_tup):
-        """Actually perform the filesystem hardlinking of two files."""
-        src_dirname, src_filename, src_ino, src_fsdev = src_tup
-        dst_dirname, dst_filename, dst_ino, dst_fsdev = dst_tup
-        src_pathname = _os.path.join(src_dirname, src_filename)
-        dst_pathname = _os.path.join(dst_dirname, dst_filename)
-        src_stat_info = src_fsdev.ino_stat[src_ino]
-        dst_stat_info = dst_fsdev.ino_stat[dst_ino]
-
-        # Quit early if the src or dst files have been updated since we first
-        # lstat()-ed them. The cached mtime needs to be kept up to date for
-        # this to work correctly.
-        if (file_has_been_modified(src_pathname, src_stat_info) or
-            file_has_been_modified(dst_pathname, dst_stat_info)):
-            return False
-
-        hardlink_succeeded = False
-        # rename the destination file to save it
-        tmp_pathname = dst_pathname + "._tmp_while_linking"
-        try:
-            _os.rename(dst_pathname, tmp_pathname)
-        except OSError:
-            error = _sys.exc_info()[1]
-            _logging.error("Failed to rename: %s to %s\n%s" % (dst_pathname, tmp_pathname, error))
-        else:
-            # Now link the sourcefile to the destination file
-            try:
-                _os.link(src_pathname, dst_pathname)
-            except Exception:
-                error = _sys.exc_info()[1]
-                _logging.error("Failed to hardlink: %s to %s\n%s" % (src_pathname, dst_pathname, error))
-                # Try to recover
-                try:
-                    _os.rename(tmp_pathname, dst_pathname)
-                except Exception:
-                    error = _sys.exc_info()[1]
-                    _logging.critical("Failed to rename temp filename %s back to %s\n%s" % (tmp_pathname, dst_pathname, error))
-                    _sys.exit(3)
-            else:
-                hardlink_succeeded = True
-
-                # Delete the renamed version since we don't need it.
-                try:
-                    _os.unlink(tmp_pathname)
-                except Exception:
-                    error = _sys.exc_info()[1]
-                    # Failing to remove the temp file could lead to endless
-                    # attempts to link to it in the future.
-                    _logging.critical("Failed to remove temp filename: %s\n%s" % (tmp_pathname, error))
-                    _sys.exit(3)
-
-                # Use the destination file times if it's most recently modified
-                dst_mtime = dst_atime = None
-                if dst_stat_info.st_mtime > src_stat_info.st_mtime:
-                    try:
-                        _os.utime(src_pathname, (dst_stat_info.st_atime, dst_stat_info.st_mtime))
-                        dst_atime = dst_stat_info.st_atime
-                        dst_mtime = dst_stat_info.st_mtime
-                    except Exception:
-                        error = _sys.exc_info()[1]
-                        _logging.warning("Failed to update file time attributes for %s\n%s" % (src_pathname, error))
-
-                    self._update_stat_info(src_stat_info,
-                                           mtime=dst_mtime,
-                                           atime=dst_atime)
-        return hardlink_succeeded
 
     def _inode_stats(self):
         """Gather some basic inode stats from caches."""
