@@ -320,7 +320,7 @@ class Hardlinkable:
                     # terminate.
                     src_nlink, src_ino = nlinks_list[0]
                     nlinks_list = nlinks_list[1:]
-                    src_dirname, src_filename = fsdev._arbitrary_namepair_from_ino(src_ino)
+                    src_dirname, src_filename = fsdev.arbitrary_namepair_from_ino(src_ino)
                     while nlinks_list:
                         # Always removes last element, so loop must terminate
                         dst_nlink, dst_ino = nlinks_list.pop()
@@ -365,7 +365,7 @@ class Hardlinkable:
             self.stats.found_hash()
             # See if the new file has the same inode as one we've already seen.
             if ino in fsdev.ino_stat:
-                prev_namepair = fsdev._arbitrary_namepair_from_ino(ino)
+                prev_namepair = fsdev.arbitrary_namepair_from_ino(ino)
                 prev_stat_info = fsdev.ino_stat[ino]
                 self.stats.found_existing_hardlink(prev_namepair, namepair, prev_stat_info)
             # We have file(s) that have the same hash as our current file.  If
@@ -386,8 +386,8 @@ class Hardlinkable:
                         continue
 
                     # Get cached file_info, mindful of samename matching
-                    cached_file_info = fsdev._fileinfo_from_ino(cached_ino,
-                                                                options.samename and filename)
+                    cached_file_info = fsdev.fileinfo_from_ino(cached_ino,
+                                                               options.samename and filename)
 
                     if self._are_files_hardlinkable(cached_file_info, file_info):
                         self._found_hardlinkable_file(cached_file_info, file_info)
@@ -402,11 +402,11 @@ class Hardlinkable:
 
         # Always add the new file to the stored inode information
         fsdev.ino_stat[ino] = stat_info
-        fsdev._ino_append_namepair(ino, filename, namepair)
+        fsdev.ino_append_namepair(ino, filename, namepair)
 
     def _ino_missing_samename(self, fsdev, ino, filename):
         if self.options.samename:
-            if not fsdev._ino_has_filename(ino, filename):
+            if not fsdev.ino_has_filename(ino, filename):
                 return True
         return False
 
@@ -425,7 +425,7 @@ class Hardlinkable:
 
         self._update_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
         self._update_stat_info(dst_stat_info, nlink=dst_stat_info.st_nlink - 1)
-        fsdev._move_linked_namepair(dst_namepair, src_ino, dst_ino)
+        fsdev.move_linked_namepair(dst_namepair, src_ino, dst_ino)
 
     # Determine if a file is eligibile for hardlinking.  Files will only be
     # considered for hardlinking if this function returns true.
@@ -489,7 +489,7 @@ class Hardlinkable:
 
         assert src_stat_info.st_dev == dst_stat_info.st_dev
         fsdev = self._get_fsdev(src_stat_info.st_dev)
-        fsdev._add_linked_inodes(src_stat_info.st_ino, dst_stat_info.st_ino)
+        fsdev.add_linked_inodes(src_stat_info.st_ino, dst_stat_info.st_ino)
 
     def _update_stat_info(self, stat_info, nlink=None, mtime=None, atime=None, uid=None, gid=None):
         """Updates an ino_stat stat_info with the given values."""
@@ -594,7 +594,7 @@ class Hardlinkable:
             for ino, stat_info in fsdev.ino_stat.items():
                 total_inodes += 1
                 total_bytes += stat_info.st_size
-                count = fsdev._count_nlinks_this_inode(ino)
+                count = fsdev.count_nlinks_this_inode(ino)
                 total_saved_bytes += (stat_info.st_size * (count - 1))
         return {'total_inodes' : total_inodes,
                 'total_bytes': total_bytes,
@@ -635,19 +635,19 @@ class _FSDev:
         # linked_inodes = {largest_ino_num: set(ino_nums)}
         self.linked_inodes = {}
 
-    def _arbitrary_namepair_from_ino(self, ino):
+    def arbitrary_namepair_from_ino(self, ino):
         # Get the dict of filename: [pathnames] for ino_key
         d = self.ino_pathnames[ino]
         # Get an arbitrary pathnames list
         l = next(iter(d.values()))
         return l[0]
 
-    def _ino_append_namepair(self, ino, filename, namepair):
+    def ino_append_namepair(self, ino, filename, namepair):
         d = self.ino_pathnames.setdefault(ino, {})
         l = d.setdefault(filename, [])
         l.append(namepair)
 
-    def _fileinfo_from_ino(self, ino, filename=None):
+    def fileinfo_from_ino(self, ino, filename=None):
         """When filename is None, chooses an arbitrary namepair linked to the inode"""
         if filename:
             assert ino in self.ino_pathnames
@@ -655,14 +655,14 @@ class _FSDev:
             l = self.ino_pathnames[ino][filename]
             dirname, filename = l[0]
         else:
-            dirname, filename = self._arbitrary_namepair_from_ino(ino)
+            dirname, filename = self.arbitrary_namepair_from_ino(ino)
         return (dirname, filename, self.ino_stat[ino])
 
-    def _ino_has_filename(self, ino, filename):
+    def ino_has_filename(self, ino, filename):
         """Return true if the given ino has 'filename' linked to it."""
         return (filename in self.ino_pathnames[ino])
 
-    def _add_linked_inodes(self, ino1, ino2):
+    def add_linked_inodes(self, ino1, ino2):
         """Adds to the dictionary of ino1 to ino2 mappings."""
         assert ino1 != ino2
         s = self.linked_inodes.setdefault(ino1, set())
@@ -670,7 +670,7 @@ class _FSDev:
         s = self.linked_inodes.setdefault(ino2, set())
         s.add(ino1)
 
-    def _move_linked_namepair(self, namepair, src_ino, dst_ino):
+    def move_linked_namepair(self, namepair, src_ino, dst_ino):
         """Move namepair from dst_ino to src_ino (yes, backwards)"""
         dirname, filename = namepair
         pathnames = self.ino_pathnames[dst_ino][filename]
@@ -678,9 +678,9 @@ class _FSDev:
         assert namepair not in pathnames
         if not pathnames:
             del self.ino_pathnames[dst_ino][filename]
-        self._ino_append_namepair(src_ino, filename, namepair)
+        self.ino_append_namepair(src_ino, filename, namepair)
 
-    def _count_nlinks_this_inode(self, ino):
+    def count_nlinks_this_inode(self, ino):
         """Because of file matching and exclusions, the number of links that we
         care about may not equal the total nlink count for the inode."""
         # Count the number of links to this inode that we have discovered
