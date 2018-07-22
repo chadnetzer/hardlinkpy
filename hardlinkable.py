@@ -367,6 +367,7 @@ class Hardlinkable:
                 # We did not find this file as hardlinked to any other file
                 # yet.  So now lets see if our file should be hardlinked to any
                 # of the other files with the same hash.
+                self.stats.search_hash_list()
                 for cached_ino in fsdev.inode_hashes[inode_hash]:
                     self.stats.inc_hash_list_iteration()
                     if (options.samename and not fsdev._ino_has_filename(cached_ino, filename)):
@@ -708,6 +709,7 @@ class _Statistics:
         self.num_hash_hits = 0              # Amount of times a hash is found in inode_hashes
         self.num_hash_misses = 0            # Amount of times a hash is not found in inode_hashes
         self.num_hash_mismatches = 0        # Times a hash is found, but is not a file match
+        self.num_hash_list_searches = 0     # Times a hash list search is initiated
         self.num_list_iterations = 0        # Number of iterations over a list in inode_hashes
 
     def found_directory(self):
@@ -817,6 +819,9 @@ class _Statistics:
         """When a hash lookup succeeds, but no matching value found"""
         self.num_hash_mismatches += 1
 
+    def search_hash_list(self):
+        self.num_hash_list_searches += 1
+
     def inc_hash_list_iteration(self):
         self.num_list_iterations += 1
 
@@ -912,7 +917,9 @@ class _Statistics:
                                                                                 (self.num_hash_mismatches +
                                                                                  self.hardlinked_previously +
                                                                                  self.hardlinked_thisrun)))
-            print("Total hash list iterations : %s" % self.num_list_iterations)
+            print("Total hash searches        : %s" % self.num_hash_list_searches)
+            print("Total hash list iterations : %s  (avg per-search: %s)" % (self.num_list_iterations,
+                                                                             round(float(self.num_list_iterations)/self.num_hash_list_searches, 3)))
             print("Total equal comparisons    : %s" % self.equal_comparisons)
 
 
