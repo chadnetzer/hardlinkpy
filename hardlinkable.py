@@ -355,7 +355,6 @@ class Hardlinkable:
             # See if the new file has the same inode as one we've already seen.
             if ino in fsdev.ino_stat:
                 prev_namepair = fsdev._arbitrary_namepair_from_ino(ino)
-                pathname = _os.path.join(dirname, filename)
                 prev_stat_info = fsdev.ino_stat[ino]
                 self.stats.found_existing_hardlink(prev_namepair, namepair, prev_stat_info)
             # We have file(s) that have the same hash as our current file.  If
