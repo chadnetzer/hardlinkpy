@@ -714,7 +714,7 @@ class LinkingStats:
         self.hardlinked_previously = 0      # hardlinks that are already existing
         self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run
         self.bytes_saved_previously = 0     # bytes saved by previous hardlinks
-        self.hardlinkstats = []             # list of files hardlinked this run
+        self.hardlinkpairs = []             # list of files hardlinkable this run
         self.starttime = _time.time()       # track how long it takes
         self.previouslyhardlinked = {}      # list of files hardlinked previously
 
@@ -812,7 +812,7 @@ class LinkingStats:
         self.num_inodes += 1
 
     def did_hardlink(self, src_namepair, dst_namepair, dst_stat_info):
-        self.hardlinkstats.append((tuple(src_namepair),
+        self.hardlinkpairs.append((tuple(src_namepair),
                                    tuple(dst_namepair)))
         filesize = dst_stat_info.st_size
         self.hardlinked_thisrun += 1
@@ -860,13 +860,13 @@ class LinkingStats:
                                                               _humanize_number(size * len(file_list))))
             print("")
         # Print out the stats for the files we hardlinked, if any
-        if self.options.verbosity > 0 and self.hardlinkstats:
+        if self.options.verbosity > 0 and self.hardlinkpairs:
             if self.options.linking_enabled:
                 print("Files that were hardlinked this run")
             else:
                 print("Files that are hardlinkable")
             print("-----------------------")
-            for (src_namepair, dst_namepair) in self.hardlinkstats:
+            for (src_namepair, dst_namepair) in self.hardlinkpairs:
                 print("from: %s" % _os.path.join(*src_namepair))
                 print("  to: %s" % _os.path.join(*dst_namepair))
             print("")
