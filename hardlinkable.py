@@ -716,7 +716,7 @@ class LinkingStats:
         self.bytes_saved_previously = 0     # bytes saved by previous hardlinks
         self.hardlinkpairs = []             # list of files hardlinkable this run
         self.starttime = _time.time()       # track how long it takes
-        self.previouslyhardlinked = {}      # list of files hardlinked previously
+        self.currently_hardlinked = {}      # list of files currently hardlinked
 
         # Debugging stats
         self.num_hash_hits = 0              # Amount of times a hash is found in inode_hashes
@@ -795,10 +795,10 @@ class LinkingStats:
         self.hardlinked_previously += 1
         self.bytes_saved_previously += filesize
         if self.options.verbosity > 1:
-            if src_namepair not in self.previouslyhardlinked:
-                self.previouslyhardlinked[src_namepair] = (filesize, [dst_namepair])
+            if src_namepair not in self.currently_hardlinked:
+                self.currently_hardlinked[src_namepair] = (filesize, [dst_namepair])
             else:
-                self.previouslyhardlinked[src_namepair][1].append(dst_namepair)
+                self.currently_hardlinked[src_namepair][1].append(dst_namepair)
 
     def found_hardlinkable(self, src_namepair, dst_namepair):
         # We don't actually keep these stats, and we record the actual links
@@ -845,13 +845,13 @@ class LinkingStats:
         if possibly_incomplete:
             print("Statistics possibly incomplete due to errors")
 
-        if self.options.verbosity > 1 and self.previouslyhardlinked:
+        if self.options.verbosity > 1 and self.currently_hardlinked:
             print("Currently hardlinked files")
             print("-----------------------")
-            keys = list(self.previouslyhardlinked.keys())
+            keys = list(self.currently_hardlinked.keys())
             keys.sort()  # Could use sorted() once we only support >= Python 2.4
             for key in keys:
-                size, file_list = self.previouslyhardlinked[key]
+                size, file_list = self.currently_hardlinked[key]
                 print("Currently hardlinked: %s" % _os.path.join(*key))
                 for namepair in file_list:
                     pathname = _os.path.join(*namepair)
