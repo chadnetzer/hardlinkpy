@@ -129,6 +129,7 @@ by another user.
     # Allow for a way to get a default options object (for Statistics)
     if get_default_options:
         (options, args) = parser.parse_args([""])
+        options_validation(options)
         return options
 
     (options, args) = parser.parse_args()
@@ -141,6 +142,12 @@ by another user.
         if not _os.path.isdir(dirname):
             parser.error("%s is NOT a directory" % dirname)
 
+    options_validation(options)
+
+    return options, args
+
+
+def options_validation(options):
     if options.debug_level > 1:
         _logging.getLogger().setLevel(_logging.DEBUG)
 
@@ -168,8 +175,6 @@ by another user.
     # definitively that the program is set to modify the filesystem.
     if options.linking_enabled:
         print("----- Hardlinking enabled.  The filesystem will be modified -----")
-
-    return options, args
 
 
 class Hardlinkable:
