@@ -812,8 +812,9 @@ class LinkingStats:
         self.num_inodes += 1
 
     def did_hardlink(self, src_namepair, dst_namepair, dst_stat_info):
-        self.hardlinkpairs.append((tuple(src_namepair),
-                                   tuple(dst_namepair)))
+        if self.options.verbosity > 0:
+            self.hardlinkpairs.append((tuple(src_namepair),
+                                       tuple(dst_namepair)))
         filesize = dst_stat_info.st_size
         self.hardlinked_thisrun += 1
         if dst_stat_info.st_nlink == 1:
