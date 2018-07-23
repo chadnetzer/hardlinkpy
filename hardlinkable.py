@@ -714,9 +714,9 @@ class LinkingStats:
         self.hardlinked_previously = 0      # hardlinks that are already existing
         self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run
         self.bytes_saved_previously = 0     # bytes saved by previous hardlinks
-        self.hardlinkstats = []             # list of files hardlinked this run
+        self.hardlinkpairs = []             # list of files hardlinkable this run
         self.starttime = _time.time()       # track how long it takes
-        self.previouslyhardlinked = {}      # list of files hardlinked previously
+        self.currently_hardlinked = {}      # list of files currently hardlinked
 
         # Debugging stats
         self.num_hash_hits = 0              # Amount of times a hash is found in inode_hashes
@@ -795,10 +795,10 @@ class LinkingStats:
         self.hardlinked_previously += 1
         self.bytes_saved_previously += filesize
         if self.options.verbosity > 1:
-            if src_namepair not in self.previouslyhardlinked:
-                self.previouslyhardlinked[src_namepair] = (filesize, [dst_namepair])
+            if src_namepair not in self.currently_hardlinked:
+                self.currently_hardlinked[src_namepair] = (filesize, [dst_namepair])
             else:
-                self.previouslyhardlinked[src_namepair][1].append(dst_namepair)
+                self.currently_hardlinked[src_namepair][1].append(dst_namepair)
 
     def found_hardlinkable(self, src_namepair, dst_namepair):
         # We don't actually keep these stats, and we record the actual links
@@ -812,8 +812,9 @@ class LinkingStats:
         self.num_inodes += 1
 
     def did_hardlink(self, src_namepair, dst_namepair, dst_stat_info):
-        self.hardlinkstats.append((tuple(src_namepair),
-                                   tuple(dst_namepair)))
+        if self.options.verbosity > 0:
+            self.hardlinkpairs.append((tuple(src_namepair),
+                                       tuple(dst_namepair)))
         filesize = dst_stat_info.st_size
         self.hardlinked_thisrun += 1
         if dst_stat_info.st_nlink == 1:
@@ -845,13 +846,13 @@ class LinkingStats:
         if possibly_incomplete:
             print("Statistics possibly incomplete due to errors")
 
-        if self.options.verbosity > 1 and self.previouslyhardlinked:
+        if self.options.verbosity > 1 and self.currently_hardlinked:
             print("Currently hardlinked files")
             print("-----------------------")
-            keys = list(self.previouslyhardlinked.keys())
+            keys = list(self.currently_hardlinked.keys())
             keys.sort()  # Could use sorted() once we only support >= Python 2.4
             for key in keys:
-                size, file_list = self.previouslyhardlinked[key]
+                size, file_list = self.currently_hardlinked[key]
                 print("Currently hardlinked: %s" % _os.path.join(*key))
                 for namepair in file_list:
                     pathname = _os.path.join(*namepair)
@@ -860,13 +861,13 @@ class LinkingStats:
                                                               _humanize_number(size * len(file_list))))
             print("")
         # Print out the stats for the files we hardlinked, if any
-        if self.options.verbosity > 0 and self.hardlinkstats:
+        if self.options.verbosity > 0 and self.hardlinkpairs:
             if self.options.linking_enabled:
                 print("Files that were hardlinked this run")
             else:
                 print("Files that are hardlinkable")
             print("-----------------------")
-            for (src_namepair, dst_namepair) in self.hardlinkstats:
+            for (src_namepair, dst_namepair) in self.hardlinkpairs:
                 print("from: %s" % _os.path.join(*src_namepair))
                 print("  to: %s" % _os.path.join(*dst_namepair))
             print("")
