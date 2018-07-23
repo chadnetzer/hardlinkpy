@@ -198,6 +198,21 @@ class Hardlinkable:
 
     def run(self, directories):
         """Run link scan, and perform linking if requested.  Return stats."""
+        # Prevent 'directories' from accidentally being a stringlike or
+        # byteslike.  We don't want to "walk" each string character as a dir,
+        # especially since it has a good chance of starting with an '/'.
+        if _sys.version_info[0] == 2:
+            if isinstance(directories, basestring):
+                directories = [directories]
+        else:
+            if (isinstance(directories, str) or
+                isinstance(directories, bytes)):
+                directories = [directories]
+
+        for dirname in directories:
+            if not _os.path.isdir(dirname):
+                raise IOError("%s is not a directory" % dirname)
+
         aborted_early = False
         for (src_file_info, dst_file_info) in self._sorted_links(directories):
             assert not self.options.samename or src_file_info[1] == dst_file_info[1]
