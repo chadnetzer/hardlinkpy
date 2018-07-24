@@ -303,8 +303,8 @@ class Hardlinkable:
             for linkable_set in _linkable_inode_sets(fsdev.linked_inodes):
                 nlinks_list = [(fsdev.ino_stat[ino].st_nlink, ino) for ino in linkable_set]
                 nlinks_list.sort(reverse=True)
-                assert len(nlinks_list) > 1
-                while len(nlinks_list) > 1:
+                assert len(nlinks_list) > 0
+                while len(nlinks_list) > 0:
                     # Ensure we don't try to combine inodes that would create
                     # more links than the maximum allowed nlinks, by looping
                     # until src + dst nlink < max_nlinks
