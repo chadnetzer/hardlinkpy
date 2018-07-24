@@ -841,7 +841,8 @@ class LinkingStats:
         filesize = stat_info.st_size
         self.hardlinked_previously += 1
         self.bytes_saved_previously += filesize
-        if self.options.verbosity > 1:
+        if (self.options.verbosity > 1 or
+            getattr(self.options, '_force_stats_to_store_old_hardlinks', False)):
             if src_namepair not in self.currently_hardlinked:
                 self.currently_hardlinked[src_namepair] = (filesize, [dst_namepair])
             else:
@@ -863,7 +864,8 @@ class LinkingStats:
         dst_namepair = tuple(dst_file_info[:2])
         dst_stat_info = dst_file_info[2]
 
-        if self.options.verbosity > 0:
+        if (self.options.verbosity > 0 or
+            getattr(self.options, '_force_stats_to_store_new_hardlinks', False)):
             self.hardlinkpairs.append((tuple(src_namepair),
                                        tuple(dst_namepair)))
         filesize = dst_stat_info.st_size
@@ -889,6 +891,12 @@ class LinkingStats:
 
     def inc_hash_list_iteration(self):
         self.num_list_iterations += 1
+
+    def _count_hardlinked_previously(self):
+        count = 0
+        for filesize,namepairs in self.currently_hardlinked.values():
+            count += len(namepairs)
+        return count
 
     def print_stats(self, possibly_incomplete=False):
         if not self.options.printstats:
