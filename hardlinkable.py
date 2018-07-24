@@ -21,6 +21,7 @@
 # this program; if not, write to the Free Software Foundation, Inc., 59 Temple
 # Place, Suite 330, Boston, MA  02111-1307, USA.
 
+import copy as _copy
 import filecmp as _filecmp
 import logging as _logging
 import os as _os
@@ -1039,8 +1040,10 @@ def _linkable_inode_sets(linked_inodes):
 def _namepairs_per_inode(d):
     """Yield namepairs for each value in the dictionary d"""
     # A dictionary of {filename:[namepair]}, ie. a filename and list of
-    # namepairs.
-    for filename, namepairs in d.copy().items():
+    # namepairs.  Make a copy as d and it's list values may be modified between
+    # yields.
+    d = _copy.deepcopy(d)
+    for filename, namepairs in d.items():
         for namepair in namepairs:
             yield namepair
 
