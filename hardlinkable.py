@@ -301,8 +301,11 @@ class Hardlinkable:
         self._prelink_inode_stats = self._inode_stats()
         for fsdev in self._fsdevs.values():
             for linkable_set in _linkable_inode_sets(fsdev.linked_inodes):
+                # Decorate-sort-undecorate with st_link as primary key
                 nlinks_list = [(fsdev.ino_stat[ino].st_nlink, ino) for ino in linkable_set]
                 nlinks_list.sort(reverse=True)
+                nlinks_list = [x[1] for x in nlinks_list] # strip nlinks sort key
+
                 assert len(nlinks_list) > 0
                 while len(nlinks_list) > 0:
                     # Ensure we don't try to combine inodes that would create
