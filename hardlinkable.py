@@ -304,38 +304,44 @@ class Hardlinkable:
                 # Decorate-sort-undecorate with st_link as primary key
                 nlinks_list = [(fsdev.ino_stat[ino].st_nlink, ino) for ino in linkable_set]
                 nlinks_list.sort(reverse=True)
-                nlinks_list = [x[1] for x in nlinks_list] # strip nlinks sort key
+                ino_list = [x[1] for x in nlinks_list] # strip nlinks sort key
 
-                assert len(nlinks_list) > 0
-                while len(nlinks_list) > 0:
+                assert len(ino_list) > 0
+                while ino_list:
                     # Ensure we don't try to combine inodes that would create
                     # more links than the maximum allowed nlinks, by looping
                     # until src + dst nlink < max_nlinks
                     #
                     # Every loop shortens the nlinks_list, so the loop will
                     # terminate.
-                    src_nlink, src_ino = nlinks_list[0]
-                    nlinks_list = nlinks_list[1:]
+                    src_ino = ino_list[0]
+                    ino_list = ino_list[1:]
                     src_dirname, src_filename = fsdev.arbitrary_namepair_from_ino(src_ino)
-                    while nlinks_list:
+                    while ino_list:
                         # Always removes last element, so loop must terminate
-                        dst_nlink, dst_ino = nlinks_list.pop()
-                        assert src_nlink >= dst_nlink
+                        dst_ino = ino_list.pop()
+                        src_stat_info = fsdev.ino_stat[src_ino]
+                        dst_stat_info = fsdev.ino_stat[dst_ino]
+                        assert src_stat_info.st_nlink >= dst_stat_info.st_nlink
                         if (fsdev.max_nlinks is not None and
-                            src_nlink + dst_nlink > fsdev.max_nlinks):
-                            nlinks_list = nlinks_list[1:]
+                            src_stat_info.st_nlink + dst_stat_info.st_nlink > fsdev.max_nlinks):
+                            ino_list = ino_list[1:]
                             break
                         # Keep track of src/dst nlinks so that we can ensure
                         # we don't exceed the max_nlinks for the device.  We
                         # return the unmodified stat_infos because they may end
                         # up just being reported, not actually linked.
                         for dst_dirname, dst_filename in _namepairs_per_inode(fsdev.ino_pathnames[dst_ino]):
-                            src_tup = (src_dirname, src_filename, src_ino, fsdev)
-                            dst_tup = (dst_dirname, dst_filename, dst_ino, fsdev)
+                            src_tup = (src_dirname, src_filename, src_ino, src_stat_info.st_dev)
+                            dst_tup = (dst_dirname, dst_filename, dst_ino, dst_stat_info.st_dev)
+
                             yield (src_tup, dst_tup)
-                            src_nlink += 1
-                            dst_nlink -= 1
-                            assert dst_nlink >= 0
+
+                            src_stat_info = fsdev.ino_stat[src_ino]
+                            dst_stat_info = fsdev.ino_stat[dst_ino]
+                            assert dst_stat_info.st_nlink > 0
+                            fsdev.update_stat_info(src_ino, nlink=src_stat_info.st_nlink + 1)
+                            fsdev.update_stat_info(dst_ino, nlink=dst_stat_info.st_nlink - 1)
 
     # dirname is the directory component and filename is just the file name
     # component (ie. the basename) without the path.  The tree walking provides
