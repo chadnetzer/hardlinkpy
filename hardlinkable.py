@@ -481,29 +481,6 @@ class Hardlinkable:
             self._fsdevs[st_dev] = fsdev
         return fsdev
 
-    def _ino_missing_samename(self, fsdev, ino, filename):
-        if self.options.samename:
-            if not fsdev.ino_has_filename(ino, filename):
-                return True
-        return False
-
-    def _update_hardlink_caches(self, src_tup, dst_tup):
-        """Update cached data after hardlink is done."""
-        assert src_tup[3] == dst_tup[3] # Same fs device
-        fsdev = src_tup[3]
-
-        src_namepair, dst_namepair = src_tup[:2], dst_tup[:2]
-        src_ino, dst_ino = src_tup[2], dst_tup[2]
-
-        src_stat_info = fsdev.ino_stat[src_ino]
-        dst_stat_info = fsdev.ino_stat[dst_ino]
-
-        self.stats.did_hardlink(src_namepair, dst_namepair, dst_stat_info)
-
-        self._update_stat_info(src_stat_info, nlink=src_stat_info.st_nlink + 1)
-        self._update_stat_info(dst_stat_info, nlink=dst_stat_info.st_nlink - 1)
-        fsdev.move_linked_namepair(dst_namepair, src_ino, dst_ino)
-
     # Determine if a file is eligibile for hardlinking.  Files will only be
     # considered for hardlinking if this function returns true.
     def _eligible_for_hardlink(self, st1, st2):
@@ -549,7 +526,6 @@ class Hardlinkable:
     def _are_files_hardlinkable(self, file_info1, file_info2):
         dirname1,filename1,stat1 = file_info1
         dirname2,filename2,stat2 = file_info2
-        assert not self.options.samename or filename1 == filename2
         if not self._eligible_for_hardlink(stat1, stat2):
             result = False
         else:
@@ -568,25 +544,10 @@ class Hardlinkable:
         fsdev = self._get_fsdev(src_stat_info.st_dev)
         fsdev.add_linked_inodes(src_stat_info.st_ino, dst_stat_info.st_ino)
 
-    def _update_stat_info(self, stat_info, nlink=None, mtime=None, atime=None, uid=None, gid=None):
+    def _updated_stat_info(self, stat_info, nlink=None, mtime=None, atime=None, uid=None, gid=None):
         """Updates an ino_stat stat_info with the given values."""
-        l = list(stat_info)
-        if nlink is not None:
-            l[_stat.ST_NLINK] = nlink
-        if mtime is not None:
-            l[_stat.ST_MTIME] = mtime
-        if atime is not None:
-            l[_stat.ST_ATIME] = atime
-        if uid is not None:
-            l[_stat.ST_UID] = uid
-        if gid is not None:
-            l[_stat.ST_GID] = gid
-
         fsdev = self._get_fsdev(stat_info.st_dev)
-        fsdev.ino_stat[stat_info.st_ino] = stat_info.__class__(l)
-        if fsdev.ino_stat[stat_info.st_ino].st_nlink < 1:
-            assert fsdev.ino_stat[stat_info.st_ino].st_nlink == 0
-            del fsdev.ino_stat[stat_info.st_ino]
+        return fsdev.updated_stat_info(stat_info.st_ino, nlink=nlink, mtime=mtime, atime=atime, uid=uid, gid=gid)
 
     def _updated_file_info(self, file_info):
         """Return a file_info tuple with the current stat_info value."""
@@ -667,6 +628,29 @@ class _FSDev:
         else:
             dirname, filename = self.arbitrary_namepair_from_ino(ino)
         return (dirname, filename, self.ino_stat[ino])
+
+    def updated_stat_info(self, ino, nlink=None, mtime=None, atime=None, uid=None, gid=None):
+        """Updates an ino_stat stat_info with the given values."""
+        stat_info = self.ino_stat[ino]
+        l = list(stat_info)
+        if nlink is not None:
+            l[_stat.ST_NLINK] = nlink
+        if mtime is not None:
+            l[_stat.ST_MTIME] = mtime
+        if atime is not None:
+            l[_stat.ST_ATIME] = atime
+        if uid is not None:
+            l[_stat.ST_UID] = uid
+        if gid is not None:
+            l[_stat.ST_GID] = gid
+
+        new_stat_info = stat_info.__class__(l)
+        self.ino_stat[ino] = new_stat_info
+        if self.ino_stat[ino].st_nlink < 1:
+            assert self.ino_stat[ino].st_nlink == 0
+            del self.ino_stat[ino]
+            new_stat_info = None
+        return new_stat_info
 
     def ino_has_filename(self, ino, filename):
         """Return true if the given ino has 'filename' linked to it."""
