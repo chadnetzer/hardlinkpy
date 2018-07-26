@@ -188,12 +188,14 @@ class Hardlinkable:
             src_pathname = _os.path.join(*src_namepair)
             dst_pathname = _os.path.join(*dst_namepair)
 
+            assert not self.options.samename or src_namepair[1] == dst_namepair[1]
             yield (src_pathname, dst_pathname)
 
     def run(self, directories):
         """Run link scan, and perform linking if requested.  Return stats."""
         aborted_early = False
         for (src_file_info, dst_file_info) in self._sorted_links(directories):
+            assert not self.options.samename or src_file_info[1] == dst_file_info[1]
             if self.options.linking_enabled:
                 # DO NOT call hardlink_files() unless link creation
                 # is selected. It unconditionally performs links.
