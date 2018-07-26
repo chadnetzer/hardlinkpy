@@ -324,6 +324,7 @@ class Hardlinkable:
                         assert src_stat_info.st_nlink >= dst_stat_info.st_nlink
                         if (fsdev.max_nlinks is not None and
                             src_stat_info.st_nlink + dst_stat_info.st_nlink > fsdev.max_nlinks):
+                            ino_list.append(dst_ino)
                             ino_list = ino_list[1:]
                             break
                         for dst_dirname, dst_filename in _namepairs_per_inode(fsdev.ino_pathnames[dst_ino]):
