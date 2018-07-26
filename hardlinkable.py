@@ -305,6 +305,11 @@ class Hardlinkable:
                 nlinks_list.sort(reverse=True)
                 ino_list = [x[1] for x in nlinks_list] # strip nlinks sort key
 
+                # Keep a list if inos from the end of the ino_list that cannot
+                # be linked to (such as when in 'samename' mode), and reappend
+                # them to nlist when the src inode advances.
+                remaining_inos = []
+
                 assert len(ino_list) > 0
                 while ino_list:
                     # Ensure we don't try to combine inodes that would create
@@ -315,8 +320,10 @@ class Hardlinkable:
                     # terminate.
                     src_ino = ino_list[0]
                     ino_list = ino_list[1:]
+                    ino_list_len = len(ino_list)
                     while ino_list:
-                        # Always removes last element, so loop must terminate
+                        # Always removes either first or last element, so loop
+                        # must terminate
                         dst_ino = ino_list.pop()
                         src_stat_info = fsdev.ino_stat[src_ino]
                         dst_stat_info = fsdev.ino_stat[dst_ino]
@@ -326,8 +333,12 @@ class Hardlinkable:
                             ino_list.append(dst_ino)
                             ino_list = ino_list[1:]
                             break
-                        src_dirname, src_filename = fsdev.arbitrary_namepair_from_ino(src_ino)
+
                         for dst_dirname, dst_filename in _namepairs_per_inode(fsdev.ino_pathnames[dst_ino]):
+                            if self.options.samename and dst_filename not in fsdev.ino_pathnames[src_ino]:
+                                continue
+                            lookup_filename = self.options.samename and dst_filename
+                            src_dirname, src_filename = fsdev.arbitrary_namepair_from_ino(src_ino, lookup_filename)
                             src_file_info = (src_dirname, src_filename, src_stat_info)
                             dst_file_info = (dst_dirname, dst_filename, dst_stat_info)
 
@@ -341,6 +352,22 @@ class Hardlinkable:
 
                             dst_namepair = tuple(dst_file_info[:2])
                             fsdev.move_linked_namepair(dst_namepair, src_ino, dst_ino)
+
+                        # if there are leftover pathnames to the inode, save it for later.
+                        if fsdev.ino_pathnames[dst_ino]:
+                            remaining_inos.append(dst_ino)
+
+                    # End of outer while loop
+                    if remaining_inos:
+                        reversed_remaining_inos = remaining_inos[::-1]
+                        remaining_inos = []
+                        ino_list.extend(reversed_remaining_inos)
+                        ino_list = ino_list[1:]
+
+                    # Ensure that the ino_list is shortening
+                    assert len(ino_list) == 0 or (len(ino_list) < ino_list_len)
+                    ino_list_len = len(ino_list)
+
 
     # dirname is the directory component and filename is just the file name
     # component (ie. the basename) without the path.  The tree walking provides
@@ -599,11 +626,14 @@ class _FSDev:
         # linked_inodes = {largest_ino_num: set(ino_nums)}
         self.linked_inodes = {}
 
-    def arbitrary_namepair_from_ino(self, ino):
+    def arbitrary_namepair_from_ino(self, ino, filename=None):
         # Get the dict of filename: [pathnames] for ino_key
         d = self.ino_pathnames[ino]
-        # Get an arbitrary pathnames list
-        l = next(iter(d.values()))
+        if filename:
+            l = d[filename]
+        else:
+            # Get an arbitrary pathnames list
+            l = next(iter(d.values()))
         return l[0]
 
     def ino_append_namepair(self, ino, filename, namepair):
