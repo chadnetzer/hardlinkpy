@@ -315,7 +315,6 @@ class Hardlinkable:
                     # terminate.
                     src_ino = ino_list[0]
                     ino_list = ino_list[1:]
-                    src_dirname, src_filename = fsdev.arbitrary_namepair_from_ino(src_ino)
                     while ino_list:
                         # Always removes last element, so loop must terminate
                         dst_ino = ino_list.pop()
@@ -327,6 +326,7 @@ class Hardlinkable:
                             ino_list.append(dst_ino)
                             ino_list = ino_list[1:]
                             break
+                        src_dirname, src_filename = fsdev.arbitrary_namepair_from_ino(src_ino)
                         for dst_dirname, dst_filename in _namepairs_per_inode(fsdev.ino_pathnames[dst_ino]):
                             src_file_info = (src_dirname, src_filename, src_stat_info)
                             dst_file_info = (dst_dirname, dst_filename, dst_stat_info)
