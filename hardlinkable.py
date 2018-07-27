@@ -313,7 +313,15 @@ class Hardlinkable:
                 remaining_inos = []
 
                 assert len(ino_list) > 0
-                while ino_list:
+                while ino_list or remaining_inos:  # outer while
+                    # reappend remaining_inos stack to ino_list
+                    if remaining_inos:
+                        ino_list.extend(remaining_inos[::-1])
+                        remaining_inos = []
+
+                    assert len(remaining_inos) == 0
+                    assert len(ino_list) > 0
+
                     # Ensure we don't try to combine inodes that would create
                     # more links than the maximum allowed nlinks, by advancing
                     # src until src + dst nlink < max_nlinks
@@ -322,22 +330,27 @@ class Hardlinkable:
                     # terminate.
                     src_ino = ino_list[0]
                     ino_list = ino_list[1:]
-                    ino_list_len = len(ino_list)
-                    while ino_list:
+                    while ino_list:  # inner while
                         # Always removes either first or last element, so loop
                         # must terminate
                         dst_ino = ino_list.pop()
                         src_stat_info = fsdev.ino_stat[src_ino]
                         dst_stat_info = fsdev.ino_stat[dst_ino]
-                        assert src_stat_info.st_nlink >= dst_stat_info.st_nlink
+
+                        # Samename can break nlink ordering invariant
+                        assert self.options.samename or src_stat_info.st_nlink >= dst_stat_info.st_nlink
+
                         if (fsdev.max_nlinks is not None and
                             src_stat_info.st_nlink + dst_stat_info.st_nlink > fsdev.max_nlinks):
-                            ino_list.append(dst_ino)
-                            ino_list = ino_list[1:]
+                            # Move inos to remaining_inos, so that src_ino will advance
+                            remaining_inos.append(dst_ino)
+                            remaining_inos.extend(ino_list[::-1])
+                            ino_list = []
                             break
 
                         for dst_dirname, dst_filename in _namepairs_per_inode(fsdev.ino_pathnames[dst_ino]):
                             if self.options.samename and dst_filename not in fsdev.ino_pathnames[src_ino]:
+                                assert dst_filename not in fsdev.ino_pathnames[src_ino]
                                 continue
                             lookup_filename = self.options.samename and dst_filename
                             src_dirname, src_filename = fsdev.arbitrary_namepair_from_ino(src_ino, lookup_filename)
@@ -358,18 +371,6 @@ class Hardlinkable:
                         # if there are leftover pathnames to the inode, save it for later.
                         if fsdev.ino_pathnames[dst_ino]:
                             remaining_inos.append(dst_ino)
-
-                    # End of outer while loop
-                    if remaining_inos:
-                        reversed_remaining_inos = remaining_inos[::-1]
-                        remaining_inos = []
-                        ino_list.extend(reversed_remaining_inos)
-                        ino_list = ino_list[1:]
-
-                    # Ensure that the ino_list is shortening
-                    assert len(ino_list) == 0 or (len(ino_list) < ino_list_len)
-                    ino_list_len = len(ino_list)
-
 
     # dirname is the directory component and filename is just the file name
     # component (ie. the basename) without the path.  The tree walking provides
