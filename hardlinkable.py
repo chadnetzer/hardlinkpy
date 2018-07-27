@@ -566,10 +566,8 @@ class Hardlinkable:
 
     def _are_file_contents_equal(self, pathname1, pathname2):
         """Determine if the contents of two files are equal"""
-        self.stats.did_comparison(pathname1, pathname2)
         result = _filecmp.cmp(pathname1, pathname2, shallow=False)
-        if result:
-            self.stats.found_equal_comparison()
+        self.stats.did_comparison(pathname1, pathname2, result)
         return result
 
     # Determines if two files should be hard linked together.
@@ -823,14 +821,16 @@ class LinkingStats:
     def found_mismatched_ownership(self):
         self.num_mismatched_file_ownership += 1
 
-    def did_comparison(self, pathname1, pathname2):
-        if self.options.debug_level > 2:
-            _logging.debug("Comparing     : %s" % pathname1)
-            _logging.debug(" to           : %s" % pathname2)
+    def did_comparison(self, pathname1, pathname2, result):
         self.comparisons += 1
-
-    def found_equal_comparison(self):
-        self.equal_comparisons += 1
+        if self.options.debug_level > 2:
+            if result:
+                _logging.debug("Compared equal: %s" % pathname1)
+                _logging.debug(" to           : %s" % pathname2)
+                self.equal_comparisons += 1
+            else:
+                _logging.debug("Compared      : %s" % pathname1)
+                _logging.debug(" to           : %s" % pathname2)
 
     def found_existing_hardlink(self, src_namepair, dst_namepair, stat_info):
         assert len(src_namepair) == 2
