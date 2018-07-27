@@ -325,7 +325,7 @@ class Hardlinkable:
 
                     # Ensure we don't try to combine inodes that would create
                     # more links than the maximum allowed nlinks, by advancing
-                    # src until src + dst nlink < max_nlinks
+                    # src until src + dst nlink <= max_nlinks
                     #
                     # Every loop shortens the nlinks_list, so the loop will
                     # terminate.
@@ -366,9 +366,10 @@ class Hardlinkable:
                             # account for hard-linking
                             self.stats.did_hardlink(src_file_info, dst_file_info)
 
-                            assert dst_stat_info.st_nlink > 0
                             src_stat_info = fsdev.updated_stat_info(src_ino, nlink=src_stat_info.st_nlink + 1)
                             dst_stat_info = fsdev.updated_stat_info(dst_ino, nlink=dst_stat_info.st_nlink - 1)
+                            assert src_stat_info.st_nlink <= fsdev.max_nlinks
+                            assert dst_stat_info is None or dst_stat_info.st_nlink > 0
 
                             dst_namepair = tuple(dst_file_info[:2])
                             fsdev.move_linked_namepair(dst_namepair, src_ino, dst_ino)
