@@ -121,7 +121,10 @@ class BaseTests(unittest.TestCase):
         assert not pathname.lstrip().startswith('/')
         if contents is None:
             dirname = pathname
-            os.makedirs(dirname)
+            try:
+                os.makedirs(dirname)
+            except OSError:
+                pass
         else:
             dirname = os.path.dirname(pathname)
             if dirname:
