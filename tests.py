@@ -9,6 +9,9 @@ import tempfile
 import time
 import unittest
 
+from collections import defaultdict
+from itertools import chain,combinations,permutations
+
 import hardlinkable
 
 testdata0 = ""
@@ -16,6 +19,18 @@ testdata1 = "1234" * 1024 + "abc"
 testdata2 = "1234" * 1024 + "xyz"
 testdata3 = "foo"  # Short so that filesystems may back into inodes
 
+
+def powerset(iterable):
+    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+    # Note, this version skips the empty set
+    s = list(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
+
+def powerset_perms(iterable):
+    "powerset_perms([0,1]) --> (), (0,), (1,), (0, 1), (1, 0)"
+    for S in powerset(iterable):
+        for s in permutations(S):
+            yield s
 
 def get_inode(filename):
     return os.lstat(filename).st_ino
