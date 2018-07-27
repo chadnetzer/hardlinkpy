@@ -303,6 +303,7 @@ class Hardlinkable:
         for fsdev in self._fsdevs.values():
             for linkable_set in _linkable_inode_sets(fsdev.linked_inodes):
                 # Decorate-sort-undecorate with st_link as primary key
+                # Order inodes from greatest to least st_nlink
                 nlinks_list = [(fsdev.ino_stat[ino].st_nlink, ino) for ino in linkable_set]
                 nlinks_list.sort(reverse=True)
                 ino_list = [x[1] for x in nlinks_list] # strip nlinks sort key
@@ -340,6 +341,7 @@ class Hardlinkable:
                         # Samename can break nlink ordering invariant
                         assert self.options.samename or src_stat_info.st_nlink >= dst_stat_info.st_nlink
 
+                        # Ignore samename when checking max_nlink invariant
                         if (fsdev.max_nlinks is not None and
                             src_stat_info.st_nlink + dst_stat_info.st_nlink > fsdev.max_nlinks):
                             # Move inos to remaining_inos, so that src_ino will advance
@@ -348,6 +350,7 @@ class Hardlinkable:
                             ino_list = []
                             break
 
+                        # Loop through all linkable pathnames in the last inode
                         for dst_dirname, dst_filename in _namepairs_per_inode(fsdev.ino_pathnames[dst_ino]):
                             if self.options.samename and dst_filename not in fsdev.ino_pathnames[src_ino]:
                                 assert dst_filename not in fsdev.ino_pathnames[src_ino]
@@ -359,6 +362,8 @@ class Hardlinkable:
 
                             yield (src_file_info, dst_file_info)
 
+                            # After yielding, we can update stat_info to
+                            # account for hard-linking
                             self.stats.did_hardlink(src_file_info, dst_file_info)
 
                             assert dst_stat_info.st_nlink > 0
@@ -368,7 +373,8 @@ class Hardlinkable:
                             dst_namepair = tuple(dst_file_info[:2])
                             fsdev.move_linked_namepair(dst_namepair, src_ino, dst_ino)
 
-                        # if there are leftover pathnames to the inode, save it for later.
+                        # if there are still pathnames to the dest inode, save
+                        # it for possible linking later (for samename, mainly)
                         if fsdev.ino_pathnames[dst_ino]:
                             remaining_inos.append(dst_ino)
 
