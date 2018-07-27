@@ -671,7 +671,7 @@ class TestMaxNLinks(BaseTests):
         # Confirm that all but one of the identical 'b' files were linked
         # together.
         count_list = list(self.count_nlinks().values())
-        self.assertTrue(set(count_list) == set([1, self.max_nlinks]))
+        self.assertEqual(set(count_list), set([1, self.max_nlinks]))
 
         # There should be only one inode with an nlink count of 1 (ie. a
         # cluster, and a leftover)
