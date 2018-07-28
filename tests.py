@@ -990,7 +990,12 @@ class RandomizedOrderingBase(BaseTests):
 
         self.options = hardlinkable._parse_command_line(get_default_options=True)
 
-    def gen_files(self, max_dirs=True, max_filenames=True):
+    def gen_files(self, dirs=None, filenames=None):
+        if dirs is not None:
+            self.dirs = dirs
+        if filenames is not None:
+            self.filenames = filenames
+
         options = self.options
         options.linking_enabled = True
         options.printstats = False
@@ -1016,16 +1021,8 @@ class RandomizedOrderingBase(BaseTests):
         self.equalfile_pathnames = defaultdict(list)
         self.counts = defaultdict(int)
 
-        # Possibly choose an arbitrary number of dirs and filenames per dir.
-        if max_dirs:
-            M = len(self.dirs)
-        else:
-            M = random.choice(range(len(self.dirs))) + 1
-
-        if max_filenames:
-            N = len(self.filenames)
-        else:
-            N = random.choice(range(len(self.filenames))) + 1
+        M = len(self.dirs)
+        N = len(self.filenames)
 
         for i in range(M):
             for j in range(N):
@@ -1039,6 +1036,7 @@ class RandomizedOrderingBase(BaseTests):
                     src_key = random.choice(list(self.equalfile_pathnames.keys()))
                     src_pathname = random.choice(self.equalfile_pathnames[src_key])
                     assert pathname not in self.file_contents
+
                     if not options.samename or filename == src_key[1]:
                         self.make_hardlinkable_file(dirname, None)
                         self.make_linked_file(src_pathname, pathname)
@@ -1050,11 +1048,11 @@ class RandomizedOrderingBase(BaseTests):
                         self.counts['hardlinked_previously'] += 1
                 else:
                     data = random.choice(self.test_data)
-                    # A key that identifies "equal" (ie. linkable) files
-                    key = key_func(data, filename, now)
 
                     self.make_hardlinkable_file(pathname, data)
                     os.utime(pathname, (now, now))
+
+                    key = key_func(data, filename, now)
                     self.equalfile_pathnames[key].append(pathname)
 
     def check_equalfiles_stats(self, stats, max_nlinks=None):
