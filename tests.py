@@ -1019,6 +1019,7 @@ class RandomizedOrderingBase(BaseTests):
             key_func = key_func_mtime
 
         self.equalfile_pathnames = defaultdict(list)
+        self.unwalked_pathnames = defaultdict(set)
         self.counts = defaultdict(int)
 
         M = len(self.dirs)
@@ -1061,6 +1062,25 @@ class RandomizedOrderingBase(BaseTests):
 
                     key = key_func(data, filename, now)
                     self.equalfile_pathnames[key].append(pathname)
+
+    def link_with_dirs(self, src_dirs, dst_dirs, filenames):
+        # Make a list of all dirs with all filenames per dir
+        dst_pathnames = [os.path.join(x,y) for x in dst_dirs for y in filenames]
+        random.shuffle(dst_pathnames)
+
+        # iterate over all the src dirs (single level only), with a chance of
+        # linking them to the destination pathnames
+        for directory in src_dirs:
+            for entry in os.listdir(directory):
+                src_pathname = os.path.join(directory, entry)
+                if os.path.isfile(src_pathname):
+                    if random.random() < 0.1:
+                        if not dst_pathnames:
+                            return
+                        dst_pathname = dst_pathnames.pop()
+                        self.make_hardlinkable_file(os.path.dirname(dst_pathname), None)
+                        self.make_linked_file(src_pathname, dst_pathname)
+                        self.unwalked_pathnames[src_pathname].add(dst_pathname)
 
     def check_equalfiles_stats(self, stats, max_nlinks=None):
         self.assertEqual(stats.hardlinked_previously, self.counts['hardlinked_previously'])
@@ -1125,6 +1145,27 @@ class RandomizedOrderingBase(BaseTests):
             else:
                 total_inodes = (len(pathnames) + max_nlinks - 1) // max_nlinks
             sum_in_bytes += len(data) * (len(pathnames)-total_inodes)
+
+            # Subtract out extra saved nlinks from outside the walked tree
+            # (doesn't properly account for hitting max_nlinks)
+            #
+            # This happens when the inode that is linked to our out of tree
+            # inode is used as the source inode, which means all the other
+            # inodes that are linked to it have their nlink count drop to zero,
+            # and are thus counted by the hardlinker as saving space.
+            #
+            # However, if the out of tree inode is used as a destination inode,
+            # it gets unlinked from the pathnames in the walked tree, but its
+            # nlink count does *not* drop to zero (the out of tree path is
+            # still linked to it), and thus doesn't get counted as saved space
+            # in the hardlinker.  We account for this by subtracting out it's
+            # "saved" space from our in tree estimate (which counts pathnames,
+            # not nlinks).
+            for pathname in pathnames:
+                if pathname in self.unwalked_pathnames:
+                    for dst_pathname in self.unwalked_pathnames[pathname]:
+                        if os.lstat(dst_pathname).st_nlink == 1:
+                            sum_in_bytes -= len(data)
         return sum_in_bytes
 
     def full_test_ignoring_maxlinks(self):
@@ -1152,6 +1193,23 @@ class TestRandomizedOrderingEqualFiles(RandomizedOrderingBase):
     def test_linking(self):
         self.options.samename = True
         self.full_test_ignoring_maxlinks()
+
+
+class TestRandomizedOrderingPartialTreeWalk(RandomizedOrderingBase):
+    def test_linking(self):
+        # Reserve a quarter of the dirs to not pass to Hardlinkable
+        other_dirs = self.dirs[::4]
+        walk_dirs = list(set(self.dirs) - set(other_dirs))
+        assert len(set(walk_dirs) & set(other_dirs)) == 0
+
+        self.gen_files(dirs=walk_dirs)
+        self.link_with_dirs(walk_dirs, other_dirs, self.filenames[::4])
+        hl = hardlinkable.Hardlinkable(self.options)
+        stats = hl.run(walk_dirs)
+
+        self.verify_file_contents()
+        self.check_equalfiles_all_linked()
+        self.check_equalfiles_stats(stats)
 
 
 @unittest.skip("The randomized max nlinks tests takes a while...")
