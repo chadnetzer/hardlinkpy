@@ -979,7 +979,7 @@ class RandomizedOrderingBase(BaseTests):
         self.filenames = list('abcdefghijklmnopqrstuvwxyz')
         self.test_data = ['', '1', '22', '333', '4'*4, '5'*5, '6'*6, '7'*7, '8'*8]
         now = time.time()
-        self.mtimes = [now, now - 2, now - 4]
+        self.mtimes = [int(now), int(now - 2), int(now - 4)]
 
         # Randomize order to (potentially) expose bugs that may be masked by a
         # specific tree traversal ordering
