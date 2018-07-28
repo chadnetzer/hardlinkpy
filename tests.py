@@ -1024,8 +1024,11 @@ class RandomizedOrderingBase(BaseTests):
         M = len(self.dirs)
         N = len(self.filenames)
 
+        uniq_ctr = 0
+        loop_ctr = 0
         for i in range(M):
             for j in range(N):
+                loop_ctr += 1
                 dirname = self.dirs[i]
                 filename = self.filenames[j]
                 pathname = os.path.join(dirname, filename)
@@ -1043,11 +1046,15 @@ class RandomizedOrderingBase(BaseTests):
                         self.equalfile_pathnames[src_key].append(pathname)
                         made_hardlink = True
 
-                    # Ignore too-big files for now
                     if made_hardlink and len(src_key[0]) >= options.min_file_size:
                         self.counts['hardlinked_previously'] += 1
                 else:
-                    data = random.choice(self.test_data)
+                    # Occasionally make a file with unique content
+                    if random.random() < 0.05:
+                        data = "u" + str(uniq_ctr)
+                        uniq_ctr += 1
+                    else:
+                        data = random.choice(self.test_data)
 
                     self.make_hardlinkable_file(pathname, data)
                     os.utime(pathname, (now, now))
