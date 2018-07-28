@@ -997,16 +997,21 @@ class RandomizedOrderingBase(BaseTests):
         options._force_stats_to_store_old_hardlinks = True
         options._force_stats_to_store_new_hardlinks = True
 
-        def key_func_contentonly(data, filename, mtime):
-            return (data,)
-
         def key_func_samename(data, filename, mtime):
             return (data, filename, mtime)
+
+        def key_func_mtime(data, filename, mtime):
+            return (data, None, mtime)
+
+        def key_func_contentonly(data, filename, mtime):
+            return (data, None, None)
 
         if options.contentonly:
             key_func = key_func_contentonly
         elif options.samename:
             key_func = key_func_samename
+        else:
+            key_func = key_func_mtime
 
         self.equalfile_pathnames = defaultdict(list)
         self.counts = defaultdict(int)
@@ -1125,6 +1130,11 @@ class RandomizedOrderingBase(BaseTests):
         self.verify_file_contents()
         self.check_equalfiles_all_linked()
         self.check_equalfiles_stats(stats)
+
+
+class TestRandomizedOrdering(RandomizedOrderingBase):
+    def test_linking(self):
+        self.full_test_ignoring_maxlinks()
 
 
 class TestRandomizedOrderingContentOnly(RandomizedOrderingBase):
