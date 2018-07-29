@@ -756,9 +756,9 @@ class LinkingStats:
         self.hardlinked_thisrun = 0         # hardlinks done this run
         self.num_inodes = 0                 # inodes found this run
         self.nlinks_to_zero_thisrun = 0     # how man nlinks actually went to zero
-        self.hardlinked_previously = 0      # hardlinks that are already existing
-        self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run
-        self.bytes_saved_previously = 0     # bytes saved by previous hardlinks
+        self.hardlinked_previously = 0      # hardlinks that are already existing (based on walked dirs only)
+        self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run (ie. when nlink goes to zero)
+        self.bytes_saved_previously = 0     # bytes saved by previous hardlinks (in walked dirs only)
         self.hardlinkpairs = []             # list of files hardlinkable this run
         self.starttime = _time.time()       # track how long it takes
         self.currently_hardlinked = {}      # list of files currently hardlinked
