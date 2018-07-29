@@ -235,7 +235,13 @@ class Hardlinkable:
         self.stats.print_stats(aborted_early)
 
         if not aborted_early:
-            self._postlink_inode_stats_sanity_check(self._prelink_inode_stats)
+            self._postlink_inode_stats = self._inode_stats()
+            self._inode_stats_sanity_check(self._prelink_inode_stats,
+                                           self._postlink_inode_stats)
+
+            # Store the inode stats with the LinkingStats, useful for testing
+            self.stats.inode_stats = [self._prelink_inode_stats,
+                                      self._postlink_inode_stats]
 
         return self.stats
 
@@ -636,10 +642,9 @@ class Hardlinkable:
                 'total_path_links' : total_path_links,
                 'total_redundant_path_bytes': total_redundant_path_bytes}
 
-    def _postlink_inode_stats_sanity_check(self, prelink_inode_stats):
+    def _inode_stats_sanity_check(self, prelink_inode_stats, postlink_inode_stats):
         """Check stats directly from inode data."""
         # double check figures based on direct inode stats
-        postlink_inode_stats = self._inode_stats()
         totalsavedbytes = self.stats.bytes_saved_thisrun + self.stats.bytes_saved_previously
         bytes_saved_thisrun = postlink_inode_stats['total_redundant_path_bytes'] - prelink_inode_stats['total_redundant_path_bytes']
         assert totalsavedbytes == postlink_inode_stats['total_redundant_path_bytes'], ((totalsavedbytes,
