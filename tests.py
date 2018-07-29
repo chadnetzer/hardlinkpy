@@ -85,13 +85,17 @@ class BaseTests(unittest.TestCase):
         # Keep track of all files, and their content, for deleting later
         self.file_contents = {}
 
+        # Also keep track of directories for deletion later.
+        self._directories = set()
+
     def remove_tempdir(self):
         for pathname in self.file_contents:
             assert os.path.normpath(pathname) == pathname
             assert not pathname.lstrip().startswith("/")
             os.unlink(pathname)
-            dirname = os.path.dirname(pathname)
 
+        # Now remove any remaining (registered) directories
+        for dirname in self._directories:
             # This is last resort against an infinite loop, which shouldn't
             # really happen anyway
             len_dirname = len(dirname) + 1
@@ -122,6 +126,7 @@ class BaseTests(unittest.TestCase):
         assert not pathname.lstrip().startswith('/')
         if contents is None:
             dirname = pathname
+            self._directories.add(dirname)
             try:
                 os.makedirs(dirname)
             except OSError:
@@ -129,6 +134,7 @@ class BaseTests(unittest.TestCase):
         else:
             dirname = os.path.dirname(pathname)
             if dirname:
+                self._directories.add(dirname)
                 try:
                     os.makedirs(dirname)
                 except OSError:
@@ -146,6 +152,7 @@ class BaseTests(unittest.TestCase):
         assert dst not in self.file_contents
         os.link(src, dst)
         self.file_contents[dst] = self.file_contents[src]
+        self._directories.add(os.path.dirname(dst))
 
     def remove_file(self, pathname):
         assert pathname in self.file_contents
