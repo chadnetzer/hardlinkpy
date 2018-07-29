@@ -978,6 +978,134 @@ class TestNLinkOrderBug(BaseTests):
         self.assertEqual(os.lstat('a').st_nlink, 8)
 
 
+class TestSimpleStats(BaseTests):
+    def setUp(self):
+        self.setup_tempdir()
+
+        self.options = hardlinkable._parse_command_line(get_default_options=True)
+        self.options.linking_enabled = True
+        self.options.contentonly = True
+        self.options.printstats = False
+        self.options._force_stats_to_store_old_hardlinks = True
+        self.options._force_stats_to_store_new_hardlinks = True
+
+        self.dirs = [''.join(x) for x in powerset_perms('ABCD')]
+        self.filenames = list('abcdefghijklmnopqrstuvwxyz')
+        random.shuffle(self.dirs)
+        random.shuffle(self.filenames)
+
+
+    def easy_file_maker(self, dirnames, filenames, contents, linkdirs=None, linkfiles=None):
+        if linkdirs is None:
+            linkdirs = []
+        if linkfiles is None:
+            linkfiles = []
+
+        src_pathnames = []
+        for dirname in dirnames:
+            for filename in filenames:
+                pathname = os.path.join(dirname, filename)
+                self.make_hardlinkable_file(pathname, contents.pop())
+                src_pathnames.append(pathname)
+            for filename in linkfiles:
+                pathname = os.path.join(dirname, filename)
+                self.make_linked_file(src_pathnames[0], pathname)
+
+    def test_empty_dirs(self):
+        for dirname in self.dirs:
+            self.make_hardlinkable_file(dirname, None)
+        stats = hardlinkable.Hardlinkable(self.options).run('.')
+        self.verify_file_contents()
+
+    def test_single_file(self):
+        self.easy_file_maker(self.dirs[:1], self.filenames[:1], ["1"])
+        stats = hardlinkable.Hardlinkable(self.options).run('.')
+        self.verify_file_contents()
+
+        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.bytes_saved_thisrun, 0)
+        self.assertEqual(stats.bytes_saved_previously, 0)
+
+    def test_two_unequal_files(self):
+        self.easy_file_maker(self.dirs[:1], self.filenames[:2], ["1", "2"])
+        stats = hardlinkable.Hardlinkable(self.options).run('.')
+        self.verify_file_contents()
+
+        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.bytes_saved_thisrun, 0)
+        self.assertEqual(stats.bytes_saved_previously, 0)
+
+    def test_two_equal_files(self):
+        self.easy_file_maker(self.dirs[:1], self.filenames[:2], ["1", "1"])
+        stats = hardlinkable.Hardlinkable(self.options).run('.')
+        self.verify_file_contents()
+
+        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.bytes_saved_thisrun, 1)
+        self.assertEqual(stats.bytes_saved_previously, 0)
+
+    def test_three_equal_two_equal_files(self):
+        self.easy_file_maker(self.dirs[:1], self.filenames[:5], ["1", "1", "1", "22", "22"])
+        stats = hardlinkable.Hardlinkable(self.options).run('.')
+        self.verify_file_contents()
+
+        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.bytes_saved_thisrun, 4)
+        self.assertEqual(stats.bytes_saved_previously, 0)
+
+    def test_two_linked_files(self):
+        self.easy_file_maker(self.dirs[:1], self.filenames[:1],
+                             contents=["22", "22"],
+                             linkfiles=['aa'])
+        stats = hardlinkable.Hardlinkable(self.options).run('.')
+        self.verify_file_contents()
+
+        self.assertEqual(stats.hardlinked_previously, 1)
+        self.assertEqual(stats.bytes_saved_thisrun, 0)
+        self.assertEqual(stats.bytes_saved_previously, 2)
+
+    def test_three_linked_files(self):
+        self.easy_file_maker(self.dirs[:1], self.filenames[:1],
+                             contents=["22", "22"],
+                             linkfiles=['aa','bb'])
+        stats = hardlinkable.Hardlinkable(self.options).run('.')
+        self.verify_file_contents()
+
+        self.assertEqual(stats.hardlinked_previously, 2)
+        self.assertEqual(stats.bytes_saved_thisrun, 0)
+        self.assertEqual(stats.bytes_saved_previously, 4)
+
+    def test_unwalked_dir_links_no_equal_files(self):
+        for dirname in self.dirs[:2]:
+            self.make_hardlinkable_file(dirname, None)
+        self.easy_file_maker(self.dirs[:1], self.filenames[:1], contents=["1"])
+        src_pathname = os.path.join(self.dirs[0], self.filenames[0])
+        dst_pathname = os.path.join(self.dirs[1], self.filenames[1])
+        self.make_linked_file(src_pathname, dst_pathname)
+        stats = hardlinkable.Hardlinkable(self.options).run(self.dirs[:1])
+        self.verify_file_contents()
+
+        # Links outside of tree walk don't get counted as hardlinked previously
+        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.bytes_saved_thisrun, 0)
+        self.assertEqual(stats.bytes_saved_previously, 0)
+
+    def test_unwalked_dir_links_one_equal_file(self):
+        for dirname in self.dirs[:2]:
+            self.make_hardlinkable_file(dirname, None)
+        self.easy_file_maker(self.dirs[:1], self.filenames[:2], contents=["1", "1"])
+        src_pathname = os.path.join(self.dirs[0], self.filenames[0])
+        dst_pathname = os.path.join(self.dirs[1], self.filenames[1])
+        self.make_linked_file(src_pathname, dst_pathname)
+        stats = hardlinkable.Hardlinkable(self.options).run(self.dirs[:1])
+        self.verify_file_contents()
+
+        # Links outside of tree walk don't get counted as hardlinked previously
+        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.bytes_saved_thisrun, 1)
+        self.assertEqual(stats.bytes_saved_previously, 0)
+
+
 class RandomizedOrderingBase(BaseTests):
     def setUp(self):
         self.setup_tempdir()
