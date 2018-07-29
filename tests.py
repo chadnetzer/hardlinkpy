@@ -3,11 +3,15 @@
 import errno
 import os
 import os.path
+import random
 import stat
 import sys
 import tempfile
 import time
 import unittest
+
+from collections import defaultdict
+from itertools import chain,combinations,permutations
 
 import hardlinkable
 
@@ -16,6 +20,18 @@ testdata1 = "1234" * 1024 + "abc"
 testdata2 = "1234" * 1024 + "xyz"
 testdata3 = "foo"  # Short so that filesystems may back into inodes
 
+
+def powerset(iterable):
+    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+    # Note, this version skips the empty set
+    s = list(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
+
+def powerset_perms(iterable):
+    "powerset_perms([0,1]) --> (), (0,), (1,), (0, 1), (1, 0)"
+    for S in powerset(iterable):
+        for s in permutations(S):
+            yield s
 
 def get_inode(filename):
     return os.lstat(filename).st_ino
@@ -69,13 +85,17 @@ class BaseTests(unittest.TestCase):
         # Keep track of all files, and their content, for deleting later
         self.file_contents = {}
 
+        # Also keep track of directories for deletion later.
+        self._directories = set()
+
     def remove_tempdir(self):
         for pathname in self.file_contents:
             assert os.path.normpath(pathname) == pathname
             assert not pathname.lstrip().startswith("/")
             os.unlink(pathname)
-            dirname = os.path.dirname(pathname)
 
+        # Now remove any remaining (registered) directories
+        for dirname in self._directories:
             # This is last resort against an infinite loop, which shouldn't
             # really happen anyway
             len_dirname = len(dirname) + 1
@@ -106,10 +126,15 @@ class BaseTests(unittest.TestCase):
         assert not pathname.lstrip().startswith('/')
         if contents is None:
             dirname = pathname
-            os.makedirs(dirname)
+            self._directories.add(dirname)
+            try:
+                os.makedirs(dirname)
+            except OSError:
+                pass
         else:
             dirname = os.path.dirname(pathname)
             if dirname:
+                self._directories.add(dirname)
                 try:
                     os.makedirs(dirname)
                 except OSError:
@@ -127,6 +152,7 @@ class BaseTests(unittest.TestCase):
         assert dst not in self.file_contents
         os.link(src, dst)
         self.file_contents[dst] = self.file_contents[src]
+        self._directories.add(os.path.dirname(dst))
 
     def remove_file(self, pathname):
         assert pathname in self.file_contents
@@ -653,7 +679,7 @@ class TestMaxNLinks(BaseTests):
         # Confirm that all but one of the identical 'b' files were linked
         # together.
         count_list = list(self.count_nlinks().values())
-        self.assertTrue(set(count_list) == set([1, self.max_nlinks]))
+        self.assertEqual(set(count_list), set([1, self.max_nlinks]))
 
         # There should be only one inode with an nlink count of 1 (ie. a
         # cluster, and a leftover)
@@ -950,6 +976,410 @@ class TestNLinkOrderBug(BaseTests):
         # is always the higher than the destination nlink, the 'a' or 'b' file
         # can get orphaned, because it isn't re-scanned.
         self.assertEqual(os.lstat('a').st_nlink, 8)
+
+
+class TestSimpleStats(BaseTests):
+    def setUp(self):
+        self.setup_tempdir()
+
+        self.options = hardlinkable._parse_command_line(get_default_options=True)
+        self.options.linking_enabled = True
+        self.options.contentonly = True
+        self.options.printstats = False
+        self.options._force_stats_to_store_old_hardlinks = True
+        self.options._force_stats_to_store_new_hardlinks = True
+
+        self.dirs = [''.join(x) for x in powerset_perms('ABCD')]
+        self.filenames = list('abcdefghijklmnopqrstuvwxyz')
+        random.shuffle(self.dirs)
+        random.shuffle(self.filenames)
+
+
+    def easy_file_maker(self, dirnames, filenames, contents, linkdirs=None, linkfiles=None):
+        if linkdirs is None:
+            linkdirs = []
+        if linkfiles is None:
+            linkfiles = []
+
+        src_pathnames = []
+        for dirname in dirnames:
+            for filename in filenames:
+                pathname = os.path.join(dirname, filename)
+                self.make_hardlinkable_file(pathname, contents.pop())
+                src_pathnames.append(pathname)
+            for filename in linkfiles:
+                pathname = os.path.join(dirname, filename)
+                self.make_linked_file(src_pathnames[0], pathname)
+
+    def test_empty_dirs(self):
+        for dirname in self.dirs:
+            self.make_hardlinkable_file(dirname, None)
+        stats = hardlinkable.Hardlinkable(self.options).run('.')
+        self.verify_file_contents()
+
+    def test_single_file(self):
+        self.easy_file_maker(self.dirs[:1], self.filenames[:1], ["1"])
+        stats = hardlinkable.Hardlinkable(self.options).run('.')
+        self.verify_file_contents()
+
+        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.bytes_saved_thisrun, 0)
+        self.assertEqual(stats.bytes_saved_previously, 0)
+
+    def test_two_unequal_files(self):
+        self.easy_file_maker(self.dirs[:1], self.filenames[:2], ["1", "2"])
+        stats = hardlinkable.Hardlinkable(self.options).run('.')
+        self.verify_file_contents()
+
+        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.bytes_saved_thisrun, 0)
+        self.assertEqual(stats.bytes_saved_previously, 0)
+
+    def test_two_equal_files(self):
+        self.easy_file_maker(self.dirs[:1], self.filenames[:2], ["1", "1"])
+        stats = hardlinkable.Hardlinkable(self.options).run('.')
+        self.verify_file_contents()
+
+        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.bytes_saved_thisrun, 1)
+        self.assertEqual(stats.bytes_saved_previously, 0)
+
+    def test_three_equal_two_equal_files(self):
+        self.easy_file_maker(self.dirs[:1], self.filenames[:5], ["1", "1", "1", "22", "22"])
+        stats = hardlinkable.Hardlinkable(self.options).run('.')
+        self.verify_file_contents()
+
+        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.bytes_saved_thisrun, 4)
+        self.assertEqual(stats.bytes_saved_previously, 0)
+
+    def test_two_linked_files(self):
+        self.easy_file_maker(self.dirs[:1], self.filenames[:1],
+                             contents=["22", "22"],
+                             linkfiles=['aa'])
+        stats = hardlinkable.Hardlinkable(self.options).run('.')
+        self.verify_file_contents()
+
+        self.assertEqual(stats.hardlinked_previously, 1)
+        self.assertEqual(stats.bytes_saved_thisrun, 0)
+        self.assertEqual(stats.bytes_saved_previously, 2)
+
+    def test_three_linked_files(self):
+        self.easy_file_maker(self.dirs[:1], self.filenames[:1],
+                             contents=["22", "22"],
+                             linkfiles=['aa','bb'])
+        stats = hardlinkable.Hardlinkable(self.options).run('.')
+        self.verify_file_contents()
+
+        self.assertEqual(stats.hardlinked_previously, 2)
+        self.assertEqual(stats.bytes_saved_thisrun, 0)
+        self.assertEqual(stats.bytes_saved_previously, 4)
+
+    def test_unwalked_dir_links_no_equal_files(self):
+        for dirname in self.dirs[:2]:
+            self.make_hardlinkable_file(dirname, None)
+        self.easy_file_maker(self.dirs[:1], self.filenames[:1], contents=["1"])
+        src_pathname = os.path.join(self.dirs[0], self.filenames[0])
+        dst_pathname = os.path.join(self.dirs[1], self.filenames[1])
+        self.make_linked_file(src_pathname, dst_pathname)
+        stats = hardlinkable.Hardlinkable(self.options).run(self.dirs[:1])
+        self.verify_file_contents()
+
+        # Links outside of tree walk don't get counted as hardlinked previously
+        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.bytes_saved_thisrun, 0)
+        self.assertEqual(stats.bytes_saved_previously, 0)
+
+    def test_unwalked_dir_links_one_equal_file(self):
+        for dirname in self.dirs[:2]:
+            self.make_hardlinkable_file(dirname, None)
+        self.easy_file_maker(self.dirs[:1], self.filenames[:2], contents=["1", "1"])
+        src_pathname = os.path.join(self.dirs[0], self.filenames[0])
+        dst_pathname = os.path.join(self.dirs[1], self.filenames[1])
+        self.make_linked_file(src_pathname, dst_pathname)
+        stats = hardlinkable.Hardlinkable(self.options).run(self.dirs[:1])
+        self.verify_file_contents()
+
+        # Links outside of tree walk don't get counted as hardlinked previously
+        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.bytes_saved_thisrun, 1)
+        self.assertEqual(stats.bytes_saved_previously, 0)
+
+
+class RandomizedOrderingBase(BaseTests):
+    def setUp(self):
+        self.setup_tempdir()
+
+        self.dirs = [''.join(x) for x in powerset_perms('ABCD')]
+        self.filenames = list('abcdefghijklmnopqrstuvwxyz')
+        self.test_data = ['', '1', '22', '333', '4'*4, '5'*5, '6'*6, '7'*7, '8'*8]
+        now = time.time()
+        self.mtimes = [int(now), int(now - 2), int(now - 4)]
+
+        # Randomize order to (potentially) expose bugs that may be masked by a
+        # specific tree traversal ordering
+        random.shuffle(self.dirs)
+        random.shuffle(self.filenames)
+        random.shuffle(self.test_data)
+        random.shuffle(self.mtimes)
+
+        self.options = hardlinkable._parse_command_line(get_default_options=True)
+
+    def gen_files(self, dirs=None, filenames=None):
+        if dirs is not None:
+            self.dirs = dirs
+        if filenames is not None:
+            self.filenames = filenames
+
+        options = self.options
+        options.linking_enabled = True
+        options.printstats = False
+        options._force_stats_to_store_old_hardlinks = True
+        options._force_stats_to_store_new_hardlinks = True
+
+        def key_func_samename(data, filename, mtime):
+            return (data, filename, mtime)
+
+        def key_func_mtime(data, filename, mtime):
+            return (data, None, mtime)
+
+        def key_func_contentonly(data, filename, mtime):
+            return (data, None, None)
+
+        if options.contentonly:
+            key_func = key_func_contentonly
+        elif options.samename:
+            key_func = key_func_samename
+        else:
+            key_func = key_func_mtime
+
+        self.equalfile_pathnames = defaultdict(list)
+        self.seen_paths = set()
+        self.unwalked_pathnames = defaultdict(set)
+        self.counts = defaultdict(int)
+
+        M = len(self.dirs)
+        N = len(self.filenames)
+
+        uniq_ctr = 0
+        loop_ctr = 0
+        for i in range(M):
+            for j in range(N):
+                loop_ctr += 1
+                dirname = self.dirs[i]
+                filename = self.filenames[j]
+                pathname = os.path.join(dirname, filename)
+                now = random.choice(self.mtimes)
+
+                made_hardlink = False
+                if len(self.equalfile_pathnames) > 4 and random.random() < 0.25:
+                    src_key = random.choice(list(self.equalfile_pathnames.keys()))
+                    src_pathname = random.choice(self.equalfile_pathnames[src_key])
+                    assert pathname not in self.file_contents
+
+                    if not options.samename or filename == src_key[1]:
+                        self.make_hardlinkable_file(dirname, None)
+                        self.make_linked_file(src_pathname, pathname)
+                        self.equalfile_pathnames[src_key].append(pathname)
+                        self.seen_paths.add(pathname)
+                        made_hardlink = True
+
+                    if made_hardlink and len(src_key[0]) >= options.min_file_size:
+                        self.counts['hardlinked_previously'] += 1
+                else:
+                    # Occasionally make a file with unique content
+                    if random.random() < 0.05:
+                        data = "u" + str(uniq_ctr)
+                        uniq_ctr += 1
+                    else:
+                        data = random.choice(self.test_data)
+
+                    self.make_hardlinkable_file(pathname, data)
+                    os.utime(pathname, (now, now))
+
+                    key = key_func(data, filename, now)
+                    self.equalfile_pathnames[key].append(pathname)
+                    self.seen_paths.add(pathname)
+
+    def link_with_dirs(self, src_dirs, dst_dirs, filenames):
+        # Make a list of all dirs with all filenames per dir
+        dst_pathnames = [os.path.join(x,y) for x in dst_dirs for y in filenames]
+        random.shuffle(dst_pathnames)
+
+        # iterate over all the src dirs (single level only), with a chance of
+        # linking them to the destination pathnames
+        for directory in src_dirs:
+            for entry in os.listdir(directory):
+                src_pathname = os.path.join(directory, entry)
+                if os.path.isfile(src_pathname):
+                    assert src_pathname in self.seen_paths
+                    if random.random() < 0.1 and os.lstat(src_pathname).st_nlink == 1:
+                        if not dst_pathnames:
+                            return
+                        dst_pathname = dst_pathnames.pop()
+                        assert dst_pathname not in self.seen_paths
+                        self.make_hardlinkable_file(os.path.dirname(dst_pathname), None)
+                        self.make_linked_file(src_pathname, dst_pathname)
+                        self.unwalked_pathnames[src_pathname].add(dst_pathname)
+
+    def check_equalfiles_stats(self, stats, max_nlinks=None):
+        self.assertEqual(stats.hardlinked_previously, self.counts['hardlinked_previously'])
+        self.assertEqual(stats._count_hardlinked_previously(), self.counts['hardlinked_previously'])
+        self.assertEqual(stats.bytes_saved_thisrun + stats.bytes_saved_previously,
+                         self.sum_saved_bytes(max_nlinks))
+
+    def check_equalfiles_all_linked(self):
+        for key, pathnames in self.equalfile_pathnames.items():
+            if len(key[0]) < self.options.min_file_size or not pathnames:
+                continue
+
+            si = os.lstat(pathnames[0])
+            stat_set = set([si])
+            for pathname in pathnames[1:]:
+                si2 = os.lstat(pathname)
+                stat_set.add(si2)
+            nlink_list = sorted([os.lstat(pathname).st_nlink for pathname in pathnames], reverse=True)
+            total_nlinks = sum(set(nlink_list))
+
+            self.assertEqual(len([s.st_nlink for s in stat_set]), 1)
+            src_pathname = pathnames[0]
+            src_ino = get_inode(src_pathname)
+            # Cannot handle st_nlink > max_nlinks
+            for pathname in pathnames[1:]:
+                self.assertEqual(src_ino, get_inode(pathname))
+
+    def check_max_nlinks_hit(self):
+        max_nlinks = None
+        for key, pathnames in self.equalfile_pathnames.items():
+            if len(key[0]) < self.options.min_file_size or not pathnames:
+                continue
+
+            if max_nlinks is None:
+                max_nlinks = os.pathconf(pathnames[0], "PC_LINK_MAX")
+
+            nlink_list = sorted(set([os.lstat(pathname).st_nlink for pathname in pathnames]), reverse=True)
+            self.assertLessEqual(max(nlink_list), max_nlinks)
+
+            # the sum of unique nlinks should add up to more than the
+            # max_nlinks value
+            total_nlinks = sum(set(nlink_list))
+            self.assertGreater(total_nlinks, max_nlinks)
+
+        # pass on max_nlinks value for other checkers
+        return max_nlinks
+
+    def sum_saved_bytes(self, max_nlinks=None):
+        sum_in_bytes = 0
+        for key, pathnames in self.equalfile_pathnames.items():
+            data = key[0]
+            if len(data) < self.options.min_file_size or not pathnames:
+                continue
+
+            # The bytes amount is not counted for each inode used (ie. at least
+            # one copy of the data per-inode is stored).
+            #
+            # Assumes that (for testing) the number of inodes will be
+            # consistent with reaching max_nlinks exactly.
+            if max_nlinks is None:
+                total_inodes = 1
+            else:
+                total_inodes = (len(pathnames) + max_nlinks - 1) // max_nlinks
+            sum_in_bytes += len(data) * (len(pathnames)-total_inodes)
+
+            # Subtract out extra saved nlinks from outside the walked tree
+            # (doesn't properly account for hitting max_nlinks)
+            #
+            # This happens when the inode that is linked to our out of tree
+            # inode is used as the source inode, which means all the other
+            # inodes that are linked to it have their nlink count drop to zero,
+            # and are thus counted by the hardlinker as saving space.
+            #
+            # However, if the out of tree inode is used as a destination inode,
+            # it gets unlinked from the pathnames in the walked tree, but its
+            # nlink count does *not* drop to zero (the out of tree path is
+            # still linked to it), and thus doesn't get counted as saved space
+            # in the hardlinker.  We account for this by subtracting out it's
+            # "saved" space from our in tree estimate (which counts pathnames,
+            # not nlinks).  For this accounting to work, we ensure we don't
+            # link the out-of-tree files to an inode w/ nlink > 1.
+            ino_set = set()
+            for pathname in pathnames:
+                if pathname in self.unwalked_pathnames:
+                    for dst_pathname in self.unwalked_pathnames[pathname]:
+                        st = os.lstat(dst_pathname)
+                        ino_set.add(st)
+            for st in ino_set:
+                if st.st_nlink == 1:
+                    assert len(data) == st.st_size
+                    sum_in_bytes -= len(data)
+        return sum_in_bytes
+
+    def full_test_ignoring_maxlinks(self):
+        self.gen_files()
+
+        hl = hardlinkable.Hardlinkable(self.options)
+        stats = hl.run([self.root])
+        self.verify_file_contents()
+        self.check_equalfiles_all_linked()
+        self.check_equalfiles_stats(stats)
+
+
+class TestRandomizedOrdering(RandomizedOrderingBase):
+    def test_linking(self):
+        self.full_test_ignoring_maxlinks()
+
+
+class TestRandomizedOrderingContentOnly(RandomizedOrderingBase):
+    def test_linking(self):
+        self.options.contentonly = True
+        self.full_test_ignoring_maxlinks()
+
+
+class TestRandomizedOrderingEqualFiles(RandomizedOrderingBase):
+    def test_linking(self):
+        self.options.samename = True
+        self.full_test_ignoring_maxlinks()
+
+
+class TestRandomizedOrderingPartialTreeWalk(RandomizedOrderingBase):
+    def test_linking(self):
+        # Reserve a quarter of the dirs to not pass to Hardlinkable
+        other_dirs = self.dirs[::4]
+        walk_dirs = list(set(self.dirs) - set(other_dirs))
+        assert len(set(walk_dirs) & set(other_dirs)) == 0
+
+        self.gen_files(dirs=walk_dirs)
+        self.link_with_dirs(walk_dirs, other_dirs, self.filenames[::4])
+        hl = hardlinkable.Hardlinkable(self.options)
+        stats = hl.run(walk_dirs)
+
+        self.verify_file_contents()
+        self.check_equalfiles_all_linked()
+        self.check_equalfiles_stats(stats)
+
+
+@unittest.skip("The randomized max nlinks tests takes a while...")
+class TestRandomizedOrderingMaxLinks(RandomizedOrderingBase):
+    def test_linking(self):
+        # Force the linking to hit the max_nlinks limit
+        self.options.samename = True
+
+        self.dirs = [''.join(x) for x in powerset_perms('ABCDEFGH')]
+        random.shuffle(self.dirs)
+        self.filenames = self.filenames[:1]
+        self.test_data = self.test_data[:2]
+        self.mtimes = self.mtimes[:1]
+
+        assert len(self.dirs) > 0
+        assert len(self.filenames) > 0
+        assert len(self.test_data) > 0
+
+        self.gen_files()
+        hl = hardlinkable.Hardlinkable(self.options)
+        stats = hl.run([self.root])
+        self.verify_file_contents()
+        max_nlinks = self.check_max_nlinks_hit()
+        self.check_equalfiles_stats(stats, max_nlinks)
 
 
 if __name__ == '__main__':

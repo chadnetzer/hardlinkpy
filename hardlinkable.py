@@ -129,6 +129,7 @@ by another user.
     # Allow for a way to get a default options object (for Statistics)
     if get_default_options:
         (options, args) = parser.parse_args([""])
+        options_validation(options)
         return options
 
     (options, args) = parser.parse_args()
@@ -141,6 +142,12 @@ by another user.
         if not _os.path.isdir(dirname):
             parser.error("%s is NOT a directory" % dirname)
 
+    options_validation(options)
+
+    return options, args
+
+
+def options_validation(options):
     if options.debug_level > 1:
         _logging.getLogger().setLevel(_logging.DEBUG)
 
@@ -169,8 +176,6 @@ by another user.
     if options.linking_enabled:
         print("----- Hardlinking enabled.  The filesystem will be modified -----")
 
-    return options, args
-
 
 class Hardlinkable:
     def __init__(self, options=None):
@@ -193,6 +198,21 @@ class Hardlinkable:
 
     def run(self, directories):
         """Run link scan, and perform linking if requested.  Return stats."""
+        # Prevent 'directories' from accidentally being a stringlike or
+        # byteslike.  We don't want to "walk" each string character as a dir,
+        # especially since it has a good chance of starting with an '/'.
+        if _sys.version_info[0] == 2:
+            if isinstance(directories, basestring):
+                directories = [directories]
+        else:
+            if (isinstance(directories, str) or
+                isinstance(directories, bytes)):
+                directories = [directories]
+
+        for dirname in directories:
+            if not _os.path.isdir(dirname):
+                raise IOError("%s is not a directory" % dirname)
+
         aborted_early = False
         for (src_file_info, dst_file_info) in self._sorted_links(directories):
             assert not self.options.samename or src_file_info[1] == dst_file_info[1]
@@ -215,7 +235,13 @@ class Hardlinkable:
         self.stats.print_stats(aborted_early)
 
         if not aborted_early:
-            self._postlink_inode_stats_sanity_check(self._prelink_inode_stats)
+            self._postlink_inode_stats = self._inode_stats()
+            self._inode_stats_sanity_check(self._prelink_inode_stats,
+                                           self._postlink_inode_stats)
+
+            # Store the inode stats with the LinkingStats, useful for testing
+            self.stats.inode_stats = [self._prelink_inode_stats,
+                                      self._postlink_inode_stats]
 
         return self.stats
 
@@ -546,10 +572,8 @@ class Hardlinkable:
 
     def _are_file_contents_equal(self, pathname1, pathname2):
         """Determine if the contents of two files are equal"""
-        self.stats.did_comparison(pathname1, pathname2)
         result = _filecmp.cmp(pathname1, pathname2, shallow=False)
-        if result:
-            self.stats.found_equal_comparison()
+        self.stats.did_comparison(pathname1, pathname2, result)
         return result
 
     # Determines if two files should be hard linked together.
@@ -589,25 +613,42 @@ class Hardlinkable:
     def _inode_stats(self):
         """Gather some basic inode stats from caches."""
         total_inodes = 0
-        total_bytes = 0
-        total_saved_bytes = 0 # Each nlink > 1 is counted as "saved" space
+        total_bytes = 0  # st_nlinks * st_size
+        total_nlinks = 0
+        total_redundant_bytes = 0  # Each nlink > 1 is counted as "redundant" space
+        total_path_links = 0  # Total number of found paths to inodes
+        total_redundant_path_bytes = 0  # Only accounts for the seen paths to an inode
         for fsdev in self._fsdevs.values():
             for ino, stat_info in fsdev.ino_stat.items():
                 total_inodes += 1
                 total_bytes += stat_info.st_size
-                count = fsdev.count_nlinks_this_inode(ino)
-                total_saved_bytes += (stat_info.st_size * (count - 1))
+
+                # Total nlinks value can account for pathnames skipped, or
+                # outside of the walked directory trees, etc.
+                total_nlinks += stat_info.st_nlink
+                total_redundant_bytes += (stat_info.st_size * (stat_info.st_nlink - 1))
+
+                # path_count is merely the number of paths to an inode that
+                # we've seen (ie. that weren't excluded or outside the
+                # directory tree)
+                path_count = fsdev.count_pathnames_this_inode(ino)
+                total_path_links += path_count
+                total_redundant_path_bytes += (stat_info.st_size * (path_count - 1))
+
         return {'total_inodes' : total_inodes,
                 'total_bytes': total_bytes,
-                'total_saved_bytes': total_saved_bytes}
+                'total_nlinks' : total_nlinks,
+                'total_redundant_bytes': total_redundant_bytes,
+                'total_path_links' : total_path_links,
+                'total_redundant_path_bytes': total_redundant_path_bytes}
 
-    def _postlink_inode_stats_sanity_check(self, prelink_inode_stats):
+    def _inode_stats_sanity_check(self, prelink_inode_stats, postlink_inode_stats):
         """Check stats directly from inode data."""
         # double check figures based on direct inode stats
-        postlink_inode_stats = self._inode_stats()
         totalsavedbytes = self.stats.bytes_saved_thisrun + self.stats.bytes_saved_previously
-        bytes_saved_thisrun = postlink_inode_stats['total_saved_bytes'] - prelink_inode_stats['total_saved_bytes']
-        assert totalsavedbytes == postlink_inode_stats['total_saved_bytes'], (totalsavedbytes, postlink_inode_stats['total_saved_bytes'])
+        bytes_saved_thisrun = postlink_inode_stats['total_redundant_path_bytes'] - prelink_inode_stats['total_redundant_path_bytes']
+        assert totalsavedbytes == postlink_inode_stats['total_redundant_path_bytes'], ((totalsavedbytes,
+            postlink_inode_stats['total_redundant_path_bytes']))
         assert self.stats.bytes_saved_thisrun == bytes_saved_thisrun
 
 
@@ -707,9 +748,10 @@ class _FSDev:
             del self.ino_pathnames[dst_ino][filename]
         self.ino_append_namepair(src_ino, filename, namepair)
 
-    def count_nlinks_this_inode(self, ino):
-        """Because of file matching and exclusions, the number of links that we
-        care about may not equal the total nlink count for the inode."""
+    def count_pathnames_this_inode(self, ino):
+        """Because of file matching and exclusions, or links to unwalked
+        directory entries, the number of links that we care about may not equal
+        the total nlink count for the inode."""
         # Count the number of links to this inode that we have discovered
         count = 0
         for pathnames in self.ino_pathnames[ino].values():
@@ -738,9 +780,9 @@ class LinkingStats:
         self.hardlinked_thisrun = 0         # hardlinks done this run
         self.num_inodes = 0                 # inodes found this run
         self.nlinks_to_zero_thisrun = 0     # how man nlinks actually went to zero
-        self.hardlinked_previously = 0      # hardlinks that are already existing
-        self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run
-        self.bytes_saved_previously = 0     # bytes saved by previous hardlinks
+        self.hardlinked_previously = 0      # hardlinks that are already existing (based on walked dirs only)
+        self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run (ie. when nlink goes to zero)
+        self.bytes_saved_previously = 0     # bytes saved by previous hardlinks (in walked dirs only)
         self.hardlinkpairs = []             # list of files hardlinkable this run
         self.starttime = _time.time()       # track how long it takes
         self.currently_hardlinked = {}      # list of files currently hardlinked
@@ -803,14 +845,16 @@ class LinkingStats:
     def found_mismatched_ownership(self):
         self.num_mismatched_file_ownership += 1
 
-    def did_comparison(self, pathname1, pathname2):
-        if self.options.debug_level > 2:
-            _logging.debug("Comparing     : %s" % pathname1)
-            _logging.debug(" to           : %s" % pathname2)
+    def did_comparison(self, pathname1, pathname2, result):
         self.comparisons += 1
-
-    def found_equal_comparison(self):
-        self.equal_comparisons += 1
+        if self.options.debug_level > 2:
+            if result:
+                _logging.debug("Compared equal: %s" % pathname1)
+                _logging.debug(" to           : %s" % pathname2)
+                self.equal_comparisons += 1
+            else:
+                _logging.debug("Compared      : %s" % pathname1)
+                _logging.debug(" to           : %s" % pathname2)
 
     def found_existing_hardlink(self, src_namepair, dst_namepair, stat_info):
         assert len(src_namepair) == 2
@@ -821,7 +865,8 @@ class LinkingStats:
         filesize = stat_info.st_size
         self.hardlinked_previously += 1
         self.bytes_saved_previously += filesize
-        if self.options.verbosity > 1:
+        if (self.options.verbosity > 1 or
+            getattr(self.options, '_force_stats_to_store_old_hardlinks', False)):
             if src_namepair not in self.currently_hardlinked:
                 self.currently_hardlinked[src_namepair] = (filesize, [dst_namepair])
             else:
@@ -843,7 +888,8 @@ class LinkingStats:
         dst_namepair = tuple(dst_file_info[:2])
         dst_stat_info = dst_file_info[2]
 
-        if self.options.verbosity > 0:
+        if (self.options.verbosity > 0 or
+            getattr(self.options, '_force_stats_to_store_new_hardlinks', False)):
             self.hardlinkpairs.append((tuple(src_namepair),
                                        tuple(dst_namepair)))
         filesize = dst_stat_info.st_size
@@ -869,6 +915,12 @@ class LinkingStats:
 
     def inc_hash_list_iteration(self):
         self.num_list_iterations += 1
+
+    def _count_hardlinked_previously(self):
+        count = 0
+        for filesize,namepairs in self.currently_hardlinked.values():
+            count += len(namepairs)
+        return count
 
     def print_stats(self, possibly_incomplete=False):
         if not self.options.printstats:
