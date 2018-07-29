@@ -607,25 +607,43 @@ class Hardlinkable:
     def _inode_stats(self):
         """Gather some basic inode stats from caches."""
         total_inodes = 0
-        total_bytes = 0
-        total_saved_bytes = 0 # Each nlink > 1 is counted as "saved" space
+        total_bytes = 0  # st_nlinks * st_size
+        total_nlinks = 0
+        total_redundant_bytes = 0  # Each nlink > 1 is counted as "redundant" space
+        total_path_links = 0  # Total number of found paths to inodes
+        total_redundant_path_bytes = 0  # Only accounts for the seen paths to an inode
         for fsdev in self._fsdevs.values():
             for ino, stat_info in fsdev.ino_stat.items():
                 total_inodes += 1
                 total_bytes += stat_info.st_size
-                count = fsdev.count_nlinks_this_inode(ino)
-                total_saved_bytes += (stat_info.st_size * (count - 1))
+
+                # Total nlinks value can account for pathnames skipped, or
+                # outside of the walked directory trees, etc.
+                total_nlinks += stat_info.st_nlink
+                total_redundant_bytes += (stat_info.st_size * (stat_info.st_nlink - 1))
+
+                # path_count is merely the number of paths to an inode that
+                # we've seen (ie. that weren't excluded or outside the
+                # directory tree)
+                path_count = fsdev.count_pathnames_this_inode(ino)
+                total_path_links += path_count
+                total_redundant_path_bytes += (stat_info.st_size * (path_count - 1))
+
         return {'total_inodes' : total_inodes,
                 'total_bytes': total_bytes,
-                'total_saved_bytes': total_saved_bytes}
+                'total_nlinks' : total_nlinks,
+                'total_redundant_bytes': total_redundant_bytes,
+                'total_path_links' : total_path_links,
+                'total_redundant_path_bytes': total_redundant_path_bytes}
 
     def _postlink_inode_stats_sanity_check(self, prelink_inode_stats):
         """Check stats directly from inode data."""
         # double check figures based on direct inode stats
         postlink_inode_stats = self._inode_stats()
         totalsavedbytes = self.stats.bytes_saved_thisrun + self.stats.bytes_saved_previously
-        bytes_saved_thisrun = postlink_inode_stats['total_saved_bytes'] - prelink_inode_stats['total_saved_bytes']
-        assert totalsavedbytes == postlink_inode_stats['total_saved_bytes'], (totalsavedbytes, postlink_inode_stats['total_saved_bytes'])
+        bytes_saved_thisrun = postlink_inode_stats['total_redundant_path_bytes'] - prelink_inode_stats['total_redundant_path_bytes']
+        assert totalsavedbytes == postlink_inode_stats['total_redundant_path_bytes'], ((totalsavedbytes,
+            postlink_inode_stats['total_redundant_path_bytes']))
         assert self.stats.bytes_saved_thisrun == bytes_saved_thisrun
 
 
@@ -725,9 +743,10 @@ class _FSDev:
             del self.ino_pathnames[dst_ino][filename]
         self.ino_append_namepair(src_ino, filename, namepair)
 
-    def count_nlinks_this_inode(self, ino):
-        """Because of file matching and exclusions, the number of links that we
-        care about may not equal the total nlink count for the inode."""
+    def count_pathnames_this_inode(self, ino):
+        """Because of file matching and exclusions, or links to unwalked
+        directory entries, the number of links that we care about may not equal
+        the total nlink count for the inode."""
         # Count the number of links to this inode that we have discovered
         count = 0
         for pathnames in self.ino_pathnames[ino].values():
