@@ -1085,7 +1085,7 @@ class RandomizedOrderingBase(BaseTests):
                 src_pathname = os.path.join(directory, entry)
                 if os.path.isfile(src_pathname):
                     assert src_pathname in self.seen_paths
-                    if random.random() < 0.1:
+                    if random.random() < 0.1 and os.lstat(src_pathname).st_nlink == 1:
                         if not dst_pathnames:
                             return
                         dst_pathname = dst_pathnames.pop()
@@ -1172,12 +1172,18 @@ class RandomizedOrderingBase(BaseTests):
             # still linked to it), and thus doesn't get counted as saved space
             # in the hardlinker.  We account for this by subtracting out it's
             # "saved" space from our in tree estimate (which counts pathnames,
-            # not nlinks).
+            # not nlinks).  For this accounting to work, we ensure we don't
+            # link the out-of-tree files to an inode w/ nlink > 1.
+            ino_set = set()
             for pathname in pathnames:
                 if pathname in self.unwalked_pathnames:
                     for dst_pathname in self.unwalked_pathnames[pathname]:
-                        if os.lstat(dst_pathname).st_nlink == 1:
-                            sum_in_bytes -= len(data)
+                        st = os.lstat(dst_pathname)
+                        ino_set.add(st)
+            for st in ino_set:
+                if st.st_nlink == 1:
+                    assert len(data) == st.st_size
+                    sum_in_bytes -= len(data)
         return sum_in_bytes
 
     def full_test_ignoring_maxlinks(self):
