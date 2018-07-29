@@ -1026,6 +1026,7 @@ class RandomizedOrderingBase(BaseTests):
             key_func = key_func_mtime
 
         self.equalfile_pathnames = defaultdict(list)
+        self.seen_paths = set()
         self.unwalked_pathnames = defaultdict(set)
         self.counts = defaultdict(int)
 
@@ -1052,6 +1053,7 @@ class RandomizedOrderingBase(BaseTests):
                         self.make_hardlinkable_file(dirname, None)
                         self.make_linked_file(src_pathname, pathname)
                         self.equalfile_pathnames[src_key].append(pathname)
+                        self.seen_paths.add(pathname)
                         made_hardlink = True
 
                     if made_hardlink and len(src_key[0]) >= options.min_file_size:
@@ -1069,6 +1071,7 @@ class RandomizedOrderingBase(BaseTests):
 
                     key = key_func(data, filename, now)
                     self.equalfile_pathnames[key].append(pathname)
+                    self.seen_paths.add(pathname)
 
     def link_with_dirs(self, src_dirs, dst_dirs, filenames):
         # Make a list of all dirs with all filenames per dir
@@ -1081,10 +1084,12 @@ class RandomizedOrderingBase(BaseTests):
             for entry in os.listdir(directory):
                 src_pathname = os.path.join(directory, entry)
                 if os.path.isfile(src_pathname):
+                    assert src_pathname in self.seen_paths
                     if random.random() < 0.1:
                         if not dst_pathnames:
                             return
                         dst_pathname = dst_pathnames.pop()
+                        assert dst_pathname not in self.seen_paths
                         self.make_hardlinkable_file(os.path.dirname(dst_pathname), None)
                         self.make_linked_file(src_pathname, dst_pathname)
                         self.unwalked_pathnames[src_pathname].add(dst_pathname)
