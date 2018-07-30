@@ -584,6 +584,12 @@ class Hardlinkable:
         if not self._eligible_for_hardlink(stat1, stat2):
             result = False
         else:
+            # Since we are going to read the content anyway (to compare them),
+            # there is no i/o penalty in calculating a content hash.
+            fsdev = self._get_fsdev(stat1.st_dev)
+            fsdev.add_content_hash(file_info1)
+            fsdev.add_content_hash(file_info2)
+
             result = self._are_file_contents_equal(_os.path.join(dirname1,filename1),
                                                    _os.path.join(dirname2,filename2))
         return result
@@ -662,6 +668,12 @@ class _FSDev:
         # For each hash value, track inode (and optionally filename)
         # inode_hashes <- {hash_val: set(ino)}
         self.inode_hashes = {}
+
+        # For each stat hash, keep a checksum of the first 8K of content.  Used
+        # to reduce linear search when looking through comparable files.
+        # checksum_inode_map <- {cksum: set(ino)}
+        self.checksum_inode_map = {}
+        self.inodes_with_checksums = set()
 
         # Keep track of per-inode stat info
         # ino_stat <- {st_ino: stat_info}
@@ -758,6 +770,19 @@ class _FSDev:
         for pathnames in self.ino_pathnames[ino].values():
             count += len(pathnames)
         return count
+
+    def add_content_hash(self, file_info, cksum=None):
+        dirname,filename,stat_info = file_info
+        if stat_info.st_ino not in self.inodes_with_checksums:
+            pathname = _os.path.join(dirname, filename)
+            if cksum is None:
+                cksum = _content_cksum_value(pathname)
+            cksums = self.checksum_inode_map.get(cksum, None)
+            if cksums is None:
+                self.checksum_inode_map[cksum] = set([stat_info.st_ino])
+            else:
+                cksums.add(stat_info.st_ino)
+            self.inodes_with_checksums.add(stat_info.st_ino)
 
 
 class LinkingStats:
