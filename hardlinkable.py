@@ -444,6 +444,7 @@ class Hardlinkable:
             linked_inodes = _linked_inode_set(ino, fsdev.linked_inodes)
             found_linked_ino = (len(linked_inodes & fsdev.inode_hashes[inode_hash]) > 0)
             if not found_linked_ino:
+                cached_inodes_seq = fsdev.inode_hashes[inode_hash]
                 # Since the cached inodes use a simple linear search, they can
                 # devolve to O(n**2) worst case, typically when contentonly
                 # option encounters a large number of same-size files.
@@ -454,7 +455,6 @@ class Hardlinkable:
                 # differences at the beginnings of files.  But it can help
                 # quickly differentiate many files with (for example) the same
                 # size, but different contents.
-                cached_inodes_seq = fsdev.inode_hashes[inode_hash]
                 use_content_digest = (    LINEAR_SEARCH_THRESH is not None
                                       and len(cached_inodes_seq) > LINEAR_SEARCH_THRESH)
                 if use_content_digest:
