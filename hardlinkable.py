@@ -449,7 +449,7 @@ class Hardlinkable:
                     cached_file_info = fsdev.fileinfo_from_ino(cached_ino)
 
                     if self._are_files_hardlinkable(cached_file_info, file_info):
-                        fsdev.add_linked_inodes(cached_ino, ino)
+                        self._found_hardlinkable_file(cached_file_info, file_info)
                         break
                 else:  # nobreak
                     self.stats.no_hash_match()
