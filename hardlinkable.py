@@ -971,18 +971,18 @@ class LinkingStats:
         print(s1 % self.nlinks_to_zero_thisrun)
         print(s2 % self.hardlinked_thisrun)
         print("Total old and new hardlinks: %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
-        print("Current bytes saved        : %s (%s)" % (self.bytes_saved_previously,
+        print("Currently hardlinked bytes : %s (%s)" % (self.bytes_saved_previously,
                                                        _humanize_number(self.bytes_saved_previously)))
         if self.options.linking_enabled:
-            s3 = "Additional bytes saved     : %s (%s)"
+            s3 = "Additional linked bytes    : %s (%s)"
         else:
-            s3 = "Additional bytes saveable  : %s (%s)"
+            s3 = "Additional linkable bytes  : %s (%s)"
         print(s3 % (self.bytes_saved_thisrun, _humanize_number(self.bytes_saved_thisrun)))
         totalbytes = self.bytes_saved_thisrun + self.bytes_saved_previously
         if self.options.linking_enabled:
-            s4 = "Total bytes saved          : %s (%s)"
+            s4 = "Total hardlinked bytes     : %s (%s)"
         else:
-            s4 = "Total bytes saveable       : %s (%s)"
+            s4 = "Total hardlinkable bytes   : %s (%s)"
         print(s4 % (totalbytes, _humanize_number(totalbytes)))
         if self.options.verbosity > 0 or self.options.debug_level > 0:
             print("Inodes found               : %s" % self.num_inodes)
