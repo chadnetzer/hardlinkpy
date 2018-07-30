@@ -449,7 +449,7 @@ class Hardlinkable:
                     cached_file_info = fsdev.fileinfo_from_ino(cached_ino)
 
                     if self._are_files_hardlinkable(cached_file_info, file_info):
-                        fsdev.add_linked_inodes(cached_ino, ino)
+                        self._found_hardlinkable_file(cached_file_info, file_info)
                         break
                 else:  # nobreak
                     self.stats.no_hash_match()
@@ -847,11 +847,12 @@ class LinkingStats:
 
     def did_comparison(self, pathname1, pathname2, result):
         self.comparisons += 1
+        if result:
+            self.equal_comparisons += 1
         if self.options.debug_level > 2:
             if result:
                 _logging.debug("Compared equal: %s" % pathname1)
                 _logging.debug(" to           : %s" % pathname2)
-                self.equal_comparisons += 1
             else:
                 _logging.debug("Compared      : %s" % pathname1)
                 _logging.debug(" to           : %s" % pathname2)
@@ -967,25 +968,25 @@ class LinkingStats:
         else:
             s1 = "Consolidatable inodes found: %s"
             s2 = "Hardlinkable files found   : %s"
-        print("Inodes found               : %s" % self.num_inodes)
         print(s1 % self.nlinks_to_zero_thisrun)
-        print("Current hardlinks          : %s" % (self.hardlinked_previously))
         print(s2 % self.hardlinked_thisrun)
         print("Total old and new hardlinks: %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
-        print("Current bytes saved        : %s (%s)" % (self.bytes_saved_previously,
+        print("Currently hardlinked bytes : %s (%s)" % (self.bytes_saved_previously,
                                                        _humanize_number(self.bytes_saved_previously)))
         if self.options.linking_enabled:
-            s3 = "Additional bytes saved     : %s (%s)"
+            s3 = "Additional linked bytes    : %s (%s)"
         else:
-            s3 = "Additional bytes saveable  : %s (%s)"
+            s3 = "Additional linkable bytes  : %s (%s)"
         print(s3 % (self.bytes_saved_thisrun, _humanize_number(self.bytes_saved_thisrun)))
         totalbytes = self.bytes_saved_thisrun + self.bytes_saved_previously
         if self.options.linking_enabled:
-            s4 = "Total bytes saved          : %s (%s)"
+            s4 = "Total hardlinked bytes     : %s (%s)"
         else:
-            s4 = "Total bytes saveable       : %s (%s)"
+            s4 = "Total hardlinkable bytes   : %s (%s)"
         print(s4 % (totalbytes, _humanize_number(totalbytes)))
         if self.options.verbosity > 0 or self.options.debug_level > 0:
+            print("Inodes found               : %s" % self.num_inodes)
+            print("Current hardlinks          : %s" % self.hardlinked_previously)
             if self.num_excluded_dirs:
                 print("Total excluded dirs        : %s" % self.num_excluded_dirs)
             if self.num_excluded_files:
@@ -1015,8 +1016,11 @@ class LinkingStats:
                                                                                  self.hardlinked_previously +
                                                                                  self.hardlinked_thisrun)))
             print("Total hash searches        : %s" % self.num_hash_list_searches)
-            print("Total hash list iterations : %s  (avg per-search: %s)" % (self.num_list_iterations,
-                                                                             round(float(self.num_list_iterations)/self.num_hash_list_searches, 3)))
+            if self.num_hash_list_searches == 0:
+                avg_per_search = "N/A"
+            else:
+                avg_per_search = round(float(self.num_list_iterations)/self.num_hash_list_searches, 3)
+            print("Total hash list iterations : %s  (avg per-search: %s)" % (self.num_list_iterations, avg_per_search))
             print("Total equal comparisons    : %s" % self.equal_comparisons)
 
 
