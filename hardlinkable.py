@@ -847,11 +847,12 @@ class LinkingStats:
 
     def did_comparison(self, pathname1, pathname2, result):
         self.comparisons += 1
+        if result:
+            self.equal_comparisons += 1
         if self.options.debug_level > 2:
             if result:
                 _logging.debug("Compared equal: %s" % pathname1)
                 _logging.debug(" to           : %s" % pathname2)
-                self.equal_comparisons += 1
             else:
                 _logging.debug("Compared      : %s" % pathname1)
                 _logging.debug(" to           : %s" % pathname2)
