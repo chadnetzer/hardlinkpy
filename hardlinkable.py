@@ -460,6 +460,7 @@ class Hardlinkable:
                 if use_content_digest:
                     cached_inodes_no_digest = cached_inodes_seq - fsdev.inodes_with_digest
                     digest = _content_digest(_os.path.join(*namepair))
+                    self.stats.computed_digest()
                     fsdev.add_content_digest(file_info, digest)
                     cached_inodes_same_digest = cached_inodes_seq & fsdev.digest_inode_map[digest]
                     cached_inodes_different_digest = (  cached_inodes_seq
@@ -625,6 +626,7 @@ class Hardlinkable:
                 fsdev = self._get_fsdev(stat1.st_dev)
                 fsdev.add_content_digest(file_info1)
                 fsdev.add_content_digest(file_info2)
+                self.stats.computed_digest(2)
 
             result = self._are_file_contents_equal(_os.path.join(dirname1,filename1),
                                                    _os.path.join(dirname2,filename2))
@@ -855,6 +857,7 @@ class LinkingStats:
         self.num_hash_mismatches = 0        # Times a hash is found, but is not a file match
         self.num_hash_list_searches = 0     # Times a hash list search is initiated
         self.num_list_iterations = 0        # Number of iterations over a list in inode_hashes
+        self.num_digests_computed = 0       # Number of times content digest was computed
 
     def found_directory(self):
         self.dircount += 1
@@ -979,6 +982,9 @@ class LinkingStats:
     def inc_hash_list_iteration(self):
         self.num_list_iterations += 1
 
+    def computed_digest(self, num=1):
+        self.num_digests_computed += num
+
     def _count_hardlinked_previously(self):
         count = 0
         for filesize,namepairs in self.currently_hardlinked.values():
@@ -1084,6 +1090,7 @@ class LinkingStats:
                 avg_per_search = round(float(self.num_list_iterations)/self.num_hash_list_searches, 3)
             print("Total hash list iterations : %s  (avg per-search: %s)" % (self.num_list_iterations, avg_per_search))
             print("Total equal comparisons    : %s" % self.equal_comparisons)
+            print("Total digests computed     : %s" % self.num_digests_computed)
 
 
 ### Module functions ###
