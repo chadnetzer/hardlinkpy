@@ -455,8 +455,9 @@ class Hardlinkable:
                 # quickly differentiate many files with (for example) the same
                 # size, but different contents.
                 cached_inodes_seq = fsdev.inode_hashes[inode_hash]
-                if (LINEAR_SEARCH_THRESH is not None and
-                    len(cached_inodes_seq) > LINEAR_SEARCH_THRESH):
+                use_content_digest = (    LINEAR_SEARCH_THRESH is not None
+                                      and len(cached_inodes_seq) > LINEAR_SEARCH_THRESH)
+                if use_content_digest:
                     cached_inodes_no_digest = cached_inodes_seq - fsdev.inodes_with_digest
                     digest = _content_digest(_os.path.join(*namepair))
                     fsdev.add_content_digest(file_info, digest)
@@ -483,7 +484,7 @@ class Hardlinkable:
 
                     cached_file_info = fsdev.fileinfo_from_ino(cached_ino)
 
-                    if self._are_files_hardlinkable(cached_file_info, file_info):
+                    if self._are_files_hardlinkable(cached_file_info, file_info, use_content_digest):
                         self._found_hardlinkable_file(cached_file_info, file_info)
                         break
                 else:  # nobreak
@@ -612,7 +613,7 @@ class Hardlinkable:
         return result
 
     # Determines if two files should be hard linked together.
-    def _are_files_hardlinkable(self, file_info1, file_info2):
+    def _are_files_hardlinkable(self, file_info1, file_info2, use_digest):
         dirname1,filename1,stat1 = file_info1
         dirname2,filename2,stat2 = file_info2
         if not self._eligible_for_hardlink(stat1, stat2):
@@ -620,7 +621,7 @@ class Hardlinkable:
         else:
             # Since we are going to read the content anyway (to compare them),
             # there is no i/o penalty in calculating a content hash.
-            if LINEAR_SEARCH_THRESH is not None:
+            if use_digest:
                 fsdev = self._get_fsdev(stat1.st_dev)
                 fsdev.add_content_digest(file_info1)
                 fsdev.add_content_digest(file_info2)
