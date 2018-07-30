@@ -29,13 +29,17 @@ import re as _re
 import stat as _stat
 import sys as _sys
 import time as _time
-import zlib as _zlib
 
 from optparse import OptionParser as _OptionParser
 from optparse import OptionGroup as _OptionGroup
 from optparse import SUPPRESS_HELP as _SUPPRESS_HELP
 from optparse import TitledHelpFormatter as _TitledHelpFormatter
 
+try:
+    import zlib as _zlib
+    LINEAR_SEARCH_THRESH = 1
+except ImportError:
+    LINEAR_SEARCH_THRESH = None
 
 # Python 2.3 has the sets module, not the set type
 try:
@@ -451,7 +455,8 @@ class Hardlinkable:
                 # quickly differentiate many files with (for example) the same
                 # size, but different contents.
                 cached_inodes_seq = fsdev.inode_hashes[inode_hash]
-                if len(cached_inodes_seq) > 1:
+                if (LINEAR_SEARCH_THRESH is not None and
+                    len(cached_inodes_seq) > LINEAR_SEARCH_THRESH):
                     cached_inodes_no_cksums = cached_inodes_seq - fsdev.inodes_with_checksums
                     cksum = _content_cksum_value(_os.path.join(*namepair))
                     fsdev.add_content_hash(file_info, cksum)
@@ -615,9 +620,10 @@ class Hardlinkable:
         else:
             # Since we are going to read the content anyway (to compare them),
             # there is no i/o penalty in calculating a content hash.
-            fsdev = self._get_fsdev(stat1.st_dev)
-            fsdev.add_content_hash(file_info1)
-            fsdev.add_content_hash(file_info2)
+            if LINEAR_SEARCH_THRESH is not None:
+                fsdev = self._get_fsdev(stat1.st_dev)
+                fsdev.add_content_hash(file_info1)
+                fsdev.add_content_hash(file_info2)
 
             result = self._are_file_contents_equal(_os.path.join(dirname1,filename1),
                                                    _os.path.join(dirname2,filename2))
@@ -1259,6 +1265,9 @@ def _content_cksum_value(pathname):
     # filecmp)
 
     val = 0x0123456789ABCDEF
+    if LINEAR_SEARCH_THRESH is None:
+        return val
+
     try:
         f = open(pathname, 'rb')
     except:
