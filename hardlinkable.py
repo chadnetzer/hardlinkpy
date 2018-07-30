@@ -93,6 +93,11 @@ by hard linking identical files.  It can also perform the linking."""
                       help=_SUPPRESS_HELP,
                       action="count", default=0,)
 
+    # hidden linear search threshold option, allows tuning content digest usage
+    parser.add_option("--linear-search-thresh", dest="linear_search_thresh",
+                      help=_SUPPRESS_HELP,
+                      action="store", default=DEFAULT_LINEAR_SEARCH_THRESH,)
+
     group = _OptionGroup(parser, title="File Matching", description="""\
 File content must always match exactly to be linkable.  Use --content-only with
 caution, as it can lead to surprising results, including files becoming owned
@@ -459,8 +464,8 @@ class Hardlinkable:
                 # differences at the beginnings of files.  But it can help
                 # quickly differentiate many files with (for example) the same
                 # size, but different contents.
-                use_content_digest = (    DEFAULT_LINEAR_SEARCH_THRESH is not None
-                                      and len(cached_inodes_seq) > DEFAULT_LINEAR_SEARCH_THRESH)
+                use_content_digest = (    options.linear_search_thresh is not None
+                                      and len(cached_inodes_seq) > int(options.linear_search_thresh))
                 if use_content_digest:
                     digest = _content_digest(_os.path.join(*namepair))
                     # Revert to full search if digest can't be computed
