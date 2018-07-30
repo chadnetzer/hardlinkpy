@@ -29,6 +29,7 @@ import re as _re
 import stat as _stat
 import sys as _sys
 import time as _time
+import zlib as _zlib
 
 from optparse import OptionParser as _OptionParser
 from optparse import OptionGroup as _OptionGroup
@@ -1196,6 +1197,30 @@ def _humanized_number_to_bytes(s):
         s = s[:-1]
         multiplier = multipliers[last_char]
         return multiplier * int(s)
+
+
+def _content_cksum_value(pathname):
+    """Return a hash value based on all (or some) of a file"""
+    # Currently uses just the first 8K of the file (same buffer size as
+    # filecmp)
+
+    val = 0x0123456789ABCDEF
+    try:
+        f = open(pathname, 'rb')
+    except:
+        return val
+
+    try:
+        byte_data = f.read(8192)
+    except:
+        return val
+    finally:
+        f.close()
+
+    val1 = _zlib.adler32(byte_data)
+    val2 = _zlib.crc32(byte_data)
+    val = (((0xFFFFFFFF & val1) << 32) | (0xFFFFFFFF & val2))
+    return val
 
 
 def main():
