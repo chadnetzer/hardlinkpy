@@ -1264,7 +1264,7 @@ def _content_cksum_value(pathname):
     # Currently uses just the first 8K of the file (same buffer size as
     # filecmp)
 
-    val = 0x0123456789ABCDEF
+    val = 0x01234567
     if LINEAR_SEARCH_THRESH is None:
         return val
 
@@ -1280,9 +1280,8 @@ def _content_cksum_value(pathname):
     finally:
         f.close()
 
-    val1 = _zlib.adler32(byte_data)
-    val2 = _zlib.crc32(byte_data)
-    val = (((0xFFFFFFFF & val1) << 32) | (0xFFFFFFFF & val2))
+    val_crc = _zlib.crc32(byte_data)
+    val = (0xFFFFFFFF & val_crc)
     return val
 
 
