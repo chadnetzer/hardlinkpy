@@ -1292,9 +1292,7 @@ def _content_digest(pathname):
     finally:
         f.close()
 
-    val_crc = _crc32(byte_data)
-    val = (0xFFFFFFFF & val_crc)
-    return val
+    return (0xFFFFFFFF & _crc32(byte_data))
 
 
 def main():
