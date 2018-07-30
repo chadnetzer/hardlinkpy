@@ -457,22 +457,22 @@ class Hardlinkable:
                 cached_inodes_seq = fsdev.inode_hashes[inode_hash]
                 if (LINEAR_SEARCH_THRESH is not None and
                     len(cached_inodes_seq) > LINEAR_SEARCH_THRESH):
-                    cached_inodes_no_cksums = cached_inodes_seq - fsdev.inodes_with_checksums
-                    cksum = _content_cksum_value(_os.path.join(*namepair))
-                    fsdev.add_content_hash(file_info, cksum)
-                    cached_inodes_same_cksums = cached_inodes_seq & fsdev.checksum_inode_map[cksum]
-                    cached_inodes_different_cksums = (  cached_inodes_seq
-                                                      - cached_inodes_same_cksums
-                                                      - cached_inodes_no_cksums)
+                    cached_inodes_no_digest = cached_inodes_seq - fsdev.inodes_with_digest
+                    digest = _content_digest(_os.path.join(*namepair))
+                    fsdev.add_content_digest(file_info, digest)
+                    cached_inodes_same_digest = cached_inodes_seq & fsdev.digest_inode_map[digest]
+                    cached_inodes_different_digest = (  cached_inodes_seq
+                                                      - cached_inodes_same_digest
+                                                      - cached_inodes_no_digest)
 
-                    assert len(  cached_inodes_same_cksums \
-                               & cached_inodes_different_cksums \
-                               & cached_inodes_no_cksums) == 0
+                    assert len(  cached_inodes_same_digest \
+                               & cached_inodes_different_digest \
+                               & cached_inodes_no_digest) == 0
 
-                    # Search matching cksum inos first (as they may have the
-                    # same content).  Don't search different cksums at all (as
-                    # they cannot be equal).
-                    cached_inodes_seq = list(cached_inodes_same_cksums) + list(cached_inodes_no_cksums)
+                    # Search matching digest inos first (as they may have the
+                    # same content).  Don't search those with differing digests
+                    # at all (as they cannot be equal).
+                    cached_inodes_seq = list(cached_inodes_same_digest) + list(cached_inodes_no_digest)
 
                 # We did not find this file as linked to any other cached
                 # inodes yet.  So now lets see if our file should be hardlinked
@@ -622,8 +622,8 @@ class Hardlinkable:
             # there is no i/o penalty in calculating a content hash.
             if LINEAR_SEARCH_THRESH is not None:
                 fsdev = self._get_fsdev(stat1.st_dev)
-                fsdev.add_content_hash(file_info1)
-                fsdev.add_content_hash(file_info2)
+                fsdev.add_content_digest(file_info1)
+                fsdev.add_content_digest(file_info2)
 
             result = self._are_file_contents_equal(_os.path.join(dirname1,filename1),
                                                    _os.path.join(dirname2,filename2))
@@ -704,11 +704,11 @@ class _FSDev:
         # inode_hashes <- {hash_val: set(ino)}
         self.inode_hashes = {}
 
-        # For each stat hash, keep a checksum of the first 8K of content.  Used
+        # For each stat hash, keep a digest of the first 8K of content.  Used
         # to reduce linear search when looking through comparable files.
-        # checksum_inode_map <- {cksum: set(ino)}
-        self.checksum_inode_map = {}
-        self.inodes_with_checksums = set()
+        # digest_inode_map <- {digest: set(ino)}
+        self.digest_inode_map = {}
+        self.inodes_with_digest = set()
 
         # Keep track of per-inode stat info
         # ino_stat <- {st_ino: stat_info}
@@ -806,18 +806,18 @@ class _FSDev:
             count += len(pathnames)
         return count
 
-    def add_content_hash(self, file_info, cksum=None):
+    def add_content_digest(self, file_info, digest=None):
         dirname,filename,stat_info = file_info
-        if stat_info.st_ino not in self.inodes_with_checksums:
+        if stat_info.st_ino not in self.inodes_with_digest:
             pathname = _os.path.join(dirname, filename)
-            if cksum is None:
-                cksum = _content_cksum_value(pathname)
-            cksums = self.checksum_inode_map.get(cksum, None)
-            if cksums is None:
-                self.checksum_inode_map[cksum] = set([stat_info.st_ino])
+            if digest is None:
+                digest = _content_digest(pathname)
+            digests = self.digest_inode_map.get(digest, None)
+            if digests is None:
+                self.digest_inode_map[digest] = set([stat_info.st_ino])
             else:
-                cksums.add(stat_info.st_ino)
-            self.inodes_with_checksums.add(stat_info.st_ino)
+                digests.add(stat_info.st_ino)
+            self.inodes_with_digest.add(stat_info.st_ino)
 
 
 class LinkingStats:
@@ -1259,7 +1259,7 @@ def _humanized_number_to_bytes(s):
         return multiplier * int(s)
 
 
-def _content_cksum_value(pathname):
+def _content_digest(pathname):
     """Return a hash value based on all (or some) of a file"""
     # Currently uses just the first 8K of the file (same buffer size as
     # filecmp)
