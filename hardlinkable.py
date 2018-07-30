@@ -440,11 +440,40 @@ class Hardlinkable:
             linked_inodes = _linked_inode_set(ino, fsdev.linked_inodes)
             found_linked_ino = (len(linked_inodes & fsdev.inode_hashes[inode_hash]) > 0)
             if not found_linked_ino:
+                # Since the cached inodes use a simple linear search, they can
+                # devolve to O(n**2) worst case, typically when contentonly
+                # option encounters a large number of same-size files.
+                #
+                # Use content hashing to hopefully shortcut the searches.  The
+                # downside is that the content hash must access the file data
+                # (not just the inode metadata), and currently only uses
+                # differences at the beginnings of files.  But it can help
+                # quickly differentiate many files with (for example) the same
+                # size, but different contents.
+                cached_inodes_seq = fsdev.inode_hashes[inode_hash]
+                if len(cached_inodes_seq) > 1:
+                    cached_inodes_no_cksums = cached_inodes_seq - fsdev.inodes_with_checksums
+                    cksum = _content_cksum_value(_os.path.join(*namepair))
+                    fsdev.add_content_hash(file_info, cksum)
+                    cached_inodes_same_cksums = cached_inodes_seq & fsdev.checksum_inode_map[cksum]
+                    cached_inodes_different_cksums = (  cached_inodes_seq
+                                                      - cached_inodes_same_cksums
+                                                      - cached_inodes_no_cksums)
+
+                    assert len(  cached_inodes_same_cksums \
+                               & cached_inodes_different_cksums \
+                               & cached_inodes_no_cksums) == 0
+
+                    # Search matching cksum inos first (as they may have the
+                    # same content).  Don't search different cksums at all (as
+                    # they cannot be equal).
+                    cached_inodes_seq = list(cached_inodes_same_cksums) + list(cached_inodes_no_cksums)
+
                 # We did not find this file as linked to any other cached
                 # inodes yet.  So now lets see if our file should be hardlinked
                 # to any of the other files with the same hash.
                 self.stats.search_hash_list()
-                for cached_ino in fsdev.inode_hashes[inode_hash]:
+                for cached_ino in cached_inodes_seq:
                     self.stats.inc_hash_list_iteration()
 
                     cached_file_info = fsdev.fileinfo_from_ino(cached_ino)
