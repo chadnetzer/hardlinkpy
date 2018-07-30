@@ -36,10 +36,14 @@ from optparse import SUPPRESS_HELP as _SUPPRESS_HELP
 from optparse import TitledHelpFormatter as _TitledHelpFormatter
 
 try:
-    import zlib as _zlib
+    from zlib import crc32 as _crc32
     LINEAR_SEARCH_THRESH = 1
 except ImportError:
-    LINEAR_SEARCH_THRESH = None
+    try:
+        from binascii import crc32 as _crc32
+        LINEAR_SEARCH_THRESH = 1
+    except ImportError:
+        LINEAR_SEARCH_THRESH = None
 
 # Python 2.3 has the sets module, not the set type
 try:
@@ -1288,7 +1292,7 @@ def _content_digest(pathname):
     finally:
         f.close()
 
-    val_crc = _zlib.crc32(byte_data)
+    val_crc = _crc32(byte_data)
     val = (0xFFFFFFFF & val_crc)
     return val
 
