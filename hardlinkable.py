@@ -968,9 +968,7 @@ class LinkingStats:
         else:
             s1 = "Consolidatable inodes found: %s"
             s2 = "Hardlinkable files found   : %s"
-        print("Inodes found               : %s" % self.num_inodes)
         print(s1 % self.nlinks_to_zero_thisrun)
-        print("Current hardlinks          : %s" % (self.hardlinked_previously))
         print(s2 % self.hardlinked_thisrun)
         print("Total old and new hardlinks: %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
         print("Current bytes saved        : %s (%s)" % (self.bytes_saved_previously,
@@ -987,6 +985,8 @@ class LinkingStats:
             s4 = "Total bytes saveable       : %s (%s)"
         print(s4 % (totalbytes, _humanize_number(totalbytes)))
         if self.options.verbosity > 0 or self.options.debug_level > 0:
+            print("Inodes found               : %s" % self.num_inodes)
+            print("Current hardlinks          : %s" % self.hardlinked_previously)
             if self.num_excluded_dirs:
                 print("Total excluded dirs        : %s" % self.num_excluded_dirs)
             if self.num_excluded_files:
