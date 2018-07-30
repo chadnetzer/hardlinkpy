@@ -37,13 +37,13 @@ from optparse import TitledHelpFormatter as _TitledHelpFormatter
 
 try:
     from zlib import crc32 as _crc32
-    LINEAR_SEARCH_THRESH = 1
+    DEFAULT_LINEAR_SEARCH_THRESH = 1
 except ImportError:
     try:
         from binascii import crc32 as _crc32
-        LINEAR_SEARCH_THRESH = 1
+        DEFAULT_LINEAR_SEARCH_THRESH = 1
     except ImportError:
-        LINEAR_SEARCH_THRESH = None
+        DEFAULT_LINEAR_SEARCH_THRESH = None
 
 # Python 2.3 has the sets module, not the set type
 try:
@@ -459,8 +459,8 @@ class Hardlinkable:
                 # differences at the beginnings of files.  But it can help
                 # quickly differentiate many files with (for example) the same
                 # size, but different contents.
-                use_content_digest = (    LINEAR_SEARCH_THRESH is not None
-                                      and len(cached_inodes_seq) > LINEAR_SEARCH_THRESH)
+                use_content_digest = (    DEFAULT_LINEAR_SEARCH_THRESH is not None
+                                      and len(cached_inodes_seq) > DEFAULT_LINEAR_SEARCH_THRESH)
                 if use_content_digest:
                     digest = _content_digest(_os.path.join(*namepair))
                     # Revert to full search if digest can't be computed
@@ -1280,7 +1280,7 @@ def _content_digest(pathname):
     # Currently uses just the first 8K of the file (same buffer size as
     # filecmp)
 
-    if LINEAR_SEARCH_THRESH is None:
+    if DEFAULT_LINEAR_SEARCH_THRESH is None:
         return None
 
     try:
