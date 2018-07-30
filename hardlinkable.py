@@ -462,23 +462,25 @@ class Hardlinkable:
                 use_content_digest = (    LINEAR_SEARCH_THRESH is not None
                                       and len(cached_inodes_seq) > LINEAR_SEARCH_THRESH)
                 if use_content_digest:
-                    cached_inodes_no_digest = cached_inodes_seq - fsdev.inodes_with_digest
                     digest = _content_digest(_os.path.join(*namepair))
-                    self.stats.computed_digest()
-                    fsdev.add_content_digest(file_info, digest)
-                    cached_inodes_same_digest = cached_inodes_seq & fsdev.digest_inode_map[digest]
-                    cached_inodes_different_digest = (  cached_inodes_seq
-                                                      - cached_inodes_same_digest
-                                                      - cached_inodes_no_digest)
+                    # Revert to full search if digest can't be computed
+                    if digest is not None:
+                        cached_inodes_no_digest = cached_inodes_seq - fsdev.inodes_with_digest
+                        self.stats.computed_digest()
+                        fsdev.add_content_digest(file_info, digest)
+                        cached_inodes_same_digest = cached_inodes_seq & fsdev.digest_inode_map[digest]
+                        cached_inodes_different_digest = (  cached_inodes_seq
+                                                          - cached_inodes_same_digest
+                                                          - cached_inodes_no_digest)
 
-                    assert len(  cached_inodes_same_digest \
-                               & cached_inodes_different_digest \
-                               & cached_inodes_no_digest) == 0
+                        assert len(  cached_inodes_same_digest \
+                                   & cached_inodes_different_digest \
+                                   & cached_inodes_no_digest) == 0
 
-                    # Search matching digest inos first (as they may have the
-                    # same content).  Don't search those with differing digests
-                    # at all (as they cannot be equal).
-                    cached_inodes_seq = list(cached_inodes_same_digest) + list(cached_inodes_no_digest)
+                        # Search matching digest inos first (as they may have the
+                        # same content).  Don't search those with differing digests
+                        # at all (as they cannot be equal).
+                        cached_inodes_seq = list(cached_inodes_same_digest) + list(cached_inodes_no_digest)
 
                 # We did not find this file as linked to any other cached
                 # inodes yet.  So now lets see if our file should be hardlinked
@@ -819,6 +821,8 @@ class _FSDev:
             pathname = _os.path.join(dirname, filename)
             if digest is None:
                 digest = _content_digest(pathname)
+                if digest is None:
+                    return
             digests = self.digest_inode_map.get(digest, None)
             if digests is None:
                 self.digest_inode_map[digest] = set([stat_info.st_ino])
@@ -1276,19 +1280,18 @@ def _content_digest(pathname):
     # Currently uses just the first 8K of the file (same buffer size as
     # filecmp)
 
-    val = 0x01234567
     if LINEAR_SEARCH_THRESH is None:
-        return val
+        return None
 
     try:
         f = open(pathname, 'rb')
     except:
-        return val
+        return None
 
     try:
         byte_data = f.read(8192)
     except:
-        return val
+        return None
     finally:
         f.close()
 
