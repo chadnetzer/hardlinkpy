@@ -7,26 +7,24 @@ optionally perform the linking as well, saving storage space.
 
 ## Example output
 ```
-$ hardlinkable download_dir
+$ hardlinkable download_dirs
 Hard linking statistics
 -----------------------
 Statistics reflect what would result if actual linking were enabled
 Directories                : 3748
 Files                      : 89182
-Comparisons                : 716196
-Inodes found               : 89182
+Comparisons                : 29908
 Consolidatable inodes found: 10908
-Current hardlinks          : 0
 Hardlinkable files found   : 10908
 Total old and new hardlinks: 10908
-Current bytes saved        : 0 (0 bytes)
-Additional bytes saveable  : 259121960 (247.118 MiB)
-Total bytes saveable       : 259121960 (247.118 MiB)
+Currently hardlinked bytes : 0 (0 bytes)
+Additional linkable bytes  : 259121960 (247.118 MiB)
+Total hardlinkable bytes   : 259121960 (247.118 MiB)
 ```
 
 You can specify more verbosity to get a list of linkable files, and some additional stats:
 ```
-$ hardlinkable -v download_dir
+$ hardlinkable -v download_dirs
 Files that are hardlinkable
 -----------------------
 from: download_dir/bak1/some_image1.png
@@ -40,15 +38,15 @@ Hard linking statistics
 Statistics reflect what would result if actual linking were enabled
 Directories                : 3748
 Files                      : 89182
-Comparisons                : 716196
-Inodes found               : 89182
+Comparisons                : 29908
 Consolidatable inodes found: 10908
-Current hardlinks          : 0
 Hardlinkable files found   : 10908
 Total old and new hardlinks: 10908
-Current bytes saved        : 0 (0 bytes)
-Additional bytes saveable  : 259121960 (247.118 MiB)
-Total bytes saveable       : 259121960 (247.118 MiB)
+Currently hardlinked bytes : 0 (0 bytes)
+Additional linkable bytes  : 259121960 (247.118 MiB)
+Total hardlinkable bytes   : 259121960 (247.118 MiB)
+Inodes found               : 89182
+Current hardlinks          : 0
 Total too small files      : 71
 Total unequal file times   : 771
 Total unequal file modes   : 411
