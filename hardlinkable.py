@@ -35,6 +35,15 @@ from optparse import OptionGroup as _OptionGroup
 from optparse import SUPPRESS_HELP as _SUPPRESS_HELP
 from optparse import TitledHelpFormatter as _TitledHelpFormatter
 
+try:
+    from zlib import crc32 as _crc32
+    DEFAULT_LINEAR_SEARCH_THRESH = 1
+except ImportError:
+    try:
+        from binascii import crc32 as _crc32
+        DEFAULT_LINEAR_SEARCH_THRESH = 1
+    except ImportError:
+        DEFAULT_LINEAR_SEARCH_THRESH = None
 
 # Python 2.3 has the sets module, not the set type
 try:
@@ -83,6 +92,11 @@ by hard linking identical files.  It can also perform the linking."""
     parser.add_option("-d", "--debug", dest="debug_level",
                       help=_SUPPRESS_HELP,
                       action="count", default=0,)
+
+    # hidden linear search threshold option, allows tuning content digest usage
+    parser.add_option("--linear-search-thresh", dest="linear_search_thresh",
+                      help=_SUPPRESS_HELP,
+                      action="store", default=DEFAULT_LINEAR_SEARCH_THRESH,)
 
     group = _OptionGroup(parser, title="File Matching", description="""\
 File content must always match exactly to be linkable.  Use --content-only with
@@ -439,16 +453,50 @@ class Hardlinkable:
             linked_inodes = _linked_inode_set(ino, fsdev.linked_inodes)
             found_linked_ino = (len(linked_inodes & fsdev.inode_hashes[inode_hash]) > 0)
             if not found_linked_ino:
+                cached_inodes_seq = fsdev.inode_hashes[inode_hash]
+                # Since the cached inodes use a simple linear search, they can
+                # devolve to O(n**2) worst case, typically when contentonly
+                # option encounters a large number of same-size files.
+                #
+                # Use content hashing to hopefully shortcut the searches.  The
+                # downside is that the content hash must access the file data
+                # (not just the inode metadata), and currently only uses
+                # differences at the beginnings of files.  But it can help
+                # quickly differentiate many files with (for example) the same
+                # size, but different contents.
+                use_content_digest = (    options.linear_search_thresh is not None
+                                      and len(cached_inodes_seq) > int(options.linear_search_thresh))
+                if use_content_digest:
+                    digest = _content_digest(_os.path.join(*namepair))
+                    # Revert to full search if digest can't be computed
+                    if digest is not None:
+                        cached_inodes_no_digest = cached_inodes_seq - fsdev.inodes_with_digest
+                        self.stats.computed_digest()
+                        fsdev.add_content_digest(file_info, digest)
+                        cached_inodes_same_digest = cached_inodes_seq & fsdev.digest_inode_map[digest]
+                        cached_inodes_different_digest = (  cached_inodes_seq
+                                                          - cached_inodes_same_digest
+                                                          - cached_inodes_no_digest)
+
+                        assert len(  cached_inodes_same_digest \
+                                   & cached_inodes_different_digest \
+                                   & cached_inodes_no_digest) == 0
+
+                        # Search matching digest inos first (as they may have the
+                        # same content).  Don't search those with differing digests
+                        # at all (as they cannot be equal).
+                        cached_inodes_seq = list(cached_inodes_same_digest) + list(cached_inodes_no_digest)
+
                 # We did not find this file as linked to any other cached
                 # inodes yet.  So now lets see if our file should be hardlinked
                 # to any of the other files with the same hash.
                 self.stats.search_hash_list()
-                for cached_ino in fsdev.inode_hashes[inode_hash]:
+                for cached_ino in cached_inodes_seq:
                     self.stats.inc_hash_list_iteration()
 
                     cached_file_info = fsdev.fileinfo_from_ino(cached_ino)
 
-                    if self._are_files_hardlinkable(cached_file_info, file_info):
+                    if self._are_files_hardlinkable(cached_file_info, file_info, use_content_digest):
                         self._found_hardlinkable_file(cached_file_info, file_info)
                         break
                 else:  # nobreak
@@ -577,12 +625,20 @@ class Hardlinkable:
         return result
 
     # Determines if two files should be hard linked together.
-    def _are_files_hardlinkable(self, file_info1, file_info2):
+    def _are_files_hardlinkable(self, file_info1, file_info2, use_digest):
         dirname1,filename1,stat1 = file_info1
         dirname2,filename2,stat2 = file_info2
         if not self._eligible_for_hardlink(stat1, stat2):
             result = False
         else:
+            # Since we are going to read the content anyway (to compare them),
+            # there is no i/o penalty in calculating a content hash.
+            if use_digest:
+                fsdev = self._get_fsdev(stat1.st_dev)
+                fsdev.add_content_digest(file_info1)
+                fsdev.add_content_digest(file_info2)
+                self.stats.computed_digest(2)
+
             result = self._are_file_contents_equal(_os.path.join(dirname1,filename1),
                                                    _os.path.join(dirname2,filename2))
         return result
@@ -661,6 +717,12 @@ class _FSDev:
         # For each hash value, track inode (and optionally filename)
         # inode_hashes <- {hash_val: set(ino)}
         self.inode_hashes = {}
+
+        # For each stat hash, keep a digest of the first 8K of content.  Used
+        # to reduce linear search when looking through comparable files.
+        # digest_inode_map <- {digest: set(ino)}
+        self.digest_inode_map = {}
+        self.inodes_with_digest = set()
 
         # Keep track of per-inode stat info
         # ino_stat <- {st_ino: stat_info}
@@ -758,6 +820,21 @@ class _FSDev:
             count += len(pathnames)
         return count
 
+    def add_content_digest(self, file_info, digest=None):
+        dirname,filename,stat_info = file_info
+        if stat_info.st_ino not in self.inodes_with_digest:
+            pathname = _os.path.join(dirname, filename)
+            if digest is None:
+                digest = _content_digest(pathname)
+                if digest is None:
+                    return
+            digests = self.digest_inode_map.get(digest, None)
+            if digests is None:
+                self.digest_inode_map[digest] = set([stat_info.st_ino])
+            else:
+                digests.add(stat_info.st_ino)
+            self.inodes_with_digest.add(stat_info.st_ino)
+
 
 class LinkingStats:
     def __init__(self, options):
@@ -793,6 +870,7 @@ class LinkingStats:
         self.num_hash_mismatches = 0        # Times a hash is found, but is not a file match
         self.num_hash_list_searches = 0     # Times a hash list search is initiated
         self.num_list_iterations = 0        # Number of iterations over a list in inode_hashes
+        self.num_digests_computed = 0       # Number of times content digest was computed
 
     def found_directory(self):
         self.dircount += 1
@@ -917,6 +995,9 @@ class LinkingStats:
     def inc_hash_list_iteration(self):
         self.num_list_iterations += 1
 
+    def computed_digest(self, num=1):
+        self.num_digests_computed += num
+
     def _count_hardlinked_previously(self):
         count = 0
         for filesize,namepairs in self.currently_hardlinked.values():
@@ -1022,6 +1103,7 @@ class LinkingStats:
                 avg_per_search = round(float(self.num_list_iterations)/self.num_hash_list_searches, 3)
             print("Total hash list iterations : %s  (avg per-search: %s)" % (self.num_list_iterations, avg_per_search))
             print("Total equal comparisons    : %s" % self.equal_comparisons)
+            print("Total digests computed     : %s" % self.num_digests_computed)
 
 
 ### Module functions ###
@@ -1196,6 +1278,29 @@ def _humanized_number_to_bytes(s):
         s = s[:-1]
         multiplier = multipliers[last_char]
         return multiplier * int(s)
+
+
+def _content_digest(pathname):
+    """Return a hash value based on all (or some) of a file"""
+    # Currently uses just the first 8K of the file (same buffer size as
+    # filecmp)
+
+    if DEFAULT_LINEAR_SEARCH_THRESH is None:
+        return None
+
+    try:
+        f = open(pathname, 'rb')
+    except:
+        return None
+
+    try:
+        byte_data = f.read(8192)
+    except:
+        return None
+    finally:
+        f.close()
+
+    return (0xFFFFFFFF & _crc32(byte_data))
 
 
 def main():
