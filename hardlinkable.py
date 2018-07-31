@@ -1103,7 +1103,9 @@ class LinkingStats:
             print("Total digests computed     : %s" % self.num_digests_computed)
 
 
-### Module functions ###
+#################
+# Module functions
+#################
 
 def _stat_hash_value(stat_info, options):
     """Return a value appropriate for a python dict or shelve key, which can
