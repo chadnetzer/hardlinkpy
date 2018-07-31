@@ -462,8 +462,8 @@ class Hardlinkable:
                 # differences at the beginnings of files.  But it can help
                 # quickly differentiate many files with (for example) the same
                 # size, but different contents.
-                use_content_digest = (    options.linear_search_thresh is not None
-                                      and len(cached_inodes_seq) > int(options.linear_search_thresh))
+                use_content_digest = (options.linear_search_thresh is not None and
+                                      len(cached_inodes_seq) > int(options.linear_search_thresh))
                 if use_content_digest:
                     digest = _content_digest(_os.path.join(*namepair))
                     # Revert to full search if digest can't be computed
@@ -472,13 +472,13 @@ class Hardlinkable:
                         self.stats.computed_digest()
                         fsdev.add_content_digest(file_info, digest)
                         cached_inodes_same_digest = cached_inodes_seq & fsdev.digest_inode_map[digest]
-                        cached_inodes_different_digest = (  cached_inodes_seq
-                                                          - cached_inodes_same_digest
-                                                          - cached_inodes_no_digest)
+                        cached_inodes_different_digest = (cached_inodes_seq -
+                                                          cached_inodes_same_digest -
+                                                          cached_inodes_no_digest)
 
-                        assert len(  cached_inodes_same_digest \
-                                   & cached_inodes_different_digest \
-                                   & cached_inodes_no_digest) == 0
+                        assert len(cached_inodes_same_digest &
+                                   cached_inodes_different_digest &
+                                   cached_inodes_no_digest) == 0
 
                         # Search matching digest inos first (as they may have the
                         # same content).  Don't search those with differing digests
