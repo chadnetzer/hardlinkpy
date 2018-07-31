@@ -624,8 +624,8 @@ class Hardlinkable:
 
     # Determines if two files should be hard linked together.
     def _are_files_hardlinkable(self, file_info1, file_info2, use_digest):
-        dirname1,filename1,stat1 = file_info1
-        dirname2,filename2,stat2 = file_info2
+        dirname1, filename1, stat1 = file_info1
+        dirname2, filename2, stat2 = file_info2
         if not self._eligible_for_hardlink(stat1, stat2):
             result = False
         else:
@@ -637,8 +637,8 @@ class Hardlinkable:
                 fsdev.add_content_digest(file_info2)
                 self.stats.computed_digest(2)
 
-            result = self._are_file_contents_equal(_os.path.join(dirname1,filename1),
-                                                   _os.path.join(dirname2,filename2))
+            result = self._are_file_contents_equal(_os.path.join(dirname1, filename1),
+                                                   _os.path.join(dirname2, filename2))
         return result
 
     def _found_hardlinkable_file(self, src_file_info, dst_file_info):
@@ -819,7 +819,7 @@ class _FSDev:
         return count
 
     def add_content_digest(self, file_info, digest=None):
-        dirname,filename,stat_info = file_info
+        dirname, filename, stat_info = file_info
         if stat_info.st_ino not in self.inodes_with_digest:
             pathname = _os.path.join(dirname, filename)
             if digest is None:
@@ -998,7 +998,7 @@ class LinkingStats:
 
     def _count_hardlinked_previously(self):
         count = 0
-        for filesize,namepairs in self.currently_hardlinked.values():
+        for filesize, namepairs in self.currently_hardlinked.values():
             count += len(namepairs)
         return count
 
