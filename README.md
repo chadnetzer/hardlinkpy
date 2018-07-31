@@ -97,3 +97,16 @@ was originally written by John L. Villalovos (sodarock), and developed further
 by Antti Kaihola, Carl Henrik Lunde, and others.  It is able to calculate
 accurate statistics on how much space can be saved, without actually performing
 the linking.
+
+Besides having more accurate statistics, this version can be significantly
+faster than other versions in certain circumstances, due to opportunistically
+keeping track of simple file content hashes as the inode hash comparison lists
+grow.  It computes these content hashes at first only when comparing files
+(when the file data will be read anyway), to avoid unnecessary I/O.  Using this
+data, and quick set operations, it can then drastically reduce the amount of
+file comparisons attempted as many files with similar inode attributes (ie.
+size, mtime) but different content are discovered.
+
+Furthermore, because it gathers full inode/pathname information before
+attempting to optimize the link ordering, it also handles the "--same-name"
+option more accurately than many other versions (imo).
