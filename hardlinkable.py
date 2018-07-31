@@ -1269,7 +1269,7 @@ def _humanized_number_to_bytes(s):
                    'p': 1024**5}
 
     last_char = s[-1]
-    if not last_char in multipliers:
+    if last_char not in multipliers:
         return int(s)
     else:
         s = s[:-1]
