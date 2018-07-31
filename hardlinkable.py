@@ -689,11 +689,11 @@ class Hardlinkable:
                 total_path_links += path_count
                 total_redundant_path_bytes += (stat_info.st_size * (path_count - 1))
 
-        return {'total_inodes' : total_inodes,
+        return {'total_inodes': total_inodes,
                 'total_bytes': total_bytes,
-                'total_nlinks' : total_nlinks,
+                'total_nlinks': total_nlinks,
                 'total_redundant_bytes': total_redundant_bytes,
-                'total_path_links' : total_path_links,
+                'total_path_links': total_path_links,
                 'total_redundant_path_bytes': total_redundant_path_bytes}
 
     def _inode_stats_sanity_check(self, prelink_inode_stats, postlink_inode_stats):
@@ -1263,11 +1263,11 @@ def _humanized_number_to_bytes(s):
         int(s)  # Deliberately raise ValueError on empty input
 
     s = s.lower()
-    multipliers = { 'k' : 1024,
-                    'm' : 1024**2,
-                    'g' : 1024**3,
-                    't' : 1024**4,
-                    'p' : 1024**5 }
+    multipliers = {'k': 1024,
+                   'm': 1024**2,
+                   'g': 1024**3,
+                   't': 1024**4,
+                   'p': 1024**5}
 
     last_char = s[-1]
     if not last_char in multipliers:
