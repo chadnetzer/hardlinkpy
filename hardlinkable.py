@@ -314,7 +314,7 @@ class Hardlinkable:
                         # each new device.
                         try:
                             max_nlinks = _os.pathconf(pathname, "PC_LINK_MAX")
-                        except:
+                        except OSError:
                             # Avoid retrying if PC_LINK_MAX fails for a device
                             max_nlinks = None
                         fsdev = self._get_fsdev(stat_info.st_dev)
@@ -1288,12 +1288,12 @@ def _content_digest(pathname):
 
     try:
         f = open(pathname, 'rb')
-    except:
+    except OSError:
         return None
 
     try:
         byte_data = f.read(8192)
-    except:
+    except OSError:
         return None
     finally:
         f.close()
