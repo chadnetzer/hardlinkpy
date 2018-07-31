@@ -3,7 +3,14 @@
 `hardlinkable` is a tool to scan directories and report files that could be
 hardlinked together because they have matching content, and (by default) other
 criteria such as modification time, permissions and ownership.  It can
-optionally perform the linking as well, saving storage space.
+optionally perform the linking as well, saving storage space (but by default,
+it only reports information).
+
+This version is faster, with more accurate reporting of results than the other
+variants that I have tried.  It works by gathering full inode information
+before deciding what action (if any) to take.  Using the full information
+allows it to produce exact reporting of what will happen, before any
+modifications occur.
 
 ## Example output
 ```
