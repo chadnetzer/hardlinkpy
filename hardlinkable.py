@@ -594,9 +594,9 @@ class Hardlinkable:
 
         if not options.contentonly:
             result = (result and
-                    (options.ignore_time or st1.st_mtime == st2.st_mtime) and
-                    (options.ignore_perm or st1.st_mode == st2.st_mode)   and
-                    (st1.st_uid == st2.st_uid and st1.st_gid == st2.st_gid))
+                      (options.ignore_time or st1.st_mtime == st2.st_mtime) and
+                      (options.ignore_perm or st1.st_mode == st2.st_mode) and
+                      (st1.st_uid == st2.st_uid and st1.st_gid == st2.st_gid))
 
         fsdev = self._get_fsdev(st1.st_dev)
         if result and (fsdev.max_nlinks is not None):
@@ -1051,7 +1051,7 @@ class LinkingStats:
         print(s2 % self.hardlinked_thisrun)
         print("Total old and new hardlinks: %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
         print("Currently hardlinked bytes : %s (%s)" % (self.bytes_saved_previously,
-                                                       _humanize_number(self.bytes_saved_previously)))
+                                                        _humanize_number(self.bytes_saved_previously)))
         if self.options.linking_enabled:
             s3 = "Additional linked bytes    : %s (%s)"
         else:
