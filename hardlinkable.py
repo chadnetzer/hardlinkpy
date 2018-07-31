@@ -1097,7 +1097,7 @@ class LinkingStats:
             if self.num_hash_list_searches == 0:
                 avg_per_search = "N/A"
             else:
-                avg_per_search = round(float(self.num_list_iterations)/self.num_hash_list_searches, 3)
+                avg_per_search = round(float(self.num_list_iterations) / self.num_hash_list_searches, 3)
             print("Total hash list iterations : %s  (avg per-search: %s)" % (self.num_list_iterations, avg_per_search))
             print("Total equal comparisons    : %s" % self.equal_comparisons)
             print("Total digests computed     : %s" % self.num_digests_computed)
