@@ -344,7 +344,7 @@ class Hardlinkable:
                 # Order inodes from greatest to least st_nlink
                 nlinks_list = [(fsdev.ino_stat[ino].st_nlink, ino) for ino in linkable_set]
                 nlinks_list.sort(reverse=True)
-                ino_list = [x[1] for x in nlinks_list] # strip nlinks sort key
+                ino_list = [x[1] for x in nlinks_list]  # strip nlinks sort key
 
                 # Keep a list if inos from the end of the ino_list that cannot
                 # be linked to (such as when in 'samename' mode), and reappend
@@ -849,7 +849,7 @@ class LinkingStats:
         self.num_files_too_small = 0        # how many files are too small
         self.num_mismatched_file_times = 0  # same sized files with different mtimes
         self.num_mismatched_file_modes = 0  # same sized files with different perms
-        self.num_mismatched_file_ownership = 0 # same sized files with different ownership
+        self.num_mismatched_file_ownership = 0  # same sized files with different ownership
         self.comparisons = 0                # how many file content comparisons
         self.equal_comparisons = 0          # how many file comparisons found equal
         self.hardlinked_thisrun = 0         # hardlinks done this run
@@ -1260,7 +1260,7 @@ def _humanized_number_to_bytes(s):
 
     # Assumes string/bytes input
     if not s:
-        int(s) # Deliberately raise ValueError on empty input
+        int(s)  # Deliberately raise ValueError on empty input
 
     s = s.lower()
     multipliers = { 'k' : 1024,
