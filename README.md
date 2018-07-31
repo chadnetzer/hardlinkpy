@@ -98,6 +98,12 @@ by Antti Kaihola, Carl Henrik Lunde, and others.  It is able to calculate
 accurate statistics on how much space can be saved, without actually performing
 the linking.
 
+This version is named ```hardlinkable``` to indicate that, by default, it does
+*not* perform any linking, and the user has to explicitly opt-in to having it
+perform the linking step.  This (to me) is the safer and more-sensible default;
+it's not unusual to want to run it a few times with different options, and see
+the results, before actually deciding whether to perform the linking.
+
 Besides having more accurate statistics, this version can be significantly
 faster than other versions in certain circumstances, due to opportunistically
 keeping track of simple file content hashes as the inode hash comparison lists
