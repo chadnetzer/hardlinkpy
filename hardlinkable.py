@@ -129,7 +129,8 @@ by another user.
                      help="Only file contents have to match",
                      action="store_true", default=False,)
 
-    group = _OptionGroup(parser, title="Name Matching (may specify multiple times)",)
+    group = _OptionGroup(parser,
+                         title="Name Matching (may specify multiple times)",)
     parser.add_option_group(group)
 
     group.add_option("-m", "--match", dest="matches", metavar="RE",
@@ -238,7 +239,8 @@ class Hardlinkable:
                 # being modified underneath us, which we aren't prepared to
                 # deal with.
                 if not hardlink_succeeded:
-                    _logging.error("Hardlinking failed. Aborting early... Statistics may be incomplete")
+                    _logging.error("Hardlinking failed. Aborting early... "
+                                   "Statistics may be incomplete")
                     aborted_early = True
                     break
 
@@ -377,7 +379,8 @@ class Hardlinkable:
                         dst_stat_info = fsdev.ino_stat[dst_ino]
 
                         # Samename can break nlink ordering invariant
-                        assert self.options.samename or src_stat_info.st_nlink >= dst_stat_info.st_nlink
+                        assert (self.options.samename or
+                                src_stat_info.st_nlink >= dst_stat_info.st_nlink)
 
                         # Ignore samename when checking max_nlink invariant
                         if (fsdev.max_nlinks is not None and
@@ -389,12 +392,17 @@ class Hardlinkable:
                             break
 
                         # Loop through all linkable pathnames in the last inode
-                        for dst_dirname, dst_filename in _namepairs_per_inode(fsdev.ino_pathnames[dst_ino]):
-                            if self.options.samename and dst_filename not in fsdev.ino_pathnames[src_ino]:
+                        namepairs = _namepairs_per_inode(fsdev.ino_pathnames[dst_ino])
+                        for dst_dirname, dst_filename in namepairs:
+                            if (self.options.samename and
+                                dst_filename not in fsdev.ino_pathnames[src_ino]):
+                                # Skip inodes without equal filenames in samename mode
                                 assert dst_filename not in fsdev.ino_pathnames[src_ino]
                                 continue
                             lookup_filename = self.options.samename and dst_filename
-                            src_dirname, src_filename = fsdev.arbitrary_namepair_from_ino(src_ino, lookup_filename)
+                            src_namepair = fsdev.arbitrary_namepair_from_ino(src_ino,
+                                                                             lookup_filename)
+                            src_dirname, src_filename = src_namepair
                             src_file_info = (src_dirname, src_filename, src_stat_info)
                             dst_file_info = (dst_dirname, dst_filename, dst_stat_info)
 
@@ -404,8 +412,10 @@ class Hardlinkable:
                             # account for hard-linking
                             self.stats.did_hardlink(src_file_info, dst_file_info)
 
-                            src_stat_info = fsdev.updated_stat_info(src_ino, nlink=src_stat_info.st_nlink + 1)
-                            dst_stat_info = fsdev.updated_stat_info(dst_ino, nlink=dst_stat_info.st_nlink - 1)
+                            new_src_nlink = src_stat_info.st_nlink + 1
+                            new_dst_nlink = dst_stat_info.st_nlink - 1
+                            src_stat_info = fsdev.updated_stat_info(src_ino, nlink=new_src_nlink)
+                            dst_stat_info = fsdev.updated_stat_info(dst_ino, nlink=new_dst_nlink)
                             assert src_stat_info.st_nlink <= fsdev.max_nlinks
                             assert dst_stat_info is None or dst_stat_info.st_nlink > 0
 
@@ -462,16 +472,19 @@ class Hardlinkable:
                 # differences at the beginnings of files.  But it can help
                 # quickly differentiate many files with (for example) the same
                 # size, but different contents.
-                use_content_digest = (options.linear_search_thresh is not None and
-                                      len(cached_inodes_seq) > int(options.linear_search_thresh))
+                search_thresh = options.linear_search_thresh
+                use_content_digest = (search_thresh is not None and
+                                      len(cached_inodes_seq) > int(search_thresh))
                 if use_content_digest:
                     digest = _content_digest(_os.path.join(*namepair))
                     # Revert to full search if digest can't be computed
                     if digest is not None:
-                        cached_inodes_no_digest = cached_inodes_seq - fsdev.inodes_with_digest
                         self.stats.computed_digest()
+                        cached_inodes_no_digest = (cached_inodes_seq -
+                                                   fsdev.inodes_with_digest)
                         fsdev.add_content_digest(file_info, digest)
-                        cached_inodes_same_digest = cached_inodes_seq & fsdev.digest_inode_map[digest]
+                        cached_inodes_same_digest = (cached_inodes_seq &
+                                                     fsdev.digest_inode_map[digest])
                         cached_inodes_different_digest = (cached_inodes_seq -
                                                           cached_inodes_same_digest -
                                                           cached_inodes_no_digest)
@@ -483,7 +496,8 @@ class Hardlinkable:
                         # Search matching digest inos first (as they may have the
                         # same content).  Don't search those with differing digests
                         # at all (as they cannot be equal).
-                        cached_inodes_seq = list(cached_inodes_same_digest) + list(cached_inodes_no_digest)
+                        cached_inodes_seq = (list(cached_inodes_same_digest) +
+                                             list(cached_inodes_no_digest))
 
                 # We did not find this file as linked to any other cached
                 # inodes yet.  So now lets see if our file should be hardlinked
@@ -494,7 +508,9 @@ class Hardlinkable:
 
                     cached_file_info = fsdev.fileinfo_from_ino(cached_ino)
 
-                    if self._are_files_hardlinkable(cached_file_info, file_info, use_content_digest):
+                    if self._are_files_hardlinkable(cached_file_info,
+                                                    file_info,
+                                                    use_content_digest):
                         self._found_hardlinkable_file(cached_file_info, file_info)
                         break
                 else:  # nobreak
@@ -531,20 +547,23 @@ class Hardlinkable:
             _os.rename(dst_pathname, tmp_pathname)
         except OSError:
             error = _sys.exc_info()[1]
-            _logging.error("Failed to rename: %s to %s\n%s" % (dst_pathname, tmp_pathname, error))
+            _logging.error("Failed to rename: %s to %s\n%s" %
+                           (dst_pathname, tmp_pathname, error))
         else:
             # Now link the sourcefile to the destination file
             try:
                 _os.link(src_pathname, dst_pathname)
             except Exception:
                 error = _sys.exc_info()[1]
-                _logging.error("Failed to hardlink: %s to %s\n%s" % (src_pathname, dst_pathname, error))
+                _logging.error("Failed to hardlink: %s to %s\n%s" %
+                               (src_pathname, dst_pathname, error))
                 # Try to recover
                 try:
                     _os.rename(tmp_pathname, dst_pathname)
                 except Exception:
                     error = _sys.exc_info()[1]
-                    _logging.critical("Failed to rename temp filename %s back to %s\n%s" % (tmp_pathname, dst_pathname, error))
+                    _logging.critical("Failed to rename temp filename %s back to %s\n%s" %
+                                      (tmp_pathname, dst_pathname, error))
                     _sys.exit(3)
             else:
                 hardlink_succeeded = True
@@ -556,19 +575,22 @@ class Hardlinkable:
                     error = _sys.exc_info()[1]
                     # Failing to remove the temp file could lead to endless
                     # attempts to link to it in the future.
-                    _logging.critical("Failed to remove temp filename: %s\n%s" % (tmp_pathname, error))
+                    _logging.critical("Failed to remove temp filename: %s\n%s" %
+                                      (tmp_pathname, error))
                     _sys.exit(3)
 
                 # Use the destination file times if it's most recently modified
                 dst_mtime = dst_atime = None
                 if dst_stat_info.st_mtime > src_stat_info.st_mtime:
                     try:
-                        _os.utime(src_pathname, (dst_stat_info.st_atime, dst_stat_info.st_mtime))
+                        _os.utime(src_pathname, (dst_stat_info.st_atime,
+                                                 dst_stat_info.st_mtime))
                         dst_atime = dst_stat_info.st_atime
                         dst_mtime = dst_stat_info.st_mtime
                     except Exception:
                         error = _sys.exc_info()[1]
-                        _logging.warning("Failed to update file time attributes for %s\n%s" % (src_pathname, error))
+                        _logging.warning("Failed to update file time attributes for %s\n%s" %
+                                         (src_pathname, error))
 
                     self._updated_stat_info(src_stat_info,
                                             mtime=dst_mtime,
@@ -637,8 +659,9 @@ class Hardlinkable:
                 fsdev.add_content_digest(file_info2)
                 self.stats.computed_digest(2)
 
-            result = self._are_file_contents_equal(_os.path.join(dirname1, filename1),
-                                                   _os.path.join(dirname2, filename2))
+            namepair1 = _os.path.join(dirname1, filename1)
+            namepair2 = _os.path.join(dirname2, filename2)
+            result = self._are_file_contents_equal(namepair1, namepair2)
         return result
 
     def _found_hardlinkable_file(self, src_file_info, dst_file_info):
@@ -652,10 +675,21 @@ class Hardlinkable:
         fsdev = self._get_fsdev(src_stat_info.st_dev)
         fsdev.add_linked_inodes(src_stat_info.st_ino, dst_stat_info.st_ino)
 
-    def _updated_stat_info(self, stat_info, nlink=None, mtime=None, atime=None, uid=None, gid=None):
+    def _updated_stat_info(self,
+                           stat_info,
+                           nlink=None,
+                           mtime=None,
+                           atime=None,
+                           uid=None,
+                           gid=None):
         """Updates an ino_stat stat_info with the given values."""
         fsdev = self._get_fsdev(stat_info.st_dev)
-        return fsdev.updated_stat_info(stat_info.st_ino, nlink=nlink, mtime=mtime, atime=atime, uid=uid, gid=gid)
+        return fsdev.updated_stat_info(stat_info.st_ino,
+                                       nlink=nlink,
+                                       mtime=mtime,
+                                       atime=atime,
+                                       uid=uid,
+                                       gid=gid)
 
     def _updated_file_info(self, file_info):
         """Return a file_info tuple with the current stat_info value."""
@@ -700,7 +734,8 @@ class Hardlinkable:
         """Check stats directly from inode data."""
         # double check figures based on direct inode stats
         totalsavedbytes = self.stats.bytes_saved_thisrun + self.stats.bytes_saved_previously
-        bytes_saved_thisrun = postlink_inode_stats['total_redundant_path_bytes'] - prelink_inode_stats['total_redundant_path_bytes']
+        bytes_saved_thisrun = (postlink_inode_stats['total_redundant_path_bytes'] -
+                               prelink_inode_stats['total_redundant_path_bytes'])
         assert totalsavedbytes == postlink_inode_stats['total_redundant_path_bytes']
         assert self.stats.bytes_saved_thisrun == bytes_saved_thisrun
 
@@ -854,9 +889,9 @@ class LinkingStats:
         self.hardlinked_thisrun = 0         # hardlinks done this run
         self.num_inodes = 0                 # inodes found this run
         self.nlinks_to_zero_thisrun = 0     # how man nlinks actually went to zero
-        self.hardlinked_previously = 0      # hardlinks that are already existing (based on walked dirs only)
-        self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run (ie. when nlink goes to zero)
-        self.bytes_saved_previously = 0     # bytes saved by previous hardlinks (in walked dirs only)
+        self.hardlinked_previously = 0      # already existing hardlinks (based on walked dirs)
+        self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run (ie. nlink==zero)
+        self.bytes_saved_previously = 0     # bytes saved by previous hardlinks (walked dirs only)
         self.hardlinkpairs = []             # list of files hardlinkable this run
         self.starttime = _time.time()       # track how long it takes
         self.currently_hardlinked = {}      # list of files currently hardlinked
@@ -1019,8 +1054,8 @@ class LinkingStats:
                 for namepair in file_list:
                     pathname = _os.path.join(*namepair)
                     print("                    : %s" % pathname)
-                print("Size per file: %s  Total saved: %s" % (_humanize_number(size),
-                                                              _humanize_number(size * len(file_list))))
+                print("Size per file: %s  Total saved: %s" %
+                      (_humanize_number(size), _humanize_number(size * len(file_list))))
             print("")
         # Print out the stats for the files we hardlinked, if any
         if self.options.verbosity > 0 and self.hardlinkpairs:
@@ -1048,9 +1083,10 @@ class LinkingStats:
             s2 = "Hardlinkable files found   : %s"
         print(s1 % self.nlinks_to_zero_thisrun)
         print(s2 % self.hardlinked_thisrun)
-        print("Total old and new hardlinks: %s" % (self.hardlinked_previously + self.hardlinked_thisrun))
-        print("Currently hardlinked bytes : %s (%s)" % (self.bytes_saved_previously,
-                                                        _humanize_number(self.bytes_saved_previously)))
+        print("Total old and new hardlinks: %s" %
+              (self.hardlinked_previously + self.hardlinked_thisrun))
+        print("Currently hardlinked bytes : %s (%s)" %
+              (self.bytes_saved_previously, _humanize_number(self.bytes_saved_previously)))
         if self.options.linking_enabled:
             s3 = "Additional linked bytes    : %s (%s)"
         else:
@@ -1081,24 +1117,28 @@ class LinkingStats:
                 print("Total unequal file modes   : %s" % self.num_mismatched_file_modes)
             if self.num_mismatched_file_ownership:
                 print("Total unequal file uid/gid : %s" % self.num_mismatched_file_ownership)
-            print("Total remaining inodes     : %s" % (self.num_inodes - self.nlinks_to_zero_thisrun))
+            print("Total remaining inodes     : %s" %
+                  (self.num_inodes - self.nlinks_to_zero_thisrun))
             assert (self.num_inodes - self.nlinks_to_zero_thisrun) > 0
         if self.options.debug_level > 0:
-            print("Total run time             : %s seconds" % round(_time.time() - self.starttime, 3))
-            print("Total file hash hits       : %s  misses: %s  sum total: %s" % (self.num_hash_hits,
-                                                                                  self.num_hash_misses,
-                                                                                  (self.num_hash_hits +
-                                                                                   self.num_hash_misses)))
-            print("Total hash mismatches      : %s  (+ total hardlinks): %s" % (self.num_hash_mismatches,
-                                                                                (self.num_hash_mismatches +
-                                                                                 self.hardlinked_previously +
-                                                                                 self.hardlinked_thisrun)))
+            print("Total run time             : %s seconds" %
+                  round(_time.time() - self.starttime, 3))
+            print("Total file hash hits       : %s  misses: %s  sum total: %s" %
+                  (self.num_hash_hits, self.num_hash_misses,
+                   (self.num_hash_hits + self.num_hash_misses)))
+            print("Total hash mismatches      : %s  (+ total hardlinks): %s" %
+                  (self.num_hash_mismatches,
+                   (self.num_hash_mismatches +
+                    self.hardlinked_previously +
+                    self.hardlinked_thisrun)))
             print("Total hash searches        : %s" % self.num_hash_list_searches)
             if self.num_hash_list_searches == 0:
                 avg_per_search = "N/A"
             else:
-                avg_per_search = round(float(self.num_list_iterations) / self.num_hash_list_searches, 3)
-            print("Total hash list iterations : %s  (avg per-search: %s)" % (self.num_list_iterations, avg_per_search))
+                raw_avg = float(self.num_list_iterations) / self.num_hash_list_searches
+                avg_per_search = round(raw_avg, 3)
+            print("Total hash list iterations : %s  (avg per-search: %s)" %
+                  (self.num_list_iterations, avg_per_search))
             print("Total equal comparisons    : %s" % self.equal_comparisons)
             print("Total digests computed     : %s" % self.num_digests_computed)
 
