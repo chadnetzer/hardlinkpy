@@ -218,10 +218,8 @@ class Hardlinkable:
         if _sys.version_info[0] == 2:
             if isinstance(directories, basestring):
                 directories = [directories]
-        else:
-            if (isinstance(directories, str) or
-                isinstance(directories, bytes)):
-                directories = [directories]
+        elif isinstance(directories, str) or isinstance(directories, bytes):
+            directories = [directories]
 
         for dirname in directories:
             if not _os.path.isdir(dirname):
@@ -1305,9 +1303,9 @@ def _content_digest(pathname):
 
 def main():
     # 'logging' package forces at least Python 2.3
-    assert _sys.version_info >= (2,3), ("%s requires at least Python 2.3" % _sys.argv[0])
+    assert _sys.version_info >= (2, 3), ("%s requires at least Python 2.3" % _sys.argv[0])
 
-    if _sys.version_info >= (2,4):
+    if _sys.version_info >= (2, 4):
         # logging.basicConfig in Python 2.3 accepted no args
         # Remove user from logging output
         _logging.basicConfig(format='%(levelname)s:%(message)s')
