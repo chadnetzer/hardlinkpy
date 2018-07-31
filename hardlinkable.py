@@ -1255,6 +1255,7 @@ def _humanize_number(number):
         return ("%.3f KiB" % (number / 1024.0))
     return ("%d bytes" % number)
 
+
 def _humanized_number_to_bytes(s):
     """Parses numbers with size specifiers like 'k', 'm', 'g', or 't'.
     Deliberately ignores multi-letter abbrevs like 'kb' or 'kib'"""
