@@ -701,8 +701,7 @@ class Hardlinkable:
         # double check figures based on direct inode stats
         totalsavedbytes = self.stats.bytes_saved_thisrun + self.stats.bytes_saved_previously
         bytes_saved_thisrun = postlink_inode_stats['total_redundant_path_bytes'] - prelink_inode_stats['total_redundant_path_bytes']
-        assert totalsavedbytes == postlink_inode_stats['total_redundant_path_bytes'], ((totalsavedbytes,
-            postlink_inode_stats['total_redundant_path_bytes']))
+        assert totalsavedbytes == postlink_inode_stats['total_redundant_path_bytes']
         assert self.stats.bytes_saved_thisrun == bytes_saved_thisrun
 
 
