@@ -191,6 +191,22 @@ def options_validation(parser, options):
     if options.linking_enabled:
         print("----- Hardlinking enabled.  The filesystem will be modified -----")
 
+    # Verify that linear_search_thresh is an integer >= 0, or "none"
+    if options.linear_search_thresh is not None:
+        err_str = ("Invalid value '%s' for linear-search-thresh. "
+                   "Should be a non-negative int")
+        try:
+            n = int(options.linear_search_thresh)
+            if n < 0:
+                parser.error(err_str % options.linear_search_thresh)
+            options.linear_search_thresh = n
+
+        except ValueError:
+            if options.linear_search_thresh.lower() == "none":
+                options.linear_search_thresh = None
+            else:
+                parser.error(err_str % options.linear_search_thresh)
+
 
 class Hardlinkable:
     def __init__(self, options=None):
@@ -474,7 +490,7 @@ class Hardlinkable:
                 # size, but different contents.
                 search_thresh = options.linear_search_thresh
                 use_content_digest = (search_thresh is not None and
-                                      len(cached_inodes_seq) > int(search_thresh))
+                                      len(cached_inodes_seq) > search_thresh)
                 if use_content_digest:
                     digest = _content_digest(_os.path.join(*namepair))
                     # Revert to full search if digest can't be computed
