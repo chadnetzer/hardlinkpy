@@ -1127,18 +1127,15 @@ class LinkingStats:
                 print("Total too large files      : %s" % self.num_files_too_large)
             if self.num_files_too_small:
                 print("Total too small files      : %s" % self.num_files_too_small)
-            if self.num_mismatched_file_times:
-                print("Total unequal file times   : %s" % self.num_mismatched_file_times)
-            if self.num_mismatched_file_modes:
-                print("Total unequal file modes   : %s" % self.num_mismatched_file_modes)
-            if self.num_mismatched_file_ownership:
-                print("Total unequal file uid/gid : %s" % self.num_mismatched_file_ownership)
             print("Total remaining inodes     : %s" %
                   (self.num_inodes - self.nlinks_to_zero_thisrun))
             assert (self.num_inodes - self.nlinks_to_zero_thisrun) > 0
         if self.options.debug_level > 0:
             print("Total run time             : %s seconds" %
                   round(_time.time() - self.starttime, 3))
+            print("Total file time mismatches : %s" % self.num_mismatched_file_times)
+            print("Total file modes mismatches: %s" % self.num_mismatched_file_modes)
+            print("Total uid/gid mismatches   : %s" % self.num_mismatched_file_ownership)
             print("Total file hash hits       : %s  misses: %s  sum total: %s" %
                   (self.num_hash_hits, self.num_hash_misses,
                    (self.num_hash_hits + self.num_hash_misses)))
