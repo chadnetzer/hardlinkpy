@@ -1133,9 +1133,9 @@ class LinkingStats:
         if self.options.debug_level > 0:
             print("Total run time             : %s seconds" %
                   round(_time.time() - self.starttime, 3))
-            print("Total unequal file times   : %s" % self.num_mismatched_file_times)
-            print("Total unequal file modes   : %s" % self.num_mismatched_file_modes)
-            print("Total unequal file uid/gid : %s" % self.num_mismatched_file_ownership)
+            print("Total file time mismatches : %s" % self.num_mismatched_file_times)
+            print("Total file modes mismatches: %s" % self.num_mismatched_file_modes)
+            print("Total uid/gid mismatches   : %s" % self.num_mismatched_file_ownership)
             print("Total file hash hits       : %s  misses: %s  sum total: %s" %
                   (self.num_hash_hits, self.num_hash_misses,
                    (self.num_hash_hits + self.num_hash_misses)))
