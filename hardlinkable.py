@@ -490,7 +490,7 @@ class Hardlinkable:
                 # size, but different contents.
                 search_thresh = options.linear_search_thresh
                 use_content_digest = (search_thresh is not None and
-                                      len(cached_inodes_seq) > int(search_thresh))
+                                      len(cached_inodes_seq) > search_thresh)
                 if use_content_digest:
                     digest = _content_digest(_os.path.join(*namepair))
                     # Revert to full search if digest can't be computed
