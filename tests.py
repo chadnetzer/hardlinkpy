@@ -10,6 +10,11 @@ import tempfile
 import time
 import unittest
 
+try:
+    import xattr
+except ImportError:
+    xattr = None
+
 from collections import defaultdict
 from itertools import chain,combinations,permutations
 
@@ -646,6 +651,104 @@ class TestMinMaxSize(BaseTests):
         self.assertEqual(os.lstat("a2").st_nlink, 1)
         self.assertEqual(os.lstat("b2").st_nlink, 1)
         self.assertEqual(os.lstat("c2").st_nlink, 1)
+
+
+@unittest.skipIf(xattr is None, "Requires xattr module")
+class TestXattr(BaseTests):
+    def setUp(self):
+        self.setup_tempdir()
+
+        self.xattrs = []
+        now = time.time()
+        for filename in ("a1", "b1", "c1"):
+            self.make_hardlinkable_file(filename, testdata1)
+            os.utime(filename, (now, now))
+            self.xattrs.append(xattr.xattr(filename))
+
+    def test_one_xattr(self):
+        self.xattrs[0].set(b"name1", b"value1")
+
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", self.root]
+        hardlinkable.main()
+
+        self.verify_file_contents()
+        self.assertNotEqual(get_inode("a1"), get_inode("b1"))
+        self.assertEqual(get_inode("b1"), get_inode("c1"))
+
+    def test_two_equal_xattr(self):
+        self.xattrs[0].set(b"name1", b"value1")
+        self.xattrs[1].set(b"name1", b"value1")
+
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", self.root]
+        hardlinkable.main()
+
+        self.verify_file_contents()
+        self.assertEqual(get_inode("a1"), get_inode("b1"))
+        self.assertNotEqual(get_inode("a1"), get_inode("c1"))
+        self.assertNotEqual(get_inode("b1"), get_inode("c1"))
+
+    def test_two_non_equal_name_xattr(self):
+        self.xattrs[0].set(b"name1", b"value1")
+        self.xattrs[1].set(b"name2", b"value1")
+
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", self.root]
+        hardlinkable.main()
+
+        self.verify_file_contents()
+        self.assertNotEqual(get_inode("a1"), get_inode("b1"))
+        self.assertNotEqual(get_inode("a1"), get_inode("c1"))
+        self.assertNotEqual(get_inode("b1"), get_inode("c1"))
+
+    def test_two_non_equal_value_xattr(self):
+        self.xattrs[0].set(b"name1", b"value1")
+        self.xattrs[1].set(b"name1", b"value2")
+
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", self.root]
+        hardlinkable.main()
+
+        self.verify_file_contents()
+        self.assertNotEqual(get_inode("a1"), get_inode("b1"))
+        self.assertNotEqual(get_inode("a1"), get_inode("c1"))
+        self.assertNotEqual(get_inode("b1"), get_inode("c1"))
+
+    def test_two_non_equal_xattr(self):
+        self.xattrs[0].set(b"name1", b"value1")
+        self.xattrs[1].set(b"name2", b"value2")
+
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", self.root]
+        hardlinkable.main()
+
+        self.verify_file_contents()
+        self.assertNotEqual(get_inode("a1"), get_inode("b1"))
+        self.assertNotEqual(get_inode("a1"), get_inode("c1"))
+        self.assertNotEqual(get_inode("b1"), get_inode("c1"))
+
+    def test_contentonly_xattr(self):
+        self.xattrs[0].set(b"name1", b"value1")
+        self.xattrs[1].set(b"name2", b"value2")
+
+        sys.argv = ["hardlinkable.py", "--enable-linking", "-c",
+                    "-q", self.root]
+        hardlinkable.main()
+
+        self.verify_file_contents()
+        self.assertEqual(get_inode("a1"), get_inode("b1"))
+        self.assertEqual(get_inode("a1"), get_inode("c1"))
+        self.assertEqual(get_inode("b1"), get_inode("c1"))
+
+    def test_ignore_xattr(self):
+        self.xattrs[0].set(b"name1", b"value1")
+        self.xattrs[1].set(b"name2", b"value2")
+
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--ignore-xattr",
+                    "-q", self.root]
+        hardlinkable.main()
+
+        self.verify_file_contents()
+        self.assertEqual(get_inode("a1"), get_inode("b1"))
+        self.assertEqual(get_inode("a1"), get_inode("c1"))
+        self.assertEqual(get_inode("b1"), get_inode("c1"))
+
 
 
 @unittest.skip("Max nlinks tests are slow.  Skipping...")
