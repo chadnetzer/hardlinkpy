@@ -604,7 +604,10 @@ class Hardlinkable:
             if xattr is not None and not options.ignore_xattr:
                 pathname1 = _os.path.join(dirname1, filename1)
                 pathname2 = _os.path.join(dirname2, filename2)
-                result = result and _equal_xattr(pathname1, pathname2)
+                xattr_result = _equal_xattr(pathname1, pathname2)
+                if not xattr_result:
+                    self.stats.found_mismatched_xattr()
+                result = result and xattr_result
 
         # Add some stats on the factors which may have falsified result
         if st1.st_mtime != st2.st_mtime:
@@ -952,9 +955,6 @@ class LinkingStats:
         self.num_included_files = 0         # how many files we include (by regex)
         self.num_files_too_large = 0        # how many files are too large
         self.num_files_too_small = 0        # how many files are too small
-        self.num_mismatched_file_times = 0  # same sized files with different mtimes
-        self.num_mismatched_file_modes = 0  # same sized files with different perms
-        self.num_mismatched_file_ownership = 0  # same sized files with different ownership
         self.comparisons = 0                # how many file content comparisons
         self.equal_comparisons = 0          # how many file comparisons found equal
         self.hardlinked_thisrun = 0         # hardlinks done this run
@@ -974,6 +974,10 @@ class LinkingStats:
         self.num_hash_list_searches = 0     # Times a hash list search is initiated
         self.num_list_iterations = 0        # Number of iterations over a list in inode_hashes
         self.num_digests_computed = 0       # Number of times content digest was computed
+        self.num_mismatched_file_times = 0  # same sized files with different mtimes
+        self.num_mismatched_file_modes = 0  # same sized files with different perms
+        self.num_mismatched_file_ownership = 0  # same sized files with different ownership
+        self.num_mismatched_xattr = 0       # Times xattrs didn't match
 
     def found_directory(self):
         self.dircount += 1
@@ -1025,6 +1029,9 @@ class LinkingStats:
 
     def found_mismatched_ownership(self):
         self.num_mismatched_file_ownership += 1
+
+    def found_mismatched_xattr(self):
+        self.num_mismatched_xattr += 1
 
     def did_comparison(self, pathname1, pathname2, result):
         self.comparisons += 1
@@ -1211,6 +1218,7 @@ class LinkingStats:
             print("Total file time mismatches : %s" % self.num_mismatched_file_times)
             print("Total file modes mismatches: %s" % self.num_mismatched_file_modes)
             print("Total uid/gid mismatches   : %s" % self.num_mismatched_file_ownership)
+            print("Total xattr mismatches     : %s" % self.num_mismatched_xattr)
             print("Total file hash hits       : %s  misses: %s  sum total: %s" %
                   (self.num_hash_hits, self.num_hash_misses,
                    (self.num_hash_hits + self.num_hash_misses)))
