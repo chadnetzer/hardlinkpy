@@ -1261,6 +1261,7 @@ class RandomizedOrderingBase(BaseTests):
 
             if max_nlinks is None:
                 max_nlinks = os.pathconf(pathnames[0], "PC_LINK_MAX")
+                assert max_nlinks is not None
 
             nlink_list = sorted(set([os.lstat(pathname).st_nlink for pathname in pathnames]), reverse=True)
             self.assertLessEqual(max(nlink_list), max_nlinks)
