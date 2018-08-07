@@ -1254,6 +1254,11 @@ class RandomizedOrderingBase(BaseTests):
             if len(key[0]) < self.options.min_file_size or not pathnames:
                 continue
 
+            # Ignore the unique files (as they won't be linked in large enough
+            # amounts to reach the max_nlinks limit)
+            if key[0].startswith('u'):
+                continue
+
             if max_nlinks is None:
                 max_nlinks = os.pathconf(pathnames[0], "PC_LINK_MAX")
 
