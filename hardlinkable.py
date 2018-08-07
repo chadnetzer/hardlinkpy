@@ -707,92 +707,91 @@ class _FSDev:
 
     def sorted_links(self, options, stats):
         """Generates pairs of linkeable pathnames from the linked_inodes."""
-        if True:
-            for linkable_set in _linkable_inode_sets(self.linked_inodes):
-                # Decorate-sort-undecorate with st_link as primary key
-                # Order inodes from greatest to least st_nlink
-                nlinks_list = [(self.ino_stat[ino].st_nlink, ino) for ino in linkable_set]
-                nlinks_list.sort(reverse=True)
-                ino_list = [x[1] for x in nlinks_list]  # strip nlinks sort key
+        for linkable_set in _linkable_inode_sets(self.linked_inodes):
+            # Decorate-sort-undecorate with st_link as primary key
+            # Order inodes from greatest to least st_nlink
+            nlinks_list = [(self.ino_stat[ino].st_nlink, ino) for ino in linkable_set]
+            nlinks_list.sort(reverse=True)
+            ino_list = [x[1] for x in nlinks_list]  # strip nlinks sort key
 
-                # Keep a list if inos from the end of the ino_list that cannot
-                # be linked to (such as when in 'samename' mode), and reappend
-                # them to nlist when the src inode advances.
-                remaining_inos = []
+            # Keep a list if inos from the end of the ino_list that cannot
+            # be linked to (such as when in 'samename' mode), and reappend
+            # them to nlist when the src inode advances.
+            remaining_inos = []
 
+            assert len(ino_list) > 0
+            while ino_list or remaining_inos:  # outer while
+                # reappend remaining_inos stack to ino_list
+                if remaining_inos:
+                    ino_list.extend(remaining_inos[::-1])
+                    remaining_inos = []
+
+                assert len(remaining_inos) == 0
                 assert len(ino_list) > 0
-                while ino_list or remaining_inos:  # outer while
-                    # reappend remaining_inos stack to ino_list
-                    if remaining_inos:
-                        ino_list.extend(remaining_inos[::-1])
-                        remaining_inos = []
 
-                    assert len(remaining_inos) == 0
-                    assert len(ino_list) > 0
+                # Ensure we don't try to combine inodes that would create
+                # more links than the maximum allowed nlinks, by advancing
+                # src until src + dst nlink <= max_nlinks
+                #
+                # Every loop shortens the ino_list, so the loop will
+                # terminate.
+                src_ino = ino_list[0]
+                ino_list = ino_list[1:]
+                while ino_list:  # inner while
+                    # Always removes either first or last element, so loop
+                    # must terminate
+                    dst_ino = ino_list.pop()
+                    src_stat_info = self.ino_stat[src_ino]
+                    dst_stat_info = self.ino_stat[dst_ino]
 
-                    # Ensure we don't try to combine inodes that would create
-                    # more links than the maximum allowed nlinks, by advancing
-                    # src until src + dst nlink <= max_nlinks
-                    #
-                    # Every loop shortens the ino_list, so the loop will
-                    # terminate.
-                    src_ino = ino_list[0]
-                    ino_list = ino_list[1:]
-                    while ino_list:  # inner while
-                        # Always removes either first or last element, so loop
-                        # must terminate
-                        dst_ino = ino_list.pop()
-                        src_stat_info = self.ino_stat[src_ino]
-                        dst_stat_info = self.ino_stat[dst_ino]
+                    # Samename can break nlink ordering invariant
+                    assert (options.samename or
+                            src_stat_info.st_nlink >= dst_stat_info.st_nlink)
 
-                        # Samename can break nlink ordering invariant
-                        assert (options.samename or
-                                src_stat_info.st_nlink >= dst_stat_info.st_nlink)
+                    # Ignore samename when checking max_nlink invariant
+                    if (self.max_nlinks is not None and
+                        src_stat_info.st_nlink + dst_stat_info.st_nlink > self.max_nlinks):
+                        # Move inos to remaining_inos, so that src_ino will advance
+                        remaining_inos.append(dst_ino)
+                        remaining_inos.extend(ino_list[::-1])
+                        ino_list = []
+                        break
 
-                        # Ignore samename when checking max_nlink invariant
-                        if (self.max_nlinks is not None and
-                            src_stat_info.st_nlink + dst_stat_info.st_nlink > self.max_nlinks):
-                            # Move inos to remaining_inos, so that src_ino will advance
-                            remaining_inos.append(dst_ino)
-                            remaining_inos.extend(ino_list[::-1])
-                            ino_list = []
-                            break
+                    # Loop through all linkable pathnames in the last inode
+                    namepairs = _namepairs_per_inode(self.ino_pathnames[dst_ino])
+                    for dst_dirname, dst_filename in namepairs:
+                        if (options.samename and
+                            dst_filename not in self.ino_pathnames[src_ino]):
+                            # Skip inodes without equal filenames in samename mode
+                            assert dst_filename not in self.ino_pathnames[src_ino]
+                            continue
+                        lookup_filename = options.samename and dst_filename
+                        src_namepair = self.arbitrary_namepair_from_ino(src_ino,
+                                                                        lookup_filename)
+                        src_dirname, src_filename = src_namepair
+                        src_file_info = (src_dirname, src_filename, src_stat_info)
+                        dst_file_info = (dst_dirname, dst_filename, dst_stat_info)
 
-                        # Loop through all linkable pathnames in the last inode
-                        namepairs = _namepairs_per_inode(self.ino_pathnames[dst_ino])
-                        for dst_dirname, dst_filename in namepairs:
-                            if (options.samename and
-                                dst_filename not in self.ino_pathnames[src_ino]):
-                                # Skip inodes without equal filenames in samename mode
-                                assert dst_filename not in self.ino_pathnames[src_ino]
-                                continue
-                            lookup_filename = options.samename and dst_filename
-                            src_namepair = self.arbitrary_namepair_from_ino(src_ino,
-                                                                            lookup_filename)
-                            src_dirname, src_filename = src_namepair
-                            src_file_info = (src_dirname, src_filename, src_stat_info)
-                            dst_file_info = (dst_dirname, dst_filename, dst_stat_info)
+                        yield (src_file_info, dst_file_info)
 
-                            yield (src_file_info, dst_file_info)
+                        # After yielding, we can update stat_info to
+                        # account for hard-linking
+                        stats.did_hardlink(src_file_info, dst_file_info)
 
-                            # After yielding, we can update stat_info to
-                            # account for hard-linking
-                            stats.did_hardlink(src_file_info, dst_file_info)
+                        new_src_nlink = src_stat_info.st_nlink + 1
+                        new_dst_nlink = dst_stat_info.st_nlink - 1
+                        src_stat_info = self.updated_stat_info(src_ino, nlink=new_src_nlink)
+                        dst_stat_info = self.updated_stat_info(dst_ino, nlink=new_dst_nlink)
+                        assert src_stat_info.st_nlink <= self.max_nlinks
+                        assert dst_stat_info is None or dst_stat_info.st_nlink > 0
 
-                            new_src_nlink = src_stat_info.st_nlink + 1
-                            new_dst_nlink = dst_stat_info.st_nlink - 1
-                            src_stat_info = self.updated_stat_info(src_ino, nlink=new_src_nlink)
-                            dst_stat_info = self.updated_stat_info(dst_ino, nlink=new_dst_nlink)
-                            assert src_stat_info.st_nlink <= self.max_nlinks
-                            assert dst_stat_info is None or dst_stat_info.st_nlink > 0
+                        dst_namepair = tuple(dst_file_info[:2])
+                        self.move_linked_namepair(dst_namepair, src_ino, dst_ino)
 
-                            dst_namepair = tuple(dst_file_info[:2])
-                            self.move_linked_namepair(dst_namepair, src_ino, dst_ino)
-
-                        # if there are still pathnames to the dest inode, save
-                        # it for possible linking later (for samename, mainly)
-                        if self.ino_pathnames[dst_ino]:
-                            remaining_inos.append(dst_ino)
+                    # if there are still pathnames to the dest inode, save
+                    # it for possible linking later (for samename, mainly)
+                    if self.ino_pathnames[dst_ino]:
+                        remaining_inos.append(dst_ino)
 
     def arbitrary_namepair_from_ino(self, ino, filename=None):
         # Get the dict of filename: [pathnames] for ino_key
