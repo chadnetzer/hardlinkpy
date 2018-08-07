@@ -554,14 +554,6 @@ class Hardlinkable:
                       (options.ignore_perm or st1.st_mode == st2.st_mode) and
                       (st1.st_uid == st2.st_uid and st1.st_gid == st2.st_gid))
 
-        fsdev = self._get_fsdev(st1.st_dev)
-        if result and (fsdev.max_nlinks is not None):
-            # The justification for not linking a pair of files if their nlinks sum
-            # to more than the device maximum, is that linking them won't change
-            # the overall link count, meaning no space saving is possible overall
-            # even when all their filenames are found and re-linked.
-            result = ((st1.st_nlink + st2.st_nlink) <= fsdev.max_nlinks)
-
         # Add some stats on the factors which may have falsified result
         if st1.st_mtime != st2.st_mtime:
             self.stats.found_mismatched_time()
