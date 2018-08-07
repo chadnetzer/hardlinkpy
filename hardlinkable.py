@@ -163,6 +163,7 @@ by another user.
 
 
 def options_validation(parser, options):
+    """Ensures given options are valid, and sets up options object"""
     if options.debug_level > 1:
         _logging.getLogger().setLevel(_logging.DEBUG)
 
@@ -209,6 +210,10 @@ def options_validation(parser, options):
 
 
 class Hardlinkable:
+    """Allows scanning directories for hard-linkable files.  Can return
+    iteratorable of pathname pairs that can be linked, statistics on what space
+    would be saved by linking, and actually perform the linking if
+    requested."""
     def __init__(self, options=None):
         if options is None:
             options = _parse_command_line(get_default_options=True)
@@ -365,6 +370,8 @@ class Hardlinkable:
     # component (ie. the basename) without the path.  The tree walking provides
     # this, so we don't have to extract it with _os.path.split()
     def _find_identical_files(self, dirname, filename, stat_info):
+        """Add the given (dirname, filename), with the given stats information,
+        to the internal state of which inodes are to be linked."""
         options = self.options
 
         fsdev = self._get_fsdev(stat_info.st_dev)
@@ -542,6 +549,7 @@ class Hardlinkable:
     # Determine if a file is eligibile for hardlinking.  Files will only be
     # considered for hardlinking if this function returns true.
     def _eligible_for_hardlink(self, st1, st2):
+        """Return True if inode meta-data would not preclude linking"""
         options = self.options
         # A chain of required criteria:
         result = (not _is_already_hardlinked(st1, st2) and
@@ -572,6 +580,7 @@ class Hardlinkable:
 
     # Determines if two files should be hard linked together.
     def _are_files_hardlinkable(self, file_info1, file_info2, use_digest):
+        """Return True if file contents and stat meta-data are equal"""
         dirname1, filename1, stat1 = file_info1
         dirname2, filename2, stat2 = file_info2
         if not self._eligible_for_hardlink(stat1, stat2):
@@ -591,6 +600,7 @@ class Hardlinkable:
         return result
 
     def _found_hardlinkable_file(self, src_file_info, dst_file_info):
+        """Update state to indicate if src and dst files are hard linkable"""
         src_dirname, src_filename, src_stat_info = src_file_info
         dst_dirname, dst_filename, dst_stat_info = dst_file_info
 
@@ -786,6 +796,7 @@ class _FSDev:
                         remaining_inos.append(dst_ino)
 
     def arbitrary_namepair_from_ino(self, ino, filename=None):
+        """Return a (dirname, filename) tuple associated with the inode."""
         # Get the dict of filename: [pathnames] for ino_key
         d = self.ino_pathnames[ino]
         if filename:
@@ -796,6 +807,7 @@ class _FSDev:
         return l[0]
 
     def ino_append_namepair(self, ino, filename, namepair):
+        """Add the (dirname, filename) tuple to the inode map (grouped by filename)"""
         d = self.ino_pathnames.setdefault(ino, {})
         l = d.setdefault(filename, [])
         l.append(namepair)
@@ -867,6 +879,7 @@ class _FSDev:
         return count
 
     def add_content_digest(self, file_info, digest=None):
+        """Store a given digest for an inode (or generate one if not provided)"""
         dirname, filename, stat_info = file_info
         if stat_info.st_ino not in self.inodes_with_digest:
             pathname = _os.path.join(dirname, filename)
@@ -1294,6 +1307,7 @@ def file_has_been_modified(pathname, stat_info):
 
 
 def _humanize_number(number):
+    """Return string with number represented in 'human readable' form"""
     if number >= 1024 ** 5:
         return ("%.3f PiB" % (number / (1024.0 ** 5)))
     if number >= 1024 ** 4:
