@@ -1263,12 +1263,17 @@ class RandomizedOrderingBase(BaseTests):
                 max_nlinks = os.pathconf(pathnames[0], "PC_LINK_MAX")
                 assert max_nlinks is not None
 
-            nlink_list = sorted(set([os.lstat(pathname).st_nlink for pathname in pathnames]), reverse=True)
+            ino_nlinks = {}
+            for pathname in pathnames:
+                stat_info = os.lstat(pathname)
+                ino_nlinks[stat_info.st_ino] = stat_info.st_nlink
+
+            nlink_list = sorted(ino_nlinks.values(), reverse=True)
             self.assertLessEqual(max(nlink_list), max_nlinks)
 
             # the sum of unique nlinks should add up to more than the
             # max_nlinks value
-            total_nlinks = sum(set(nlink_list))
+            total_nlinks = sum(ino_nlinks.values())
             self.assertGreater(total_nlinks, max_nlinks)
 
         # pass on max_nlinks value for other checkers
