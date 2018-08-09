@@ -64,7 +64,7 @@ __version__ = '0.8'
 _VERSION = "0.8 alpha - 2018-07-09 (09-Jul-2018)"
 
 
-def _parse_command_line(get_default_options=False):
+def _parse_command_line(get_default_options=False, show_progress_default=False):
     usage = "usage: %prog [options] directory [ directory ... ]"
     version = "%prog: " + _VERSION
     description = """\
@@ -87,6 +87,17 @@ by hard linking identical files.  It can also perform the linking."""
     parser.add_option("--enable-linking", dest="linking_enabled",
                       help="Perform the actual hardlinking",
                       action="store_true", default=False,)
+
+    # Allow disabling progress output during processing.
+    if show_progress_default:
+        progress_cmd = "--no-progress"
+        progress_action = "store_false"
+    else:
+        progress_cmd = "--progress"
+        progress_action = "store_true"
+    parser.add_option(progress_cmd, dest="show_progress",
+                      help="Output progress information as the program proceeds",
+                      action=progress_action, default=show_progress_default,)
 
     # hidden debug option, each repeat increases debug level (long option only)
     parser.add_option("-d", "--debug", dest="debug_level",
@@ -1472,7 +1483,7 @@ def main():
         _logging.basicConfig(format='%(levelname)s:%(message)s')
 
     # Parse our argument list and get our list of directories
-    options, directories = _parse_command_line()
+    options, directories = _parse_command_line(show_progress_default=True)
 
     hl = Hardlinkable(options)
     hl.run(directories)
