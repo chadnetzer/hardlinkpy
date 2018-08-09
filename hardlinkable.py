@@ -1167,7 +1167,7 @@ class LinkingStats:
                 print("Total too small files      : %s" % self.num_files_too_small)
             print("Total remaining inodes     : %s" %
                   (self.num_inodes - self.nlinks_to_zero_thisrun))
-            assert (self.num_inodes - self.nlinks_to_zero_thisrun) > 0
+            assert (self.num_inodes - self.nlinks_to_zero_thisrun) >= 0
         if self.options.debug_level > 0:
             print("Total run time             : %s seconds" %
                   round(_time.time() - self.starttime, 3))
