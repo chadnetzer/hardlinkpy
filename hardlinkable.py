@@ -1486,7 +1486,17 @@ def main():
     options, directories = _parse_command_line(show_progress_default=True)
 
     hl = Hardlinkable(options)
-    hl.run(directories)
+    try:
+        hl.run(directories)
+    except KeyboardInterrupt:
+        if options.show_progress:
+            hl.progress.clear()
+        _logging.warning("\nExiting by keyboard interrupt...")
+    except SystemExit:
+        if options.show_progress:
+            hl.progress.clear()
+        _logging.error("\nSystem exit triggered.  Shutting down...")
+        raise
 
 
 if __name__ == '__main__':
