@@ -219,6 +219,7 @@ class Hardlinkable:
             options = _parse_command_line(get_default_options=True)
         self.options = options
         self.stats = LinkingStats(options)
+        self.progress = _Progress(options, self.stats)
         self._fsdevs = {}
 
     def linkables(self, directories):
@@ -359,12 +360,16 @@ class Hardlinkable:
         """Perform the walk, collect and sort linking data, and yield linkable
         fileinfo pairs."""
         for dirname, filename, stat_info in self.matched_file_info(directories):
+            self.progress.show_dirs_files_found()
             self._find_identical_files(dirname, filename, stat_info)
 
+        self.progress.clear()
         self._prelink_inode_stats = self._inode_stats()
         for fsdev in self._fsdevs.values():
             for pair in fsdev.sorted_links(self.options, self.stats):
                 yield pair
+                self.progress.show_hardlinked_amount()
+        self.progress.clear()
 
     # dirname is the directory component and filename is just the file name
     # component (ie. the basename) without the path.  The tree walking provides
@@ -1165,6 +1170,95 @@ class LinkingStats:
                   (self.num_list_iterations, avg_per_search))
             print("Total equal comparisons    : %s" % self.equal_comparisons)
             print("Total digests computed     : %s" % self.num_digests_computed)
+
+
+class _Progress:
+    """Helps facilitate progress output repeatedly printed on the same line (ie. no scrolling)"""
+    def __init__(self, options, stats):
+        self.options = options
+        self.stats = stats
+        self.last_line_len = 0
+        self.last_time = 0.0
+        self.update_delay = 0.1
+        self.dir_files_counter = 0
+        self.counter_min = 11  # Prime number to make output values more dynamic
+        self.last_n_fps = [0.0] * 10
+        self.fps_index = 0  # Skip deque, and use a simple circular buffer
+
+    def show_dirs_files_found(self):
+        if not self.options.show_progress:
+            return
+
+        # Allow progress updating only every counter_min iterations
+        self.dir_files_counter += 1
+        if self.dir_files_counter < self.counter_min:
+            return
+        else:
+            self.dir_files_counter = 0
+
+        # Also allow not updating before update_delay seconds have elapsed
+        now = _time.time()
+        time_since_last = now - self.last_time
+        if time_since_last < self.update_delay:
+            return
+        self.last_time = now
+
+        # Calculate some stats for progress output
+        time_elapsed = now - self.stats.starttime
+        num_dirs = self.stats.dircount
+        num_files = self.stats.regularfiles
+        fps = round(num_files/time_elapsed, 1)
+        num_comparisons = self.stats.comparisons
+
+        # Very simple running avg for prev fps (for smoothing)
+        # Not even an attempt at anything sophisticated, just practical
+        avg_fps = float(sum(self.last_n_fps))/len(self.last_n_fps)
+        if fps > avg_fps:
+            up_down = "+"
+        else:
+            up_down = "-"
+        self.last_n_fps[self.fps_index] = fps
+        self.fps_index = (self.fps_index + 1) % len(self.last_n_fps)
+
+        # Generate and print the output string
+        s = ("\r%s files in %s dirs (secs: %s files/sec: %s%s comparisons: %s)" %
+              (num_files, num_dirs, int(time_elapsed), fps, up_down, num_comparisons))
+        self.line(s)
+
+    def show_hardlinked_amount(self):
+        if not self.options.show_progress:
+            return
+
+        now = _time.time()
+        time_since_last = now - self.last_time
+        if time_since_last < self.update_delay:
+            return
+
+        time_elapsed = now - self.stats.starttime
+        num_hardlinked = self.stats.hardlinked_thisrun
+
+        s = ("\rHardlinks this run %s (elapsed secs: %s)" %
+              (num_hardlinked, int(time_elapsed)))
+        self.line(s)
+        self.last_time = now
+
+    def clear(self):
+        self.line("\r")  # This erases the last line
+        self.last_line_len = 1
+        self.line("\r")  # This moves to the beginning
+
+    def line(self, output_string):
+        """Output on the same line (must be given line starting with \r, not ending with \n)"""
+        if not self.options.show_progress:
+            return
+
+        # Add enough spaces to overwrite last line
+        num_spaces = self.last_line_len - len(output_string)
+        if num_spaces > 0:
+            output_string += (" " * num_spaces)
+            assert len(output_string) == self.last_line_len
+        self.last_line_len = len(output_string)
+        _sys.stdout.write(output_string)
 
 
 #################
