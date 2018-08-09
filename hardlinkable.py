@@ -76,7 +76,7 @@ by hard linking identical files.  It can also perform the linking."""
                            version=version,
                            description=description,
                            formatter=formatter)
-    parser.add_option("-q", "--no-stats", dest="printstats",
+    parser.add_option("--no-stats", dest="printstats",
                       help="Do not print the statistics",
                       action="store_false", default=True,)
 
@@ -98,6 +98,11 @@ by hard linking identical files.  It can also perform the linking."""
     parser.add_option(progress_cmd, dest="show_progress",
                       help="Output progress information as the program proceeds",
                       action=progress_action, default=show_progress_default,)
+
+    # Do not print non-error output (overrides verbose)
+    parser.add_option("-q", "--quiet", dest="quiet",
+                      help=_SUPPRESS_HELP,
+                      action="store_true", default=False,)
 
     # hidden debug option, each repeat increases debug level (long option only)
     parser.add_option("-d", "--debug", dest="debug_level",
@@ -200,7 +205,7 @@ def options_validation(parser, options):
     # happening in case the program is set to zero verbosity and is taking a
     # long time doing comparisons with no output.  It's helpful to know
     # definitively that the program is set to modify the filesystem.
-    if options.linking_enabled:
+    if options.linking_enabled and not options.quiet:
         print("----- Hardlinking enabled.  The filesystem will be modified -----")
 
     # Verify that linear_search_thresh is an integer >= 0, or "none"
@@ -218,6 +223,12 @@ def options_validation(parser, options):
                 options.linear_search_thresh = None
             else:
                 parser.error(err_str % options.linear_search_thresh)
+
+    # Setup/reconcile output options (debugging is not overridden)
+    if options.quiet:
+        options.verbosity = 0  # Removes stats link pair collection
+        options.show_progress = False
+        options.printstats = False
 
 
 class Hardlinkable:
@@ -1080,7 +1091,7 @@ class LinkingStats:
         return count
 
     def print_stats(self, possibly_incomplete=False):
-        if not self.options.printstats:
+        if not self.options.printstats and self.options.debug_level == 0:
             return
 
         if possibly_incomplete:
