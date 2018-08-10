@@ -290,7 +290,7 @@ class Hardlinkable:
 
             assert not aborted_early
 
-        self.stats.print_stats(aborted_early)
+        self.stats.output_results(aborted_early)
 
         if not aborted_early:
             self._postlink_inode_stats = self._inode_stats()
@@ -1090,38 +1090,58 @@ class LinkingStats:
             count += len(namepairs)
         return count
 
-    def print_stats(self, possibly_incomplete=False):
-        if not self.options.printstats and self.options.debug_level == 0:
+    def output_results(self, possibly_incomplete=False):
+        """Main output function after hardlink run completed"""
+        if self.options.quiet and self.options.debug_level == 0:
             return
 
-        if possibly_incomplete:
-            print("Statistics possibly incomplete due to errors")
+        if not self.options.quiet and possibly_incomplete:
+            print("Results possibly incomplete due to errors")
 
+        separator_needed = False
         if self.options.verbosity > 1 and self.currently_hardlinked:
-            print("Currently hardlinked files")
-            print("-----------------------")
-            keys = list(self.currently_hardlinked.keys())
-            keys.sort()  # Could use sorted() once we only support >= Python 2.4
-            for key in keys:
-                size, file_list = self.currently_hardlinked[key]
-                print("Currently hardlinked: %s" % _os.path.join(*key))
-                for namepair in file_list:
-                    pathname = _os.path.join(*namepair)
-                    print("                    : %s" % pathname)
-                print("Size per file: %s  Total saved: %s" %
-                      (_humanize_number(size), _humanize_number(size * len(file_list))))
-            print("")
-        # Print out the stats for the files we hardlinked, if any
+            self.output_currently_linked()
+            separator_needed = True
+
         if self.options.verbosity > 0 and self.hardlinkpairs:
-            if self.options.linking_enabled:
-                print("Files that were hardlinked this run")
-            else:
-                print("Files that are hardlinkable")
-            print("-----------------------")
-            for (src_namepair, dst_namepair) in self.hardlinkpairs:
-                print("from: %s" % _os.path.join(*src_namepair))
-                print("  to: %s" % _os.path.join(*dst_namepair))
-            print("")
+            if separator_needed:
+                print("")
+            self.output_linked_pairs()
+            separator_needed = True
+
+        if self.options.printstats or self.options.debug_level > 0:
+            if separator_needed:
+                print("")
+            self.print_stats()
+
+    def output_currently_linked(self):
+        """Print out the already linked files that are found"""
+        print("Currently hardlinked files")
+        print("-----------------------")
+        keys = list(self.currently_hardlinked.keys())
+        keys.sort()  # Could use sorted() once we only support >= Python 2.4
+        for key in keys:
+            size, file_list = self.currently_hardlinked[key]
+            print("Currently hardlinked: %s" % _os.path.join(*key))
+            for namepair in file_list:
+                pathname = _os.path.join(*namepair)
+                print("                    : %s" % pathname)
+            print("Filesize: %s  Total saved: %s" %
+                  (_humanize_number(size), _humanize_number(size * len(file_list))))
+
+    def output_linked_pairs(self):
+        """Print out the stats for the files we hardlinked, if any"""
+        if self.options.linking_enabled:
+            print("Files that were hardlinked this run")
+        else:
+            print("Files that are hardlinkable")
+        print("-----------------------")
+        for (src_namepair, dst_namepair) in self.hardlinkpairs:
+            print("from: %s" % _os.path.join(*src_namepair))
+            print("  to: %s" % _os.path.join(*dst_namepair))
+
+    def print_stats(self):
+        """Print statistics and data about the current run"""
         print("Hard linking statistics")
         print("-----------------------")
         if not self.options.linking_enabled:
