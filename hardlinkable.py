@@ -1091,6 +1091,7 @@ class LinkingStats:
         return count
 
     def output_results(self, possibly_incomplete=False):
+        """Main output function after hardlink run completed"""
         if self.options.quiet and self.options.debug_level == 0:
             return
 
@@ -1114,6 +1115,7 @@ class LinkingStats:
             self.print_stats()
 
     def output_currently_linked(self):
+        """Print out the already linked files that are found"""
         print("Currently hardlinked files")
         print("-----------------------")
         keys = list(self.currently_hardlinked.keys())
@@ -1128,7 +1130,7 @@ class LinkingStats:
                   (_humanize_number(size), _humanize_number(size * len(file_list))))
 
     def output_linked_pairs(self):
-    # Print out the stats for the files we hardlinked, if any
+        """Print out the stats for the files we hardlinked, if any"""
         if self.options.linking_enabled:
             print("Files that were hardlinked this run")
         else:
@@ -1139,6 +1141,7 @@ class LinkingStats:
             print("  to: %s" % _os.path.join(*dst_namepair))
 
     def print_stats(self):
+        """Print statistics and data about the current run"""
         print("Hard linking statistics")
         print("-----------------------")
         if not self.options.linking_enabled:
