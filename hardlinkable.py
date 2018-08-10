@@ -964,7 +964,7 @@ class LinkingStats:
         self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run (ie. nlink==zero)
         self.bytes_saved_previously = 0     # bytes saved by previous hardlinks (walked dirs only)
         self.starttime = _time.time()       # track how long it takes
-        self.hardlinkpairs = []             # list of files hardlinkable this run
+        self.hardlink_pairs = []            # list of files hardlinkable this run
         self.currently_hardlinked = {}      # list of files currently hardlinked
 
         # Debugging stats
@@ -1079,8 +1079,8 @@ class LinkingStats:
 
         if (self.options.verbosity > 0 or
             getattr(self.options, '_force_stats_to_store_new_hardlinks', False)):
-            self.hardlinkpairs.append((tuple(src_namepair),
-                                       tuple(dst_namepair)))
+            self.hardlink_pairs.append((tuple(src_namepair),
+                                        tuple(dst_namepair)))
         filesize = dst_stat_info.st_size
         self.num_hardlinked_thisrun += 1
         if dst_stat_info.st_nlink == 1:
@@ -1127,7 +1127,7 @@ class LinkingStats:
             self.output_currently_linked()
             separator_needed = True
 
-        if self.options.verbosity > 0 and self.hardlinkpairs:
+        if self.options.verbosity > 0 and self.hardlink_pairs:
             if separator_needed:
                 print("")
             self.output_linked_pairs()
@@ -1160,7 +1160,7 @@ class LinkingStats:
         else:
             print("Files that are hardlinkable")
         print("-----------------------")
-        for (src_namepair, dst_namepair) in self.hardlinkpairs:
+        for (src_namepair, dst_namepair) in self.hardlink_pairs:
             print("from: %s" % _os.path.join(*src_namepair))
             print("  to: %s" % _os.path.join(*dst_namepair))
 
