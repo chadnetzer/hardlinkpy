@@ -774,7 +774,8 @@ class _FSDev:
             # Decorate-sort-undecorate with st_link as primary key
             # Order inodes from greatest to least st_nlink
             nlinks_list = [(self.ino_stat[ino].st_nlink, ino) for ino in linkable_set]
-            nlinks_list.sort(reverse=True)
+            nlinks_list.sort()
+            nlinks_list = nlinks_list[::-1]  # Reverse sort (Python 2.3 compat)
             ino_list = [x[1] for x in nlinks_list]  # strip nlinks sort key
 
             # Keep a list if inos from the end of the ino_list that cannot
