@@ -1114,6 +1114,41 @@ class LinkingStats:
             count += len(namepairs)
         return count
 
+    def dict_results(self, possibly_incomplete=False):
+        """Return the results as a dictionary, with namepairs converted to pathnames"""
+        stats_dict = _copy.copy(self.__dict__)
+        del stats_dict['options']
+
+        # TODO: Possibly delete currently_hardlinked and hardlink_pairs as we
+        # build new dictionary, in order to save memory?
+        if self.options.verbosity > 0:
+            new_hardlink_pairs = [(_os.path.join(*x),_os.path.join(*y))
+                                  for x,y in stats_dict.pop('hardlink_pairs')]
+        else:
+            new_hardlink_pairs = []
+
+        # Save space if verbosity doesn't indicate output of
+        # currently_hardlinked
+        new_currently_hardlinked = {}
+        if self.options.verbosity > 1:
+            for namepair,value in stats_dict.pop('currently_hardlinked').items():
+                key = _os.path.join(*namepair)
+                new_value = {'filesize': value[0], 'pathnames': []}
+                for namepair in value[1]:
+                    dst_pathname = _os.path.join(*namepair)
+                    new_value['pathnames'].append(dst_pathname)
+
+                new_currently_hardlinked[key] = new_value
+
+        d = {}
+        if self.options.verbosity > 1:
+            d['currently_hardlinked'] = new_currently_hardlinked
+        if self.options.verbosity > 0:
+            d['hardlink_pairs'] = new_hardlink_pairs
+        if self.options.printstats:
+            d['stats'] = stats_dict
+        return d
+
     def output_results(self, possibly_incomplete=False):
         """Main output function after hardlink run completed"""
         if self.options.quiet and self.options.debug_level == 0:
