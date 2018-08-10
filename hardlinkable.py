@@ -1089,7 +1089,7 @@ class LinkingStats:
         self.num_hardlinked_previously += 1
         self.bytes_saved_previously += filesize
         if (self.options.verbosity > 1 or
-            getattr(self.options, '_force_stats_to_store_old_hardlinks', False)):
+            getattr(self.options, 'store_old_hardlinks', False)):
             if src_namepair not in self.currently_hardlinked:
                 self.currently_hardlinked[src_namepair] = (filesize, [dst_namepair])
             else:
@@ -1112,7 +1112,7 @@ class LinkingStats:
         dst_stat_info = dst_file_info[2]
 
         if (self.options.verbosity > 0 or
-            getattr(self.options, '_force_stats_to_store_new_hardlinks', False)):
+            getattr(self.options, 'store_new_hardlinks', False)):
             self.hardlink_pairs.append((tuple(src_namepair),
                                         tuple(dst_namepair)))
         filesize = dst_stat_info.st_size

@@ -1097,8 +1097,8 @@ class TestSimpleStats(BaseTests):
         self.options.linking_enabled = True
         self.options.contentonly = True
         self.options.printstats = False
-        self.options._force_stats_to_store_old_hardlinks = True
-        self.options._force_stats_to_store_new_hardlinks = True
+        self.options.store_old_hardlinks = True
+        self.options.store_new_hardlinks = True
 
         self.dirs = [''.join(x) for x in powerset_perms(dirstrings)]
         self.filenames = list('abcdefghijklmnopqrstuvwxyz')
@@ -1245,8 +1245,8 @@ class RandomizedOrderingBase(BaseTests):
         options = self.options
         options.linking_enabled = True
         options.printstats = False
-        options._force_stats_to_store_old_hardlinks = True
-        options._force_stats_to_store_new_hardlinks = True
+        options.store_old_hardlinks = True
+        options.store_new_hardlinks = True
 
         def key_func_samename(data, filename, mtime):
             return (data, filename, mtime)
