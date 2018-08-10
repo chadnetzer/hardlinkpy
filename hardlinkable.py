@@ -1145,13 +1145,14 @@ class LinkingStats:
         keys = list(self.currently_hardlinked.keys())
         keys.sort()  # Could use sorted() once we only support >= Python 2.4
         for key in keys:
-            size, file_list = self.currently_hardlinked[key]
+            filesize, namepairs = self.currently_hardlinked[key]
             print("Currently hardlinked: %s" % _os.path.join(*key))
-            for namepair in file_list:
+            for namepair in namepairs:
                 pathname = _os.path.join(*namepair)
                 print("                    : %s" % pathname)
             print("Filesize: %s  Total saved: %s" %
-                  (_humanize_number(size), _humanize_number(size * len(file_list))))
+                  (_humanize_number(filesize),
+                   _humanize_number(filesize * len(namepairs))))
 
     def output_linked_pairs(self):
         """Print out the stats for the files we hardlinked, if any"""
