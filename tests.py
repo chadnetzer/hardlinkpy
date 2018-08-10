@@ -1472,6 +1472,60 @@ class TestRandomizedOrderingPartialTreeWalk(RandomizedOrderingBase):
         self.check_equalfiles_stats(stats)
 
 
+@unittest.skip("The randomized linear search vs digest comparisons can take some time...")
+class TestDigestVsLinearSearch(RandomizedOrderingBase):
+    def compare_stats(self, stats1, stats2):
+        # stats1 must be the full linear search result
+        self.assertGreaterEqual(stats1.comparisons, stats2.comparisons)
+
+        self.assertEqual(stats1.dircount, stats2.dircount)
+        self.assertEqual(stats1.regularfiles, stats2.regularfiles)
+        self.assertEqual(stats1.equal_comparisons, stats2.equal_comparisons)
+        self.assertEqual(stats1.hardlinked_thisrun, stats2.hardlinked_thisrun)
+        self.assertEqual(stats1.num_inodes, stats2.num_inodes)
+        self.assertEqual(stats1.nlinks_to_zero_thisrun, stats2.nlinks_to_zero_thisrun)
+        self.assertEqual(stats1.hardlinked_previously, stats2.hardlinked_previously)
+        self.assertEqual(stats1.bytes_saved_thisrun, stats2.bytes_saved_thisrun)
+        self.assertEqual(stats1.bytes_saved_previously, stats2.bytes_saved_previously)
+        self.assertEqual(len(stats1.hardlinkpairs), len(stats2.hardlinkpairs))
+        self.assertEqual(len(stats1.currently_hardlinked), len(stats2.currently_hardlinked))
+
+    def compare_full_linear_search_and_digest_thresh(self, thresh):
+        self.gen_files()
+        self.options.linking_enabled = False
+
+        self.options.linear_search_thresh = None
+        hl = hardlinkable.Hardlinkable(self.options)
+        stats_linear = hl.run([self.root])
+
+        self.options.linear_search_thresh = thresh
+        hl = hardlinkable.Hardlinkable(self.options)
+        stats_digest = hl.run([self.root])
+
+        self.compare_stats(stats_linear, stats_digest)
+
+    def test_compare_full_linear_search_and_digest_thresh_0(self):
+        self.compare_full_linear_search_and_digest_thresh(0)
+
+    def test_compare_full_linear_search_and_digest_thresh_1(self):
+        self.compare_full_linear_search_and_digest_thresh(1)
+
+    def test_compare_full_linear_search_and_digest_thresh_2(self):
+        self.compare_full_linear_search_and_digest_thresh(2)
+
+    def test_compare_full_linear_search_and_digest_thresh_3(self):
+        self.compare_full_linear_search_and_digest_thresh(3)
+
+    def test_compare_full_linear_search_and_digest_thresh_10(self):
+        self.compare_full_linear_search_and_digest_thresh(10)
+
+    def test_compare_full_linear_search_and_digest_thresh_100(self):
+        self.compare_full_linear_search_and_digest_thresh(100)
+
+    def test_compare_full_linear_search_and_digest_thresh_1000(self):
+        self.compare_full_linear_search_and_digest_thresh(1000)
+
+
 @unittest.skip("The randomized max nlinks tests takes a while...")
 class TestRandomizedOrderingMaxLinks(RandomizedOrderingBase):
     def test_linking(self):
