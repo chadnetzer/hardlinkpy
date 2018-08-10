@@ -1097,13 +1097,20 @@ class LinkingStats:
         if not self.options.quiet and possibly_incomplete:
             print("Results possibly incomplete due to errors")
 
+        separator_needed = False
         if self.options.verbosity > 1 and self.currently_hardlinked:
             self.output_currently_linked()
+            separator_needed = True
 
         if self.options.verbosity > 0 and self.hardlinkpairs:
+            if separator_needed:
+                print("")
             self.output_linked_pairs()
+            separator_needed = True
 
         if self.options.printstats or self.options.debug_level > 0:
+            if separator_needed:
+                print("")
             self.print_stats()
 
     def output_currently_linked(self):
