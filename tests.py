@@ -23,6 +23,11 @@ import hardlinkable
 skip_slowtests = True
 skip_logging_tests = True
 
+if skip_slowtests:
+    dirstrings = "ABC"
+else:
+    dirstrings = "ABCDE"
+
 testdata0 = ""
 testdata1 = "1234" * 1024 + "abc"
 testdata2 = "1234" * 1024 + "xyz"
@@ -1095,7 +1100,7 @@ class TestSimpleStats(BaseTests):
         self.options._force_stats_to_store_old_hardlinks = True
         self.options._force_stats_to_store_new_hardlinks = True
 
-        self.dirs = [''.join(x) for x in powerset_perms('ABCD')]
+        self.dirs = [''.join(x) for x in powerset_perms(dirstrings)]
         self.filenames = list('abcdefghijklmnopqrstuvwxyz')
         random.shuffle(self.dirs)
         random.shuffle(self.filenames)
@@ -1216,7 +1221,7 @@ class RandomizedOrderingBase(BaseTests):
     def setUp(self):
         self.setup_tempdir()
 
-        self.dirs = [''.join(x) for x in powerset_perms('ABCD')]
+        self.dirs = [''.join(x) for x in powerset_perms(dirstrings)]
         self.filenames = list('abcdefghijklmnopqrstuvwxyz')
         self.test_data = ['', '1', '22', '333', '4'*4, '5'*5, '6'*6, '7'*7, '8'*8]
         now = time.time()
