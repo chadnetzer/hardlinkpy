@@ -1610,7 +1610,11 @@ def main():
         _logging.basicConfig(format='%(levelname)s:%(message)s')
 
     # Parse our argument list and get our list of directories
-    options, directories = _parse_command_line(show_progress_default=True)
+    try:
+        use_tty = _os.isatty(_sys.stdout.fileno())
+    except (IOError, AttributeError):
+        use_tty = False
+    options, directories = _parse_command_line(show_progress_default=use_tty)
 
     hl = Hardlinkable(options)
     try:
