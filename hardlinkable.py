@@ -1107,31 +1107,29 @@ class LinkingStats:
             self.print_stats()
 
     def output_currently_linked(self):
-        if True:
-            print("Currently hardlinked files")
-            print("-----------------------")
-            keys = list(self.currently_hardlinked.keys())
-            keys.sort()  # Could use sorted() once we only support >= Python 2.4
-            for key in keys:
-                size, file_list = self.currently_hardlinked[key]
-                print("Currently hardlinked: %s" % _os.path.join(*key))
-                for namepair in file_list:
-                    pathname = _os.path.join(*namepair)
-                    print("                    : %s" % pathname)
-                print("Size per file: %s  Total saved: %s" %
-                      (_humanize_number(size), _humanize_number(size * len(file_list))))
+        print("Currently hardlinked files")
+        print("-----------------------")
+        keys = list(self.currently_hardlinked.keys())
+        keys.sort()  # Could use sorted() once we only support >= Python 2.4
+        for key in keys:
+            size, file_list = self.currently_hardlinked[key]
+            print("Currently hardlinked: %s" % _os.path.join(*key))
+            for namepair in file_list:
+                pathname = _os.path.join(*namepair)
+                print("                    : %s" % pathname)
+            print("Size per file: %s  Total saved: %s" %
+                  (_humanize_number(size), _humanize_number(size * len(file_list))))
 
     def output_linked_pairs(self):
     # Print out the stats for the files we hardlinked, if any
-        if True:
-            if self.options.linking_enabled:
-                print("Files that were hardlinked this run")
-            else:
-                print("Files that are hardlinkable")
-            print("-----------------------")
-            for (src_namepair, dst_namepair) in self.hardlinkpairs:
-                print("from: %s" % _os.path.join(*src_namepair))
-                print("  to: %s" % _os.path.join(*dst_namepair))
+        if self.options.linking_enabled:
+            print("Files that were hardlinked this run")
+        else:
+            print("Files that are hardlinkable")
+        print("-----------------------")
+        for (src_namepair, dst_namepair) in self.hardlinkpairs:
+            print("from: %s" % _os.path.join(*src_namepair))
+            print("  to: %s" % _os.path.join(*dst_namepair))
 
     def print_stats(self):
         print("Hard linking statistics")
