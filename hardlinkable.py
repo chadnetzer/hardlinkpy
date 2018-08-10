@@ -963,8 +963,8 @@ class LinkingStats:
         self.num_hardlinked_previously = 0  # already existing hardlinks (based on walked dirs)
         self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run (ie. nlink==zero)
         self.bytes_saved_previously = 0     # bytes saved by previous hardlinks (walked dirs only)
-        self.hardlinkpairs = []             # list of files hardlinkable this run
         self.starttime = _time.time()       # track how long it takes
+        self.hardlinkpairs = []             # list of files hardlinkable this run
         self.currently_hardlinked = {}      # list of files currently hardlinked
 
         # Debugging stats
