@@ -290,7 +290,7 @@ class Hardlinkable:
 
             assert not aborted_early
 
-        self.stats.print_stats(aborted_early)
+        self.stats.output_results(aborted_early)
 
         if not aborted_early:
             self._postlink_inode_stats = self._inode_stats()
@@ -1090,14 +1090,24 @@ class LinkingStats:
             count += len(namepairs)
         return count
 
-    def print_stats(self, possibly_incomplete=False):
-        if not self.options.printstats and self.options.debug_level == 0:
+    def output_results(self, possibly_incomplete=False):
+        if self.options.quiet and self.options.debug_level == 0:
             return
 
-        if possibly_incomplete:
-            print("Statistics possibly incomplete due to errors")
+        if not self.options.quiet and possibly_incomplete:
+            print("Results possibly incomplete due to errors")
 
         if self.options.verbosity > 1 and self.currently_hardlinked:
+            self.output_currently_linked()
+
+        if self.options.verbosity > 0 and self.hardlinkpairs:
+            self.output_linked_pairs()
+
+        if self.options.printstats or self.options.debug_level > 0:
+            self.print_stats()
+
+    def output_currently_linked(self):
+        if True:
             print("Currently hardlinked files")
             print("-----------------------")
             keys = list(self.currently_hardlinked.keys())
@@ -1110,9 +1120,10 @@ class LinkingStats:
                     print("                    : %s" % pathname)
                 print("Size per file: %s  Total saved: %s" %
                       (_humanize_number(size), _humanize_number(size * len(file_list))))
-            print("")
-        # Print out the stats for the files we hardlinked, if any
-        if self.options.verbosity > 0 and self.hardlinkpairs:
+
+    def output_linked_pairs(self):
+    # Print out the stats for the files we hardlinked, if any
+        if True:
             if self.options.linking_enabled:
                 print("Files that were hardlinked this run")
             else:
@@ -1121,7 +1132,8 @@ class LinkingStats:
             for (src_namepair, dst_namepair) in self.hardlinkpairs:
                 print("from: %s" % _os.path.join(*src_namepair))
                 print("  to: %s" % _os.path.join(*dst_namepair))
-            print("")
+
+    def print_stats(self):
         print("Hard linking statistics")
         print("-----------------------")
         if not self.options.linking_enabled:
