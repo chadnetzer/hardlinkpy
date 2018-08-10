@@ -45,6 +45,11 @@ except ImportError:
     except ImportError:
         DEFAULT_LINEAR_SEARCH_THRESH = None
 
+try:
+    import xattr
+except ImportError:
+    xattr = None
+
 # Python 2.3 has the sets module, not the set type
 try:
     set
@@ -132,6 +137,11 @@ by another user.
     group.add_option("-t", "--ignore-time", dest="ignore_time",
                      help="File modification times do not need to match",
                      action="store_true", default=False,)
+
+    if xattr is not None:
+        group.add_option("--ignore-xattr", dest="ignore_xattr",
+                         help="Xattrs do not need to match",
+                         action="store_true", default=False,)
 
     group.add_option("-s", "--min-size", dest="min_file_size", metavar="SZ",
                      help="Minimum file size (default: %default)",
@@ -575,8 +585,10 @@ class Hardlinkable:
 
     # Determine if a file is eligibile for hardlinking.  Files will only be
     # considered for hardlinking if this function returns true.
-    def _eligible_for_hardlink(self, st1, st2):
+    def _eligible_for_hardlink(self, file_info1, file_info2):
         """Return True if inode meta-data would not preclude linking"""
+        dirname1, filename1, st1 = file_info1
+        dirname2, filename2, st2 = file_info2
         options = self.options
         # A chain of required criteria:
         result = (not _is_already_hardlinked(st1, st2) and
@@ -588,6 +600,14 @@ class Hardlinkable:
                       (options.ignore_time or st1.st_mtime == st2.st_mtime) and
                       (options.ignore_perm or st1.st_mode == st2.st_mode) and
                       (st1.st_uid == st2.st_uid and st1.st_gid == st2.st_gid))
+
+            if xattr is not None and not options.ignore_xattr:
+                pathname1 = _os.path.join(dirname1, filename1)
+                pathname2 = _os.path.join(dirname2, filename2)
+                xattr_result = _equal_xattr(pathname1, pathname2)
+                if not xattr_result:
+                    self.stats.found_mismatched_xattr()
+                result = result and xattr_result
 
         # Add some stats on the factors which may have falsified result
         if st1.st_mtime != st2.st_mtime:
@@ -608,13 +628,13 @@ class Hardlinkable:
     # Determines if two files should be hard linked together.
     def _are_files_hardlinkable(self, file_info1, file_info2, use_digest):
         """Return True if file contents and stat meta-data are equal"""
-        dirname1, filename1, stat1 = file_info1
-        dirname2, filename2, stat2 = file_info2
-        if not self._eligible_for_hardlink(stat1, stat2):
+        if not self._eligible_for_hardlink(file_info1, file_info2):
             result = False
         else:
             # Since we are going to read the content anyway (to compare them),
             # there is no i/o penalty in calculating a content hash.
+            dirname1, filename1, stat1 = file_info1
+            dirname2, filename2, stat2 = file_info2
             if use_digest:
                 fsdev = self._get_fsdev(stat1.st_dev)
                 fsdev.add_content_digest(file_info1)
@@ -935,9 +955,6 @@ class LinkingStats:
         self.num_included_files = 0         # how many files we include (by regex)
         self.num_files_too_large = 0        # how many files are too large
         self.num_files_too_small = 0        # how many files are too small
-        self.num_mismatched_file_times = 0  # same sized files with different mtimes
-        self.num_mismatched_file_modes = 0  # same sized files with different perms
-        self.num_mismatched_file_ownership = 0  # same sized files with different ownership
         self.comparisons = 0                # how many file content comparisons
         self.equal_comparisons = 0          # how many file comparisons found equal
         self.hardlinked_thisrun = 0         # hardlinks done this run
@@ -957,6 +974,10 @@ class LinkingStats:
         self.num_hash_list_searches = 0     # Times a hash list search is initiated
         self.num_list_iterations = 0        # Number of iterations over a list in inode_hashes
         self.num_digests_computed = 0       # Number of times content digest was computed
+        self.num_mismatched_file_times = 0  # same sized files with different mtimes
+        self.num_mismatched_file_modes = 0  # same sized files with different perms
+        self.num_mismatched_file_ownership = 0  # same sized files with different ownership
+        self.num_mismatched_xattr = 0       # Times xattrs didn't match
 
     def found_directory(self):
         self.dircount += 1
@@ -1008,6 +1029,9 @@ class LinkingStats:
 
     def found_mismatched_ownership(self):
         self.num_mismatched_file_ownership += 1
+
+    def found_mismatched_xattr(self):
+        self.num_mismatched_xattr += 1
 
     def did_comparison(self, pathname1, pathname2, result):
         self.comparisons += 1
@@ -1194,6 +1218,7 @@ class LinkingStats:
             print("Total file time mismatches : %s" % self.num_mismatched_file_times)
             print("Total file modes mismatches: %s" % self.num_mismatched_file_modes)
             print("Total uid/gid mismatches   : %s" % self.num_mismatched_file_ownership)
+            print("Total xattr mismatches     : %s" % self.num_mismatched_xattr)
             print("Total file hash hits       : %s  misses: %s  sum total: %s" %
                   (self.num_hash_hits, self.num_hash_misses,
                    (self.num_hash_hits + self.num_hash_misses)))
@@ -1502,6 +1527,27 @@ def _content_digest(pathname):
         f.close()
 
     return (0xFFFFFFFF & _crc32(byte_data))
+
+
+def _equal_xattr(pathname1, pathname2):
+    x1 = xattr.xattr(pathname1)
+    x2 = xattr.xattr(pathname2)
+
+    if len(x1) != len(x2):
+        return False
+    for k,v in x1.iteritems():
+        if k not in x2:
+            return False
+        if v != x2[k]:
+            return False
+    return True
+
+
+def _equal_xattr_dummy(p1, p2):
+    return True
+
+if xattr is None:
+    _equal_xattr = _equal_xattr_dummy
 
 
 def main():
