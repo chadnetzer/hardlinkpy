@@ -864,8 +864,11 @@ class _FSDev:
         if filename:
             l = d[filename]
         else:
-            # Get an arbitrary pathnames list
-            l = next(iter(d.values()))
+            # Get an arbitrary pathnames list (allowing pre-2.6 syntax)
+            try:
+                l = next(iter(d.values()))
+            except NameError:
+                l = iter(d.values()).next()
         return l[0]
 
     def ino_append_namepair(self, ino, filename, namepair):
