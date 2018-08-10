@@ -21,6 +21,22 @@
 # this program; if not, write to the Free Software Foundation, Inc., 59 Temple
 # Place, Suite 330, Boston, MA  02111-1307, USA.
 
+
+# This version runs under Python 3, but still supports (or attempts to support)
+# Python 2.3, which for example is the version provided with RHEL 4.  Support
+# for such old versions (while simultaneously supporting 3), leads to some
+# clunky coding practices at times, that could be made more elegant if support
+# for older versions were dropped.  The continual unpacking of tuples, such as
+# in the 'file_info' objects could likely be done more elegantly as
+# namedtuples, for example.
+#
+# Sometime after the first official, stable release it is likely that support
+# for anything less than Python 2.7 will be dropped, allowing a number of
+# cleanups of the code, but also providing those who still need a version that
+# works with older Python releases to stick with a tested, working (though
+# older) release.
+
+
 import copy as _copy
 import filecmp as _filecmp
 import logging as _logging
@@ -774,7 +790,8 @@ class _FSDev:
             # Decorate-sort-undecorate with st_link as primary key
             # Order inodes from greatest to least st_nlink
             nlinks_list = [(self.ino_stat[ino].st_nlink, ino) for ino in linkable_set]
-            nlinks_list.sort(reverse=True)
+            nlinks_list.sort()
+            nlinks_list = nlinks_list[::-1]  # Reverse sort (Python 2.3 compat)
             ino_list = [x[1] for x in nlinks_list]  # strip nlinks sort key
 
             # Keep a list if inos from the end of the ino_list that cannot
@@ -863,8 +880,11 @@ class _FSDev:
         if filename:
             l = d[filename]
         else:
-            # Get an arbitrary pathnames list
-            l = next(iter(d.values()))
+            # Get an arbitrary pathnames list (allowing pre-2.6 syntax)
+            try:
+                l = next(iter(d.values()))
+            except NameError:
+                l = iter(d.values()).next()
         return l[0]
 
     def ino_append_namepair(self, ino, filename, namepair):
@@ -1569,12 +1589,13 @@ def _content_digest(pathname):
     except OSError:
         return None
 
+    # Python 2.3 disallows except/finally together
     try:
         byte_data = f.read(_filecmp.BUFSIZE)
     except OSError:
-        return None
-    finally:
         f.close()
+        return None
+    f.close()
 
     return (0xFFFFFFFF & _crc32(byte_data))
 

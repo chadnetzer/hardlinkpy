@@ -12,6 +12,9 @@ before deciding what action (if any) to take.  Using the full information
 allows it to produce exact reporting of what will happen, before any
 modifications occur.
 
+It currently works with Python 3, as well as supporting Python 2 versions back
+to 2.3.
+
 ## Example output
 ```
 $ hardlinkable download_dirs
