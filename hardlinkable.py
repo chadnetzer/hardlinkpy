@@ -50,6 +50,11 @@ try:
 except ImportError:
     xattr = None
 
+try:
+    import json
+except ImportError:
+    json = None
+
 # Python 2.3 has the sets module, not the set type
 try:
     set
@@ -103,6 +108,12 @@ by hard linking identical files.  It can also perform the linking."""
     parser.add_option(progress_cmd, dest="show_progress",
                       help="Output progress information as the program proceeds",
                       action=progress_action, default=show_progress_default,)
+
+    # Allow json output if json module is present
+    if json is not None:
+        parser.add_option("--json", dest="json_output",
+                          help="Output results as JSON",
+                          action="store_true", default=False,)
 
     # Do not print non-error output (overrides verbose)
     parser.add_option("-q", "--quiet", dest="quiet",
@@ -300,7 +311,10 @@ class Hardlinkable:
 
             assert not aborted_early
 
-        self.stats.output_results(aborted_early)
+        if json is not None and self.options.json_output and not self.options.quiet:
+            print(json.dumps(self.stats.dict_results(aborted_early)))
+        else:
+            self.stats.output_results(aborted_early)
 
         if not aborted_early:
             self._postlink_inode_stats = self._inode_stats()
