@@ -1573,12 +1573,13 @@ def _content_digest(pathname):
     except OSError:
         return None
 
+    # Python 2.3 disallows except/finally together
     try:
         byte_data = f.read(_filecmp.BUFSIZE)
     except OSError:
-        return None
-    finally:
         f.close()
+        return None
+    f.close()
 
     return (0xFFFFFFFF & _crc32(byte_data))
 
