@@ -50,6 +50,11 @@ try:
 except ImportError:
     xattr = None
 
+try:
+    import json
+except ImportError:
+    json = None
+
 # Python 2.3 has the sets module, not the set type
 try:
     set
@@ -103,6 +108,12 @@ by hard linking identical files.  It can also perform the linking."""
     parser.add_option(progress_cmd, dest="show_progress",
                       help="Output progress information as the program proceeds",
                       action=progress_action, default=show_progress_default,)
+
+    # Allow json output if json module is present
+    if json is not None:
+        parser.add_option("--json", dest="json_output",
+                          help="Output results as JSON",
+                          action="store_true", default=False,)
 
     # Do not print non-error output (overrides verbose)
     parser.add_option("-q", "--quiet", dest="quiet",
@@ -300,7 +311,10 @@ class Hardlinkable:
 
             assert not aborted_early
 
-        self.stats.output_results(aborted_early)
+        if json is not None and self.options.json_output and not self.options.quiet:
+            print(json.dumps(self.stats.dict_results(aborted_early)))
+        else:
+            self.stats.output_results(aborted_early)
 
         if not aborted_early:
             self._postlink_inode_stats = self._inode_stats()
@@ -948,23 +962,23 @@ class LinkingStats:
         self.reset()
 
     def reset(self):
-        self.dircount = 0                   # how many directories we find
-        self.regularfiles = 0               # how many regular files we find
+        self.num_dirs = 0                   # how many directories we find
+        self.num_files = 0                  # how many regular files we find
         self.num_excluded_dirs = 0          # how many directories we exclude
         self.num_excluded_files = 0         # how many files we exclude (by regex)
         self.num_included_files = 0         # how many files we include (by regex)
         self.num_files_too_large = 0        # how many files are too large
         self.num_files_too_small = 0        # how many files are too small
-        self.comparisons = 0                # how many file content comparisons
-        self.equal_comparisons = 0          # how many file comparisons found equal
-        self.hardlinked_thisrun = 0         # hardlinks done this run
+        self.num_comparisons = 0            # how many file content comparisons
+        self.num_equal_comparisons = 0      # how many file comparisons found equal
+        self.num_hardlinked_thisrun = 0     # hardlinks done this run
         self.num_inodes = 0                 # inodes found this run
-        self.nlinks_to_zero_thisrun = 0     # how man nlinks actually went to zero
-        self.hardlinked_previously = 0      # already existing hardlinks (based on walked dirs)
+        self.num_inodes_consolidated = 0    # how man nlinks actually went to zero
+        self.num_hardlinked_previously = 0  # already existing hardlinks (based on walked dirs)
         self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run (ie. nlink==zero)
         self.bytes_saved_previously = 0     # bytes saved by previous hardlinks (walked dirs only)
-        self.hardlinkpairs = []             # list of files hardlinkable this run
         self.starttime = _time.time()       # track how long it takes
+        self.hardlink_pairs = []            # list of files hardlinkable this run
         self.currently_hardlinked = {}      # list of files currently hardlinked
 
         # Debugging stats
@@ -980,10 +994,10 @@ class LinkingStats:
         self.num_mismatched_xattr = 0       # Times xattrs didn't match
 
     def found_directory(self):
-        self.dircount += 1
+        self.num_dirs += 1
 
     def found_regular_file(self, pathname):
-        self.regularfiles += 1
+        self.num_files += 1
         if self.options.debug_level > 4:
             _logging.debug("File          : %s" % pathname)
 
@@ -1034,9 +1048,9 @@ class LinkingStats:
         self.num_mismatched_xattr += 1
 
     def did_comparison(self, pathname1, pathname2, result):
-        self.comparisons += 1
+        self.num_comparisons += 1
         if result:
-            self.equal_comparisons += 1
+            self.num_equal_comparisons += 1
         if self.options.debug_level > 2:
             if result:
                 _logging.debug("Compared equal: %s" % pathname1)
@@ -1052,7 +1066,7 @@ class LinkingStats:
             _logging.debug("Existing link : %s" % _os.path.join(*src_namepair))
             _logging.debug(" with         : %s" % _os.path.join(*dst_namepair))
         filesize = stat_info.st_size
-        self.hardlinked_previously += 1
+        self.num_hardlinked_previously += 1
         self.bytes_saved_previously += filesize
         if (self.options.verbosity > 1 or
             getattr(self.options, '_force_stats_to_store_old_hardlinks', False)):
@@ -1079,14 +1093,14 @@ class LinkingStats:
 
         if (self.options.verbosity > 0 or
             getattr(self.options, '_force_stats_to_store_new_hardlinks', False)):
-            self.hardlinkpairs.append((tuple(src_namepair),
-                                       tuple(dst_namepair)))
+            self.hardlink_pairs.append((tuple(src_namepair),
+                                        tuple(dst_namepair)))
         filesize = dst_stat_info.st_size
-        self.hardlinked_thisrun += 1
+        self.num_hardlinked_thisrun += 1
         if dst_stat_info.st_nlink == 1:
             # We only save bytes if the last link was actually removed.
             self.bytes_saved_thisrun += filesize
-            self.nlinks_to_zero_thisrun += 1
+            self.num_inodes_consolidated += 1
 
     def found_hash(self):
         self.num_hash_hits += 1
@@ -1114,6 +1128,41 @@ class LinkingStats:
             count += len(namepairs)
         return count
 
+    def dict_results(self, possibly_incomplete=False):
+        """Return the results as a dictionary, with namepairs converted to pathnames"""
+        stats_dict = _copy.copy(self.__dict__)
+        del stats_dict['options']
+
+        # TODO: Possibly delete currently_hardlinked and hardlink_pairs as we
+        # build new dictionary, in order to save memory?
+        if self.options.verbosity > 0:
+            new_hardlink_pairs = [(_os.path.join(*x),_os.path.join(*y))
+                                  for x,y in stats_dict.pop('hardlink_pairs')]
+        else:
+            new_hardlink_pairs = []
+
+        # Save space if verbosity doesn't indicate output of
+        # currently_hardlinked
+        new_currently_hardlinked = {}
+        if self.options.verbosity > 1:
+            for namepair,value in stats_dict.pop('currently_hardlinked').items():
+                key = _os.path.join(*namepair)
+                new_value = {'filesize': value[0], 'pathnames': []}
+                for namepair in value[1]:
+                    dst_pathname = _os.path.join(*namepair)
+                    new_value['pathnames'].append(dst_pathname)
+
+                new_currently_hardlinked[key] = new_value
+
+        d = {}
+        if self.options.verbosity > 1:
+            d['currently_hardlinked'] = new_currently_hardlinked
+        if self.options.verbosity > 0:
+            d['hardlink_pairs'] = new_hardlink_pairs
+        if self.options.printstats:
+            d['stats'] = stats_dict
+        return d
+
     def output_results(self, possibly_incomplete=False):
         """Main output function after hardlink run completed"""
         if self.options.quiet and self.options.debug_level == 0:
@@ -1127,7 +1176,7 @@ class LinkingStats:
             self.output_currently_linked()
             separator_needed = True
 
-        if self.options.verbosity > 0 and self.hardlinkpairs:
+        if self.options.verbosity > 0 and self.hardlink_pairs:
             if separator_needed:
                 print("")
             self.output_linked_pairs()
@@ -1145,13 +1194,14 @@ class LinkingStats:
         keys = list(self.currently_hardlinked.keys())
         keys.sort()  # Could use sorted() once we only support >= Python 2.4
         for key in keys:
-            size, file_list = self.currently_hardlinked[key]
+            filesize, namepairs = self.currently_hardlinked[key]
             print("Currently hardlinked: %s" % _os.path.join(*key))
-            for namepair in file_list:
+            for namepair in namepairs:
                 pathname = _os.path.join(*namepair)
                 print("                    : %s" % pathname)
             print("Filesize: %s  Total saved: %s" %
-                  (_humanize_number(size), _humanize_number(size * len(file_list))))
+                  (_humanize_number(filesize),
+                   _humanize_number(filesize * len(namepairs))))
 
     def output_linked_pairs(self):
         """Print out the stats for the files we hardlinked, if any"""
@@ -1160,7 +1210,7 @@ class LinkingStats:
         else:
             print("Files that are hardlinkable")
         print("-----------------------")
-        for (src_namepair, dst_namepair) in self.hardlinkpairs:
+        for (src_namepair, dst_namepair) in self.hardlink_pairs:
             print("from: %s" % _os.path.join(*src_namepair))
             print("  to: %s" % _os.path.join(*dst_namepair))
 
@@ -1170,19 +1220,19 @@ class LinkingStats:
         print("-----------------------")
         if not self.options.linking_enabled:
             print("Statistics reflect what would result if actual linking were enabled")
-        print("Directories                : %s" % self.dircount)
-        print("Files                      : %s" % self.regularfiles)
-        print("Comparisons                : %s" % self.comparisons)
+        print("Directories                : %s" % self.num_dirs)
+        print("Files                      : %s" % self.num_files)
+        print("Comparisons                : %s" % self.num_comparisons)
         if self.options.linking_enabled:
             s1 = "Consolidated inodes        : %s"
             s2 = "Hardlinked this run        : %s"
         else:
             s1 = "Consolidatable inodes found: %s"
             s2 = "Hardlinkable files found   : %s"
-        print(s1 % self.nlinks_to_zero_thisrun)
-        print(s2 % self.hardlinked_thisrun)
+        print(s1 % self.num_inodes_consolidated)
+        print(s2 % self.num_hardlinked_thisrun)
         print("Total old and new hardlinks: %s" %
-              (self.hardlinked_previously + self.hardlinked_thisrun))
+              (self.num_hardlinked_previously + self.num_hardlinked_thisrun))
         print("Currently hardlinked bytes : %s (%s)" %
               (self.bytes_saved_previously, _humanize_number(self.bytes_saved_previously)))
         if self.options.linking_enabled:
@@ -1198,7 +1248,7 @@ class LinkingStats:
         print(s4 % (totalbytes, _humanize_number(totalbytes)))
         if self.options.verbosity > 0 or self.options.debug_level > 0:
             print("Inodes found               : %s" % self.num_inodes)
-            print("Current hardlinks          : %s" % self.hardlinked_previously)
+            print("Current hardlinks          : %s" % self.num_hardlinked_previously)
             if self.num_excluded_dirs:
                 print("Total excluded dirs        : %s" % self.num_excluded_dirs)
             if self.num_excluded_files:
@@ -1210,8 +1260,8 @@ class LinkingStats:
             if self.num_files_too_small:
                 print("Total too small files      : %s" % self.num_files_too_small)
             print("Total remaining inodes     : %s" %
-                  (self.num_inodes - self.nlinks_to_zero_thisrun))
-            assert (self.num_inodes - self.nlinks_to_zero_thisrun) >= 0
+                  (self.num_inodes - self.num_inodes_consolidated))
+            assert (self.num_inodes - self.num_inodes_consolidated) >= 0
         if self.options.debug_level > 0:
             print("Total run time             : %s seconds" %
                   round(_time.time() - self.starttime, 3))
@@ -1225,8 +1275,8 @@ class LinkingStats:
             print("Total hash mismatches      : %s  (+ total hardlinks): %s" %
                   (self.num_hash_mismatches,
                    (self.num_hash_mismatches +
-                    self.hardlinked_previously +
-                    self.hardlinked_thisrun)))
+                    self.num_hardlinked_previously +
+                    self.num_hardlinked_thisrun)))
             print("Total hash searches        : %s" % self.num_hash_list_searches)
             if self.num_hash_list_searches == 0:
                 avg_per_search = "N/A"
@@ -1235,7 +1285,7 @@ class LinkingStats:
                 avg_per_search = round(raw_avg, 3)
             print("Total hash list iterations : %s  (avg per-search: %s)" %
                   (self.num_list_iterations, avg_per_search))
-            print("Total equal comparisons    : %s" % self.equal_comparisons)
+            print("Total equal comparisons    : %s" % self.num_equal_comparisons)
             print("Total digests computed     : %s" % self.num_digests_computed)
 
 
@@ -1272,10 +1322,10 @@ class _Progress:
 
         # Calculate some stats for progress output
         time_elapsed = now - self.stats.starttime
-        num_dirs = self.stats.dircount
-        num_files = self.stats.regularfiles
+        num_dirs = self.stats.num_dirs
+        num_files = self.stats.num_files
         fps = round(num_files/time_elapsed, 1)
-        num_comparisons = self.stats.comparisons
+        num_comparisons = self.stats.num_comparisons
 
         # Very simple running avg for prev fps (for smoothing)
         # Not even an attempt at anything sophisticated, just practical
@@ -1302,7 +1352,7 @@ class _Progress:
             return
 
         time_elapsed = now - self.stats.starttime
-        num_hardlinked = self.stats.hardlinked_thisrun
+        num_hardlinked = self.stats.num_hardlinked_thisrun
 
         s = ("\rHardlinks this run %s (elapsed secs: %s)" %
               (num_hardlinked, int(time_elapsed)))
@@ -1560,7 +1610,11 @@ def main():
         _logging.basicConfig(format='%(levelname)s:%(message)s')
 
     # Parse our argument list and get our list of directories
-    options, directories = _parse_command_line(show_progress_default=True)
+    try:
+        use_tty = _os.isatty(_sys.stdout.fileno())
+    except (IOError, AttributeError):
+        use_tty = False
+    options, directories = _parse_command_line(show_progress_default=use_tty)
 
     hl = Hardlinkable(options)
     try:

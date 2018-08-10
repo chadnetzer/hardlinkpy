@@ -20,6 +20,9 @@ from itertools import chain,combinations,permutations
 
 import hardlinkable
 
+skip_slowtests = True
+skip_logging_tests = True
+
 testdata0 = ""
 testdata1 = "1234" * 1024 + "abc"
 testdata2 = "1234" * 1024 + "xyz"
@@ -751,7 +754,7 @@ class TestXattr(BaseTests):
 
 
 
-@unittest.skip("Max nlinks tests are slow.  Skipping...")
+@unittest.skipIf(skip_slowtests, "Max nlinks tests are slow.  Skipping...")
 class TestMaxNLinks(BaseTests):
     def setUp(self):
         self.setup_tempdir()
@@ -859,7 +862,7 @@ class TestMaxNLinks(BaseTests):
         self.assertEqual(os.lstat("c0").st_nlink, num_c_links)
 
 
-@unittest.skip("Forces filesystem permission errors to test logging and recovery")
+@unittest.skipIf(skip_logging_tests, "Forces filesystem permission errors to test logging and recovery")
 class TestErrorLogging(BaseTests):
     def setUp(self):
         self.setup_tempdir()
@@ -1125,7 +1128,7 @@ class TestSimpleStats(BaseTests):
         stats = hardlinkable.Hardlinkable(self.options).run('.')
         self.verify_file_contents()
 
-        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.num_hardlinked_previously, 0)
         self.assertEqual(stats.bytes_saved_thisrun, 0)
         self.assertEqual(stats.bytes_saved_previously, 0)
 
@@ -1134,7 +1137,7 @@ class TestSimpleStats(BaseTests):
         stats = hardlinkable.Hardlinkable(self.options).run('.')
         self.verify_file_contents()
 
-        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.num_hardlinked_previously, 0)
         self.assertEqual(stats.bytes_saved_thisrun, 0)
         self.assertEqual(stats.bytes_saved_previously, 0)
 
@@ -1143,7 +1146,7 @@ class TestSimpleStats(BaseTests):
         stats = hardlinkable.Hardlinkable(self.options).run('.')
         self.verify_file_contents()
 
-        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.num_hardlinked_previously, 0)
         self.assertEqual(stats.bytes_saved_thisrun, 1)
         self.assertEqual(stats.bytes_saved_previously, 0)
 
@@ -1152,7 +1155,7 @@ class TestSimpleStats(BaseTests):
         stats = hardlinkable.Hardlinkable(self.options).run('.')
         self.verify_file_contents()
 
-        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.num_hardlinked_previously, 0)
         self.assertEqual(stats.bytes_saved_thisrun, 4)
         self.assertEqual(stats.bytes_saved_previously, 0)
 
@@ -1163,7 +1166,7 @@ class TestSimpleStats(BaseTests):
         stats = hardlinkable.Hardlinkable(self.options).run('.')
         self.verify_file_contents()
 
-        self.assertEqual(stats.hardlinked_previously, 1)
+        self.assertEqual(stats.num_hardlinked_previously, 1)
         self.assertEqual(stats.bytes_saved_thisrun, 0)
         self.assertEqual(stats.bytes_saved_previously, 2)
 
@@ -1174,7 +1177,7 @@ class TestSimpleStats(BaseTests):
         stats = hardlinkable.Hardlinkable(self.options).run('.')
         self.verify_file_contents()
 
-        self.assertEqual(stats.hardlinked_previously, 2)
+        self.assertEqual(stats.num_hardlinked_previously, 2)
         self.assertEqual(stats.bytes_saved_thisrun, 0)
         self.assertEqual(stats.bytes_saved_previously, 4)
 
@@ -1189,7 +1192,7 @@ class TestSimpleStats(BaseTests):
         self.verify_file_contents()
 
         # Links outside of tree walk don't get counted as hardlinked previously
-        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.num_hardlinked_previously, 0)
         self.assertEqual(stats.bytes_saved_thisrun, 0)
         self.assertEqual(stats.bytes_saved_previously, 0)
 
@@ -1204,7 +1207,7 @@ class TestSimpleStats(BaseTests):
         self.verify_file_contents()
 
         # Links outside of tree walk don't get counted as hardlinked previously
-        self.assertEqual(stats.hardlinked_previously, 0)
+        self.assertEqual(stats.num_hardlinked_previously, 0)
         self.assertEqual(stats.bytes_saved_thisrun, 1)
         self.assertEqual(stats.bytes_saved_previously, 0)
 
@@ -1288,7 +1291,7 @@ class RandomizedOrderingBase(BaseTests):
                         made_hardlink = True
 
                     if made_hardlink and len(src_key[0]) >= options.min_file_size:
-                        self.counts['hardlinked_previously'] += 1
+                        self.counts['num_hardlinked_previously'] += 1
                 else:
                     # Occasionally make a file with unique content
                     if random.random() < 0.05:
@@ -1326,8 +1329,8 @@ class RandomizedOrderingBase(BaseTests):
                         self.unwalked_pathnames[src_pathname].add(dst_pathname)
 
     def check_equalfiles_stats(self, stats, max_nlinks=None):
-        self.assertEqual(stats.hardlinked_previously, self.counts['hardlinked_previously'])
-        self.assertEqual(stats._count_hardlinked_previously(), self.counts['hardlinked_previously'])
+        self.assertEqual(stats.num_hardlinked_previously, self.counts['num_hardlinked_previously'])
+        self.assertEqual(stats._count_hardlinked_previously(), self.counts['num_hardlinked_previously'])
         self.assertEqual(stats.bytes_saved_thisrun + stats.bytes_saved_previously,
                          self.sum_saved_bytes(max_nlinks))
 
@@ -1472,22 +1475,22 @@ class TestRandomizedOrderingPartialTreeWalk(RandomizedOrderingBase):
         self.check_equalfiles_stats(stats)
 
 
-@unittest.skip("The randomized linear search vs digest comparisons can take some time...")
+@unittest.skipIf(skip_slowtests, "The randomized linear search vs digest comparisons can take some time...")
 class TestDigestVsLinearSearch(RandomizedOrderingBase):
     def compare_stats(self, stats1, stats2):
         # stats1 must be the full linear search result
-        self.assertGreaterEqual(stats1.comparisons, stats2.comparisons)
+        self.assertGreaterEqual(stats1.num_comparisons, stats2.num_comparisons)
 
-        self.assertEqual(stats1.dircount, stats2.dircount)
-        self.assertEqual(stats1.regularfiles, stats2.regularfiles)
-        self.assertEqual(stats1.equal_comparisons, stats2.equal_comparisons)
-        self.assertEqual(stats1.hardlinked_thisrun, stats2.hardlinked_thisrun)
+        self.assertEqual(stats1.num_dirs, stats2.num_dirs)
+        self.assertEqual(stats1.num_files, stats2.num_files)
+        self.assertEqual(stats1.num_equal_comparisons, stats2.num_equal_comparisons)
+        self.assertEqual(stats1.num_hardlinked_thisrun, stats2.num_hardlinked_thisrun)
         self.assertEqual(stats1.num_inodes, stats2.num_inodes)
-        self.assertEqual(stats1.nlinks_to_zero_thisrun, stats2.nlinks_to_zero_thisrun)
-        self.assertEqual(stats1.hardlinked_previously, stats2.hardlinked_previously)
+        self.assertEqual(stats1.num_inodes_consolidated, stats2.num_inodes_consolidated)
+        self.assertEqual(stats1.num_hardlinked_previously, stats2.num_hardlinked_previously)
         self.assertEqual(stats1.bytes_saved_thisrun, stats2.bytes_saved_thisrun)
         self.assertEqual(stats1.bytes_saved_previously, stats2.bytes_saved_previously)
-        self.assertEqual(len(stats1.hardlinkpairs), len(stats2.hardlinkpairs))
+        self.assertEqual(len(stats1.hardlink_pairs), len(stats2.hardlink_pairs))
         self.assertEqual(len(stats1.currently_hardlinked), len(stats2.currently_hardlinked))
 
     def compare_full_linear_search_and_digest_thresh(self, thresh):
@@ -1526,7 +1529,7 @@ class TestDigestVsLinearSearch(RandomizedOrderingBase):
         self.compare_full_linear_search_and_digest_thresh(1000)
 
 
-@unittest.skip("The randomized max nlinks tests takes a while...")
+@unittest.skipIf(skip_slowtests, "The randomized max nlinks tests takes a while...")
 class TestRandomizedOrderingMaxLinks(RandomizedOrderingBase):
     def test_linking(self):
         # Force the linking to hit the max_nlinks limit
