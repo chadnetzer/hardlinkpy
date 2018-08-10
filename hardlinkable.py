@@ -1495,7 +1495,7 @@ def _content_digest(pathname):
         return None
 
     try:
-        byte_data = f.read(8192)
+        byte_data = f.read(_filecmp.BUFSIZE)
     except OSError:
         return None
     finally:
