@@ -1126,7 +1126,7 @@ class LinkingStats:
             for namepair in file_list:
                 pathname = _os.path.join(*namepair)
                 print("                    : %s" % pathname)
-            print("Size per file: %s  Total saved: %s" %
+            print("Filesize: %s  Total saved: %s" %
                   (_humanize_number(size), _humanize_number(size * len(file_list))))
 
     def output_linked_pairs(self):
