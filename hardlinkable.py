@@ -948,19 +948,19 @@ class LinkingStats:
         self.reset()
 
     def reset(self):
-        self.dircount = 0                   # how many directories we find
-        self.regularfiles = 0               # how many regular files we find
+        self.num_dirs = 0                   # how many directories we find
+        self.num_files = 0                  # how many regular files we find
         self.num_excluded_dirs = 0          # how many directories we exclude
         self.num_excluded_files = 0         # how many files we exclude (by regex)
         self.num_included_files = 0         # how many files we include (by regex)
         self.num_files_too_large = 0        # how many files are too large
         self.num_files_too_small = 0        # how many files are too small
-        self.comparisons = 0                # how many file content comparisons
-        self.equal_comparisons = 0          # how many file comparisons found equal
-        self.hardlinked_thisrun = 0         # hardlinks done this run
+        self.num_comparisons = 0            # how many file content comparisons
+        self.num_equal_comparisons = 0      # how many file comparisons found equal
+        self.num_hardlinked_thisrun = 0     # hardlinks done this run
         self.num_inodes = 0                 # inodes found this run
-        self.nlinks_to_zero_thisrun = 0     # how man nlinks actually went to zero
-        self.hardlinked_previously = 0      # already existing hardlinks (based on walked dirs)
+        self.num_inodes_consolidated = 0    # how man nlinks actually went to zero
+        self.num_hardlinked_previously = 0  # already existing hardlinks (based on walked dirs)
         self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run (ie. nlink==zero)
         self.bytes_saved_previously = 0     # bytes saved by previous hardlinks (walked dirs only)
         self.hardlinkpairs = []             # list of files hardlinkable this run
@@ -980,10 +980,10 @@ class LinkingStats:
         self.num_mismatched_xattr = 0       # Times xattrs didn't match
 
     def found_directory(self):
-        self.dircount += 1
+        self.num_dirs += 1
 
     def found_regular_file(self, pathname):
-        self.regularfiles += 1
+        self.num_files += 1
         if self.options.debug_level > 4:
             _logging.debug("File          : %s" % pathname)
 
@@ -1034,9 +1034,9 @@ class LinkingStats:
         self.num_mismatched_xattr += 1
 
     def did_comparison(self, pathname1, pathname2, result):
-        self.comparisons += 1
+        self.num_comparisons += 1
         if result:
-            self.equal_comparisons += 1
+            self.num_equal_comparisons += 1
         if self.options.debug_level > 2:
             if result:
                 _logging.debug("Compared equal: %s" % pathname1)
@@ -1052,7 +1052,7 @@ class LinkingStats:
             _logging.debug("Existing link : %s" % _os.path.join(*src_namepair))
             _logging.debug(" with         : %s" % _os.path.join(*dst_namepair))
         filesize = stat_info.st_size
-        self.hardlinked_previously += 1
+        self.num_hardlinked_previously += 1
         self.bytes_saved_previously += filesize
         if (self.options.verbosity > 1 or
             getattr(self.options, '_force_stats_to_store_old_hardlinks', False)):
@@ -1082,11 +1082,11 @@ class LinkingStats:
             self.hardlinkpairs.append((tuple(src_namepair),
                                        tuple(dst_namepair)))
         filesize = dst_stat_info.st_size
-        self.hardlinked_thisrun += 1
+        self.num_hardlinked_thisrun += 1
         if dst_stat_info.st_nlink == 1:
             # We only save bytes if the last link was actually removed.
             self.bytes_saved_thisrun += filesize
-            self.nlinks_to_zero_thisrun += 1
+            self.num_inodes_consolidated += 1
 
     def found_hash(self):
         self.num_hash_hits += 1
@@ -1170,19 +1170,19 @@ class LinkingStats:
         print("-----------------------")
         if not self.options.linking_enabled:
             print("Statistics reflect what would result if actual linking were enabled")
-        print("Directories                : %s" % self.dircount)
-        print("Files                      : %s" % self.regularfiles)
-        print("Comparisons                : %s" % self.comparisons)
+        print("Directories                : %s" % self.num_dirs)
+        print("Files                      : %s" % self.num_files)
+        print("Comparisons                : %s" % self.num_comparisons)
         if self.options.linking_enabled:
             s1 = "Consolidated inodes        : %s"
             s2 = "Hardlinked this run        : %s"
         else:
             s1 = "Consolidatable inodes found: %s"
             s2 = "Hardlinkable files found   : %s"
-        print(s1 % self.nlinks_to_zero_thisrun)
-        print(s2 % self.hardlinked_thisrun)
+        print(s1 % self.num_inodes_consolidated)
+        print(s2 % self.num_hardlinked_thisrun)
         print("Total old and new hardlinks: %s" %
-              (self.hardlinked_previously + self.hardlinked_thisrun))
+              (self.num_hardlinked_previously + self.num_hardlinked_thisrun))
         print("Currently hardlinked bytes : %s (%s)" %
               (self.bytes_saved_previously, _humanize_number(self.bytes_saved_previously)))
         if self.options.linking_enabled:
@@ -1198,7 +1198,7 @@ class LinkingStats:
         print(s4 % (totalbytes, _humanize_number(totalbytes)))
         if self.options.verbosity > 0 or self.options.debug_level > 0:
             print("Inodes found               : %s" % self.num_inodes)
-            print("Current hardlinks          : %s" % self.hardlinked_previously)
+            print("Current hardlinks          : %s" % self.num_hardlinked_previously)
             if self.num_excluded_dirs:
                 print("Total excluded dirs        : %s" % self.num_excluded_dirs)
             if self.num_excluded_files:
@@ -1210,8 +1210,8 @@ class LinkingStats:
             if self.num_files_too_small:
                 print("Total too small files      : %s" % self.num_files_too_small)
             print("Total remaining inodes     : %s" %
-                  (self.num_inodes - self.nlinks_to_zero_thisrun))
-            assert (self.num_inodes - self.nlinks_to_zero_thisrun) >= 0
+                  (self.num_inodes - self.num_inodes_consolidated))
+            assert (self.num_inodes - self.num_inodes_consolidated) >= 0
         if self.options.debug_level > 0:
             print("Total run time             : %s seconds" %
                   round(_time.time() - self.starttime, 3))
@@ -1225,8 +1225,8 @@ class LinkingStats:
             print("Total hash mismatches      : %s  (+ total hardlinks): %s" %
                   (self.num_hash_mismatches,
                    (self.num_hash_mismatches +
-                    self.hardlinked_previously +
-                    self.hardlinked_thisrun)))
+                    self.num_hardlinked_previously +
+                    self.num_hardlinked_thisrun)))
             print("Total hash searches        : %s" % self.num_hash_list_searches)
             if self.num_hash_list_searches == 0:
                 avg_per_search = "N/A"
@@ -1235,7 +1235,7 @@ class LinkingStats:
                 avg_per_search = round(raw_avg, 3)
             print("Total hash list iterations : %s  (avg per-search: %s)" %
                   (self.num_list_iterations, avg_per_search))
-            print("Total equal comparisons    : %s" % self.equal_comparisons)
+            print("Total equal comparisons    : %s" % self.num_equal_comparisons)
             print("Total digests computed     : %s" % self.num_digests_computed)
 
 
@@ -1272,10 +1272,10 @@ class _Progress:
 
         # Calculate some stats for progress output
         time_elapsed = now - self.stats.starttime
-        num_dirs = self.stats.dircount
-        num_files = self.stats.regularfiles
+        num_dirs = self.stats.num_dirs
+        num_files = self.stats.num_files
         fps = round(num_files/time_elapsed, 1)
-        num_comparisons = self.stats.comparisons
+        num_comparisons = self.stats.num_comparisons
 
         # Very simple running avg for prev fps (for smoothing)
         # Not even an attempt at anything sophisticated, just practical
@@ -1302,7 +1302,7 @@ class _Progress:
             return
 
         time_elapsed = now - self.stats.starttime
-        num_hardlinked = self.stats.hardlinked_thisrun
+        num_hardlinked = self.stats.num_hardlinked_thisrun
 
         s = ("\rHardlinks this run %s (elapsed secs: %s)" %
               (num_hardlinked, int(time_elapsed)))
