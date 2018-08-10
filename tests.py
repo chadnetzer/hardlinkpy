@@ -20,6 +20,9 @@ from itertools import chain,combinations,permutations
 
 import hardlinkable
 
+skip_slowtests = True
+skip_logging_tests = True
+
 testdata0 = ""
 testdata1 = "1234" * 1024 + "abc"
 testdata2 = "1234" * 1024 + "xyz"
@@ -751,7 +754,7 @@ class TestXattr(BaseTests):
 
 
 
-@unittest.skip("Max nlinks tests are slow.  Skipping...")
+@unittest.skipIf(skip_slowtests, "Max nlinks tests are slow.  Skipping...")
 class TestMaxNLinks(BaseTests):
     def setUp(self):
         self.setup_tempdir()
@@ -859,7 +862,7 @@ class TestMaxNLinks(BaseTests):
         self.assertEqual(os.lstat("c0").st_nlink, num_c_links)
 
 
-@unittest.skip("Forces filesystem permission errors to test logging and recovery")
+@unittest.skipIf(skip_logging_tests, "Forces filesystem permission errors to test logging and recovery")
 class TestErrorLogging(BaseTests):
     def setUp(self):
         self.setup_tempdir()
@@ -1472,7 +1475,7 @@ class TestRandomizedOrderingPartialTreeWalk(RandomizedOrderingBase):
         self.check_equalfiles_stats(stats)
 
 
-@unittest.skip("The randomized linear search vs digest comparisons can take some time...")
+@unittest.skipIf(skip_slowtests, "The randomized linear search vs digest comparisons can take some time...")
 class TestDigestVsLinearSearch(RandomizedOrderingBase):
     def compare_stats(self, stats1, stats2):
         # stats1 must be the full linear search result
@@ -1526,7 +1529,7 @@ class TestDigestVsLinearSearch(RandomizedOrderingBase):
         self.compare_full_linear_search_and_digest_thresh(1000)
 
 
-@unittest.skip("The randomized max nlinks tests takes a while...")
+@unittest.skipIf(skip_slowtests, "The randomized max nlinks tests takes a while...")
 class TestRandomizedOrderingMaxLinks(RandomizedOrderingBase):
     def test_linking(self):
         # Force the linking to hit the max_nlinks limit
