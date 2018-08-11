@@ -131,3 +131,6 @@ size, mtime) but different content are discovered.
 Furthermore, because it gathers full inode/pathname information before
 attempting to optimize the link ordering, it also handles the "--same-name"
 option more accurately than many other versions (imo).
+
+Certain features are optional depending on the available python packages, such
+as json and xattr support.
