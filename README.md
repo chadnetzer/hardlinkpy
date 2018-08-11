@@ -10,7 +10,9 @@ This version is faster, with more accurate reporting of results than the other
 variants that I have tried.  It works by gathering full inode information
 before deciding what action (if any) to take.  Using the full information
 allows it to produce exact reporting of what will happen, before any
-modifications occur.
+modifications occur.  It also can use remembered file content digests to
+drastically shortcut the search time when looking for matching files, which
+leads to order-of-magnitude increases in speed under some circumstances.
 
 It currently works with Python 3, as well as supporting Python 2 versions back
 to 2.3.
