@@ -1280,6 +1280,8 @@ class LinkingStats:
         else:
             s4 = "Total hardlinkable bytes   : %s (%s)"
         print(s4 % (totalbytes, _humanize_number(totalbytes)))
+        print("Total run time             : %s seconds" %
+              round(_time.time() - self.starttime, 3))
         if self.options.verbosity > 0 or self.options.debug_level > 0:
             print("Inodes found               : %s" % self.num_inodes)
             print("Current hardlinks          : %s" % self.num_hardlinked_previously)
@@ -1297,8 +1299,6 @@ class LinkingStats:
                   (self.num_inodes - self.num_inodes_consolidated))
             assert (self.num_inodes - self.num_inodes_consolidated) >= 0
         if self.options.debug_level > 0:
-            print("Total run time             : %s seconds" %
-                  round(_time.time() - self.starttime, 3))
             print("Total file time mismatches : %s" % self.num_mismatched_file_times)
             print("Total file modes mismatches: %s" % self.num_mismatched_file_modes)
             print("Total uid/gid mismatches   : %s" % self.num_mismatched_file_ownership)
