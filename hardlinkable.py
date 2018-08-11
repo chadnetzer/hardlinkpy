@@ -114,18 +114,24 @@ by hard linking identical files.  It can also perform the linking."""
                       help="Perform the actual hardlinking",
                       action="store_true", default=False,)
 
-    # Allow disabling progress output during processing.
+    # Setup both --progress and --no-progress options, so that both are always
+    # accepted.  Allows the default option to vary depending on isatty
+    # detection, without having to change the command line when redirecting.
+    progress_dest = "show_progress"
+    no_progress_dest = "_dummy_show_progress"
+    progress_help = no_progress_help = _SUPPRESS_HELP
     if show_progress_default:
-        progress_cmd = "--no-progress"
-        progress_action = "store_false"
-        progress_help = "Disable progress output while processing"
+        no_progress_help = "Disable progress output while processing"
+        progress_dest, no_progress_dest = no_progress_dest, progress_dest
     else:
-        progress_cmd = "--progress"
-        progress_action = "store_true"
-        progress_help = "Output progress information as the program proceeds",
-    parser.add_option(progress_cmd, dest="show_progress",
+        progress_help = "Output progress information as the program proceeds"
+
+    parser.add_option("--progress", dest=progress_dest,
                       help=progress_help,
-                      action=progress_action, default=show_progress_default,)
+                      action="store_true", default=False,)
+    parser.add_option("--no-progress", dest=no_progress_dest,
+                      help=no_progress_help,
+                      action="store_false", default=True,)
 
     # Allow json output if json module is present
     if json is not None:
@@ -268,6 +274,9 @@ def options_validation(parser, options):
         options.verbosity = 0  # Removes stats link pair collection
         options.show_progress = False
         options.printstats = False
+
+    # Remove dummy show progress variable
+    del options._dummy_show_progress
 
 
 class Hardlinkable:
