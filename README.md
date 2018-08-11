@@ -109,9 +109,9 @@ Name Matching (may specify multiple times)
 
 This program is built on and evolved from hardlink.py (or hardlinkpy), which
 was originally written by John L. Villalovos (sodarock), and developed further
-by Antti Kaihola, Carl Henrik Lunde, and others.  It is able to calculate
-accurate statistics on how much space can be saved, without actually performing
-the linking.
+by Antti Kaihola, Carl Henrik Lunde, Wolf Ó Spealáin, and others.  It is able
+to calculate accurate statistics on how much space can be saved, without
+actually performing the linking.
 
 This version is named ```hardlinkable``` to indicate that, by default, it does
 *not* perform any linking, and the user has to explicitly opt-in to having it
