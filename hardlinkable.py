@@ -1334,14 +1334,20 @@ class LinkingStats:
                 print("Total too large files      : %s" % self.num_files_too_large)
             if self.num_files_too_small:
                 print("Total too small files      : %s" % self.num_files_too_small)
+            if self.num_mismatched_file_mtime:
+                print("Total file time mismatches : %s" % self.num_mismatched_file_mtime)
+            if self.num_mismatched_file_mode:
+                print("Total file mode mismatches : %s" % self.num_mismatched_file_mode)
+            if self.num_mismatched_file_uid:
+                print("Total file uid mismatches  : %s" % self.num_mismatched_file_uid)
+            if self.num_mismatched_file_gid:
+                print("Total file gid mismatches  : %s" % self.num_mismatched_file_gid)
+            if self.num_mismatched_file_xattr:
+                print("Total file xattr mismatches: %s" % self.num_mismatched_file_xattr)
             print("Total remaining inodes     : %s" %
                   (self.num_inodes - self.num_inodes_consolidated))
             assert (self.num_inodes - self.num_inodes_consolidated) >= 0
         if self.options.debug_level > 0:
-            print("Total file time mismatches : %s" % self.num_mismatched_file_times)
-            print("Total file modes mismatches: %s" % self.num_mismatched_file_modes)
-            print("Total uid/gid mismatches   : %s" % self.num_mismatched_file_ownership)
-            print("Total xattr mismatches     : %s" % self.num_mismatched_xattr)
             print("Total file hash hits       : %s  misses: %s  sum total: %s" %
                   (self.num_hash_hits, self.num_hash_misses,
                    (self.num_hash_hits + self.num_hash_misses)))
