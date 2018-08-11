@@ -1373,7 +1373,7 @@ class _Progress:
 
         # Generate and print the output string
         s = ("\r%s files in %s dirs (secs: %s files/sec: %s%s comparisons: %s)" %
-              (num_files, num_dirs, int(time_elapsed), fps, up_down, num_comparisons))
+             (num_files, num_dirs, int(time_elapsed), fps, up_down, num_comparisons))
         self.line(s)
 
     def show_hardlinked_amount(self):
@@ -1389,7 +1389,7 @@ class _Progress:
         num_hardlinked = self.stats.num_hardlinked_thisrun
 
         s = ("\rHardlinks this run %s (elapsed secs: %s)" %
-              (num_hardlinked, int(time_elapsed)))
+             (num_hardlinked, int(time_elapsed)))
         self.line(s)
         self.last_time = now
 
