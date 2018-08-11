@@ -327,8 +327,9 @@ class Hardlinkable:
 
             assert not aborted_early
 
-        if json is not None and self.options.json_enabled and not self.options.quiet:
-            print(json.dumps(self.stats.dict_results(aborted_early)))
+        if json is not None and self.options.json_enabled:
+            if not self.options.quiet:
+                print(json.dumps(self.stats.dict_results(aborted_early)))
         else:
             self.stats.output_results(aborted_early)
 
