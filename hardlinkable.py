@@ -697,9 +697,9 @@ class Hardlinkable:
                 fsdev.add_content_digest(fileinfo2)
                 self.stats.computed_digest(2)
 
-            namepair1 = _os.path.join(dirname1, filename1)
-            namepair2 = _os.path.join(dirname2, filename2)
-            result = self._are_file_contents_equal(namepair1, namepair2)
+            pathname1 = _os.path.join(dirname1, filename1)
+            pathname2 = _os.path.join(dirname2, filename2)
+            result = self._are_file_contents_equal(pathname1, pathname2)
         return result
 
     def _found_hardlinkable_file(self, src_fileinfo, dst_fileinfo):
