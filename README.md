@@ -82,6 +82,8 @@ Options
 --no-stats, -q        Do not print the statistics
 --verbose, -v         Increase verbosity level (Up to 3 times)
 --enable-linking      Perform the actual hardlinking
+--no-progress         Disable progress output while processing
+--json                Output results as JSON
 
 File Matching
 -------------
@@ -92,6 +94,7 @@ owned by another user.
 --same-name, -f       Filenames have to be identical
 --ignore-perms, -p    File permissions do not need to match
 --ignore-time, -t     File modification times do not need to match
+--ignore-xattr        Xattrs do not need to match
 --min-size=SZ, -s SZ  Minimum file size (default: 1)
 --max-size=SZ, -S SZ  Maximum file size (Can add 'k', 'm', etc.)
 --content-only, -c    Only file contents have to match
