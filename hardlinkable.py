@@ -271,7 +271,13 @@ def options_validation(parser, options):
 
     # Setup/reconcile output options (debugging is not overridden)
     if options.quiet:
-        options.verbosity = 0  # Removes stats link pair collection
+        # Based on verbosity, enable extra stats storage when quiet option is
+        # selected.  Useful with Hardlinkable objects directly.
+        if options.verbosity > 1:
+            options.store_old_hardlinks = True
+        if options.verbosity > 0:
+            options.store_new_hardlinks = True
+        options.verbosity = 0  # Disable any remaining verbosity output
         options.show_progress = False
         options.printstats = False
 
