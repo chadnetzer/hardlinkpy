@@ -132,7 +132,7 @@ by hard linking identical files.  It can also perform the linking."""
                           action="store_true", default=False,)
 
     # Do not print non-error output (overrides verbose)
-    parser.add_option("-q", "--quiet", dest="quiet",
+    parser.add_option("--quiet", dest="quiet",
                       help=_SUPPRESS_HELP,
                       action="store_true", default=False,)
 
