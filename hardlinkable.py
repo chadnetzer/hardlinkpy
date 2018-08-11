@@ -661,17 +661,7 @@ class Hardlinkable:
                 pathname1 = _os.path.join(dirname1, filename1)
                 pathname2 = _os.path.join(dirname2, filename2)
                 xattr_result = _equal_xattr(pathname1, pathname2)
-                if not xattr_result:
-                    self.stats.found_mismatched_xattr()
                 result = result and xattr_result
-
-        # Add some stats on the factors which may have falsified result
-        if st1.st_mtime != st2.st_mtime:
-            self.stats.found_mismatched_time()
-        if st1.st_mode != st2.st_mode:
-            self.stats.found_mismatched_mode()
-        if (st1.st_uid != st2.st_uid or st1.st_gid != st2.st_gid):
-            self.stats.found_mismatched_ownership()
 
         return result
 
@@ -700,6 +690,25 @@ class Hardlinkable:
             pathname1 = _os.path.join(dirname1, filename1)
             pathname2 = _os.path.join(dirname2, filename2)
             result = self._are_file_contents_equal(pathname1, pathname2)
+
+            if result:
+                # Record some stats when files are found to match, but stat
+                # parameters are mismatched (such as in content-only mode).
+                if stat1.st_mtime != stat2.st_mtime:
+                    self.stats.found_mismatched_time()
+                if stat1.st_mode != stat2.st_mode:
+                    self.stats.found_mismatched_mode()
+                if stat1.st_uid != stat2.st_uid:
+                    self.stats.found_mismatched_uid()
+                if stat1.st_gid != stat2.st_gid:
+                    self.stats.found_mismatched_gid()
+                if xattr is not None:
+                    # Slower than stat mismatch data, but only done per-matched
+                    # file
+                    xattr_result = _equal_xattr(pathname1, pathname2)
+                    if not xattr_result:
+                        self.stats.found_mismatched_xattr()
+
         return result
 
     def _found_hardlinkable_file(self, src_fileinfo, dst_fileinfo):
@@ -1088,8 +1097,11 @@ class LinkingStats:
     def found_mismatched_mode(self):
         self.num_mismatched_file_modes += 1
 
-    def found_mismatched_ownership(self):
-        self.num_mismatched_file_ownership += 1
+    def found_mismatched_uid(self):
+        self.num_mismatched_file_uid += 1
+
+    def found_mismatched_gid(self):
+        self.num_mismatched_file_gid += 1
 
     def found_mismatched_xattr(self):
         self.num_mismatched_xattr += 1
