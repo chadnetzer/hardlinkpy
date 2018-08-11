@@ -1167,17 +1167,19 @@ class LinkingStats:
 
         # TODO: Possibly delete currently_hardlinked and hardlink_pairs as we
         # build new dictionary, in order to save memory?
+        hardlink_pairs = stats_dict.pop('hardlink_pairs')
         if self.options.verbosity > 0:
             new_hardlink_pairs = [(_os.path.join(*x),_os.path.join(*y))
-                                  for x,y in stats_dict.pop('hardlink_pairs')]
+                                  for x,y in hardlink_pairs]
         else:
             new_hardlink_pairs = []
 
         # Save space if verbosity doesn't indicate output of
         # currently_hardlinked
+        currently_hardlinked = stats_dict.pop('currently_hardlinked')
         new_currently_hardlinked = {}
         if self.options.verbosity > 1:
-            for namepair,value in stats_dict.pop('currently_hardlinked').items():
+            for namepair,value in currently_hardlinked.items():
                 key = _os.path.join(*namepair)
                 new_value = {'filesize': value[0], 'pathnames': []}
                 for namepair in value[1]:
