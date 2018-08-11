@@ -97,6 +97,8 @@ def _parse_command_line(get_default_options=False, show_progress_default=False):
 This is a tool to scan directories and report on the space that could be saved
 by hard linking identical files.  It can also perform the linking."""
 
+    description += missing_modules_str()
+
     formatter = _TitledHelpFormatter(max_help_position=26)
     parser = _OptionParser(usage=usage,
                            version=version,
@@ -1660,6 +1662,26 @@ def _equal_xattr_dummy(p1, p2):
 
 if xattr is None:
     _equal_xattr = _equal_xattr_dummy
+
+
+def missing_modules_str():
+    """Return string indicating useful but missing modules"""
+    missing_modules = []
+    if not json:
+        missing_modules.append("'json'")
+    if not xattr:
+        missing_modules.append("'xattr'")
+    if len(missing_modules) > 1:
+        plural = 's'
+    else:
+        plural = ''
+    missing_modules_str = ",".join(missing_modules)
+    if missing_modules_str:
+        s = (" Install %s Python module%s for more options." %
+             (missing_modules_str, plural))
+    else:
+        s = ''
+    return s
 
 
 def main():
