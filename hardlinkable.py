@@ -69,7 +69,10 @@ except ImportError:
 try:
     import json
 except ImportError:
-    json = None
+    try:
+        import simplejson as json
+    except ImportError:
+        json = None
 
 # Python 2.3 has the sets module, not the set type
 try:
