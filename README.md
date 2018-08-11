@@ -62,8 +62,6 @@ Total run time             : 15.024 seconds
 Inodes found               : 89182
 Current hardlinks          : 0
 Total too small files      : 71
-Total unequal file times   : 771
-Total unequal file modes   : 411
 Total remaining inodes     : 78274
 ```
 
