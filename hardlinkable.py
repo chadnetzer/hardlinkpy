@@ -1408,6 +1408,7 @@ class _Progress:
             assert len(output_string) == self.last_line_len
         self.last_line_len = len(output_string)
         _sys.stdout.write(output_string)
+        _sys.stdout.flush()
 
 
 #################
