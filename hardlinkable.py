@@ -1167,38 +1167,46 @@ class LinkingStats:
         return count
 
     def dict_results(self, possibly_incomplete=False):
-        """Return the results as a dictionary, with namepairs converted to pathnames"""
+        """Destructively return the results as a dictionary, with namepairs
+        converted to pathnames"""
+        # Deletes currently_hardlinked and hardlink_pairs containers while
+        # building new pathname containers, to save memory.  Could be
+        # deepcopied first if required.
         stats_dict = _copy.copy(self.__dict__)
         del stats_dict['options']
 
-        # TODO: Possibly delete currently_hardlinked and hardlink_pairs as we
-        # build new dictionary, in order to save memory?
         hardlink_pairs = stats_dict.pop('hardlink_pairs')
-        if self.options.verbosity > 0:
-            new_hardlink_pairs = [(_os.path.join(*x),_os.path.join(*y))
-                                  for x,y in hardlink_pairs]
-        else:
-            new_hardlink_pairs = []
+        pathname_hardlink_pairs = []
+        if (self.options.verbosity > 0 or
+            getattr(self.options, 'store_new_hardlinks', False)):
+            # reverse initially, to build in the same order as the original
+            hardlink_pairs = hardlink_pairs[::-1]
+            while hardlink_pairs:
+                x,y = hardlink_pairs.pop()
+                pathname_pair = (_os.path.join(*x),_os.path.join(*y))
+                pathname_hardlink_pairs.append(pathname_pair)
 
         # Save space if verbosity doesn't indicate output of
         # currently_hardlinked
         currently_hardlinked = stats_dict.pop('currently_hardlinked')
-        new_currently_hardlinked = {}
-        if self.options.verbosity > 1:
-            for namepair,value in currently_hardlinked.items():
+        pathname_currently_hardlinked = {}
+        if (self.options.verbosity > 1 or
+            getattr(self.options, 'store_old_hardlinks', False)):
+            while currently_hardlinked:
+                namepair,value = currently_hardlinked.popitem()
                 key = _os.path.join(*namepair)
-                new_value = {'filesize': value[0], 'pathnames': []}
+                pathname_value = {'filesize': value[0], 'pathnames': []}
                 for namepair in value[1]:
                     dst_pathname = _os.path.join(*namepair)
-                    new_value['pathnames'].append(dst_pathname)
+                    pathname_value['pathnames'].append(dst_pathname)
 
-                new_currently_hardlinked[key] = new_value
+                pathname_currently_hardlinked[key] = pathname_value
 
         d = {}
         if self.options.verbosity > 1:
-            d['currently_hardlinked'] = new_currently_hardlinked
+            d['currently_hardlinked'] = pathname_currently_hardlinked
         if self.options.verbosity > 0:
-            d['hardlink_pairs'] = new_hardlink_pairs
+            d['hardlink_pairs'] = pathname_hardlink_pairs
         if self.options.printstats:
             d['stats'] = stats_dict
         return d
