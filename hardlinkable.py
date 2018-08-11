@@ -1638,6 +1638,16 @@ def main():
         use_tty = False
     options, directories = _parse_command_line(show_progress_default=use_tty)
 
+    # If no output or action possible from command, do nothing
+    if not options.linking_enabled:
+        if json is not None and options.json_enabled:
+            if options.quiet:
+                return
+        elif options.debug_level == 0:
+            # Note that debugging can override 'quiet' in non-json output
+            if options.quiet or (options.verbosity == 0 and not options.printstats):
+                return
+
     hl = Hardlinkable(options)
     try:
         hl.run(directories)
