@@ -127,7 +127,7 @@ by hard linking identical files.  It can also perform the linking."""
 
     # Allow json output if json module is present
     if json is not None:
-        parser.add_option("--json", dest="json_output",
+        parser.add_option("--json", dest="json_enabled",
                           help="Output results as JSON",
                           action="store_true", default=False,)
 
@@ -327,7 +327,7 @@ class Hardlinkable:
 
             assert not aborted_early
 
-        if json is not None and self.options.json_output and not self.options.quiet:
+        if json is not None and self.options.json_enabled and not self.options.quiet:
             print(json.dumps(self.stats.dict_results(aborted_early)))
         else:
             self.stats.output_results(aborted_early)
