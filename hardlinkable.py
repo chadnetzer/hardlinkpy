@@ -344,6 +344,8 @@ class Hardlinkable:
 
             assert not aborted_early
 
+        self.stats.endtime = _time.time()
+
         if json is not None and self.options.json_enabled:
             if not self.options.quiet:
                 print(json.dumps(self.stats.dict_results(aborted_early)))
@@ -1016,6 +1018,7 @@ class LinkingStats:
         self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run (ie. nlink==zero)
         self.bytes_saved_previously = 0     # bytes saved by previous hardlinks (walked dirs only)
         self.starttime = _time.time()       # track how long it takes
+        self.endtime = None
         self.hardlink_pairs = []            # list of files hardlinkable this run
         self.currently_hardlinked = {}      # list of files currently hardlinked
 
@@ -1264,6 +1267,9 @@ class LinkingStats:
 
     def print_stats(self):
         """Print statistics and data about the current run"""
+        if self.endtime is None:
+            self.endtime = _time.time()
+
         print("Hard linking statistics")
         print("-----------------------")
         if not self.options.linking_enabled:
@@ -1295,7 +1301,7 @@ class LinkingStats:
             s4 = "Total hardlinkable bytes   : %s (%s)"
         print(s4 % (totalbytes, _humanize_number(totalbytes)))
         print("Total run time             : %s seconds" %
-              round(_time.time() - self.starttime, 3))
+              round(self.endtime - self.starttime, 3))
         if self.options.verbosity > 0 or self.options.debug_level > 0:
             print("Inodes found               : %s" % self.num_inodes)
             print("Current hardlinks          : %s" % self.num_hardlinked_previously)
