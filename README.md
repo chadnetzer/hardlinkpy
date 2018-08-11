@@ -32,6 +32,7 @@ Total old and new hardlinks: 10908
 Currently hardlinked bytes : 0 (0 bytes)
 Additional linkable bytes  : 259121960 (247.118 MiB)
 Total hardlinkable bytes   : 259121960 (247.118 MiB)
+Total run time             : 15.024 seconds
 ```
 
 You can specify more verbosity to get a list of linkable files, and some additional stats:
@@ -57,6 +58,7 @@ Total old and new hardlinks: 10908
 Currently hardlinked bytes : 0 (0 bytes)
 Additional linkable bytes  : 259121960 (247.118 MiB)
 Total hardlinkable bytes   : 259121960 (247.118 MiB)
+Total run time             : 15.024 seconds
 Inodes found               : 89182
 Current hardlinks          : 0
 Total too small files      : 71
