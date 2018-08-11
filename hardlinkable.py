@@ -1030,6 +1030,11 @@ class LinkingStats:
         self.num_inodes = 0                 # inodes found this run
         self.num_inodes_consolidated = 0    # how man nlinks actually went to zero
         self.num_hardlinked_previously = 0  # already existing hardlinks (based on walked dirs)
+        self.num_mismatched_file_mtime = 0  # files with equal content and different mtime
+        self.num_mismatched_file_mode = 0   # files with equal content and different perm/mode
+        self.num_mismatched_file_uid = 0    # files with equal content and different uid
+        self.num_mismatched_file_gid = 0    # files with equal content and different gid
+        self.num_mismatched_file_xattr = 0  # files with equal content and different xattrs
         self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run (ie. nlink==zero)
         self.bytes_saved_previously = 0     # bytes saved by previous hardlinks (walked dirs only)
         self.starttime = _time.time()       # track how long it takes
@@ -1044,10 +1049,6 @@ class LinkingStats:
         self.num_hash_list_searches = 0     # Times a hash list search is initiated
         self.num_list_iterations = 0        # Number of iterations over a list in inode_hashes
         self.num_digests_computed = 0       # Number of times content digest was computed
-        self.num_mismatched_file_times = 0  # same sized files with different mtimes
-        self.num_mismatched_file_modes = 0  # same sized files with different perms
-        self.num_mismatched_file_ownership = 0  # same sized files with different ownership
-        self.num_mismatched_xattr = 0       # Times xattrs didn't match
 
     def found_directory(self):
         self.num_dirs += 1
@@ -1092,10 +1093,10 @@ class LinkingStats:
                 _logging.debug("File too small: %s" % pathname)
 
     def found_mismatched_time(self):
-        self.num_mismatched_file_times += 1
+        self.num_mismatched_file_mtime += 1
 
     def found_mismatched_mode(self):
-        self.num_mismatched_file_modes += 1
+        self.num_mismatched_file_mode += 1
 
     def found_mismatched_uid(self):
         self.num_mismatched_file_uid += 1
@@ -1104,7 +1105,7 @@ class LinkingStats:
         self.num_mismatched_file_gid += 1
 
     def found_mismatched_xattr(self):
-        self.num_mismatched_xattr += 1
+        self.num_mismatched_file_xattr += 1
 
     def did_comparison(self, pathname1, pathname2, result):
         self.num_comparisons += 1
