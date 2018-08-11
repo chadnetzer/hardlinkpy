@@ -252,7 +252,7 @@ class TestHappy(BaseTests):
         self.verify_file_contents()
 
     def test_hardlink_tree_dryrun(self):
-        sys.argv = ["hardlinkable.py", "-q", self.root]
+        sys.argv = ["hardlinkable.py", "--quiet", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -268,7 +268,7 @@ class TestHappy(BaseTests):
         self.assertEqual(os.lstat("dir6/name1.ext").st_nlink, 1)
 
     def test_hardlink_tree(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -285,7 +285,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
 
     def test_hardlink_multiple_dir_args(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q",
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet",
                 os.path.join(self.root, 'dir1'),
                 os.path.join(self.root, 'dir2'),
                 ]
@@ -310,7 +310,7 @@ class TestHappy(BaseTests):
         self.file_contents = saved_file_contents
 
     def test_hardlink_tree_filenames_equal(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--same-name", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "--same-name", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -335,7 +335,7 @@ class TestHappy(BaseTests):
         self.remove_file("dir1/link")
         self.make_linked_file("dir2/name1.ext", "dir1/link")
 
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--same-name", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "--same-name", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -343,7 +343,7 @@ class TestHappy(BaseTests):
         self.assertEqual(get_inode("dir1/name1.ext"), get_inode("dir2/name1.ext"))
 
     def test_hardlink_tree_exclude(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--exclude", ".*noext$", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "--exclude", ".*noext$", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -357,7 +357,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_timestamp_ignore(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--ignore-time", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "--ignore-time", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -372,7 +372,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name3.ext"), get_inode("dir5/name1.ext"))
 
     def test_hardlink_tree_ignore_permissions(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--ignore-perms", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "--ignore-perms", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -387,7 +387,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_match_extension(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--match", ".*\.ext$", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "--match", ".*\.ext$", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -401,7 +401,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_match_prefix(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--match", "^name1.*", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "--match", "^name1.*", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -417,7 +417,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir1/name1.ext"), get_inode("dir4/name1.ext"))
 
     def test_hardlink_tree_multiple_matches(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-m", "^name2.*", "-m", ".*\.noext$", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "-m", "^name2.*", "-m", ".*\.noext$", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -431,7 +431,7 @@ class TestHappy(BaseTests):
         self.assertNotEqual(get_inode("dir6/name1.ext"), get_inode("dir6/name2.ext"))
 
     def test_hardlink_tree_content_only(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--content-only", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "--content-only", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -479,7 +479,7 @@ class TestMinMaxSize(BaseTests):
 
     def test_hardlink_tree_smaller_than_minsize(self):
         """Set a minimum size larger than the test data, inhibiting linking"""
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-c",
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "-c",
                     "--min-size", str(self.max_datasize + 1), self.root]
         hardlinkable.main()
 
@@ -502,7 +502,7 @@ class TestMinMaxSize(BaseTests):
 
     def test_hardlink_tree_default_minsize(self):
         """By default, length zero files aren't hardlinked."""
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-c", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "-c", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -530,7 +530,7 @@ class TestMinMaxSize(BaseTests):
         self.assertNotEqual(get_inode("a1"), get_inode("a2"))
 
     def test_hardlink_tree_zero_minsize(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-c",
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "-c",
                     "--min-size", "0", self.root]
         hardlinkable.main()
 
@@ -562,7 +562,7 @@ class TestMinMaxSize(BaseTests):
 
     def test_hardlink_tree_larger_than_maxsize(self):
         """Set a minimum size larger than the test data, inhibiting linking (zero excluded)"""
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-c",
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "-c",
                     "--max-size", str(self.min_datasize - 1), self.root]
 
         hardlinkable.main()
@@ -585,7 +585,7 @@ class TestMinMaxSize(BaseTests):
         self.assertEqual(os.lstat("c2").st_nlink, 1)
 
     def test_hardlink_tree_zero_minsize(self):
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "-c",
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "-c",
                     "--max-size", "0", "--min-size", "0", self.root]
         hardlinkable.main()
 
@@ -610,7 +610,7 @@ class TestMinMaxSize(BaseTests):
 
     def test_hardlink_tree_minsize_maxsize_excluding_all_files(self):
         """Test using both min and max size restrictions"""
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q",
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet",
                     "--min-size", str(len(testdata3) + 1),
                     "--max-size", str(len(testdata1) - 1),
                     self.root]
@@ -635,7 +635,7 @@ class TestMinMaxSize(BaseTests):
 
     def test_hardlink_tree_minsize_maxsize_equal(self):
         """Test equal max and min size restrictions"""
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q",
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet",
                     "--min-size", str(len(testdata3)),
                     "--max-size", str(len(testdata3)),
                     self.root]
@@ -676,7 +676,7 @@ class TestXattr(BaseTests):
     def test_one_xattr(self):
         self.xattrs[0].set(b"name1", b"value1")
 
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -687,7 +687,7 @@ class TestXattr(BaseTests):
         self.xattrs[0].set(b"name1", b"value1")
         self.xattrs[1].set(b"name1", b"value1")
 
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -699,7 +699,7 @@ class TestXattr(BaseTests):
         self.xattrs[0].set(b"name1", b"value1")
         self.xattrs[1].set(b"name2", b"value1")
 
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -711,7 +711,7 @@ class TestXattr(BaseTests):
         self.xattrs[0].set(b"name1", b"value1")
         self.xattrs[1].set(b"name1", b"value2")
 
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -723,7 +723,7 @@ class TestXattr(BaseTests):
         self.xattrs[0].set(b"name1", b"value1")
         self.xattrs[1].set(b"name2", b"value2")
 
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -736,7 +736,7 @@ class TestXattr(BaseTests):
         self.xattrs[1].set(b"name2", b"value2")
 
         sys.argv = ["hardlinkable.py", "--enable-linking", "-c",
-                    "-q", self.root]
+                    "--quiet", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -749,7 +749,7 @@ class TestXattr(BaseTests):
         self.xattrs[1].set(b"name2", b"value2")
 
         sys.argv = ["hardlinkable.py", "--enable-linking", "--ignore-xattr",
-                    "-q", self.root]
+                    "--quiet", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -781,7 +781,7 @@ class TestMaxNLinks(BaseTests):
         # changes.  Saves on overhead of destroying and recreating the
         # max_nlinks files.  But makes tests very sensitive to ordering and
         # edits.
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--content-only", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "--content-only", self.root]
         hardlinkable.main()
 
         # Since the directory traversal can occur in arbitrary order, we test
@@ -881,7 +881,7 @@ class TestErrorLogging(BaseTests):
         # output.
         os.chmod(self.root, stat.S_IRUSR | stat.S_IXUSR)
 
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", self.root]
         # This should log an error message when the rename() fails (check
         # buffering option to unittests is set to False)
         hardlinkable.main()
@@ -950,7 +950,7 @@ class TestDifferentDevices(BaseTests):
         self.assertEqual(stat_c.st_nlink, 1)
         self.assertEqual(stat_d.st_nlink, 1)
 
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--content-only",
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "--content-only",
                     self.dev1_root, self.dev2_root,
                     ]
         hardlinkable.main()
@@ -982,7 +982,7 @@ class TestDifferentDevices(BaseTests):
         self.make_hardlinkable_file('c', testdata2)
         self.make_hardlinkable_file('d', testdata2)
 
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--content-only",
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "--content-only",
                     self.dev1_root, self.dev2_root,
                     ]
         hardlinkable.main()
@@ -1043,7 +1043,7 @@ class TestNLinkOrderBug(BaseTests):
         self.assertEqual(os.lstat('y').st_nlink, 3)
         self.assertEqual(os.lstat('z').st_nlink, 3)
 
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--content-only", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "--content-only", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -1077,7 +1077,7 @@ class TestNLinkOrderBug(BaseTests):
         self.assertEqual(os.lstat('y').st_nlink, 2)
         self.assertEqual(os.lstat('z').st_nlink, 2)
 
-        sys.argv = ["hardlinkable.py", "--enable-linking", "-q", "--content-only", self.root]
+        sys.argv = ["hardlinkable.py", "--enable-linking", "--quiet", "--content-only", self.root]
         hardlinkable.main()
 
         self.verify_file_contents()
@@ -1097,8 +1097,8 @@ class TestSimpleStats(BaseTests):
         self.options.linking_enabled = True
         self.options.contentonly = True
         self.options.printstats = False
-        self.options._force_stats_to_store_old_hardlinks = True
-        self.options._force_stats_to_store_new_hardlinks = True
+        self.options.store_old_hardlinks = True
+        self.options.store_new_hardlinks = True
 
         self.dirs = [''.join(x) for x in powerset_perms(dirstrings)]
         self.filenames = list('abcdefghijklmnopqrstuvwxyz')
@@ -1245,8 +1245,8 @@ class RandomizedOrderingBase(BaseTests):
         options = self.options
         options.linking_enabled = True
         options.printstats = False
-        options._force_stats_to_store_old_hardlinks = True
-        options._force_stats_to_store_new_hardlinks = True
+        options.store_old_hardlinks = True
+        options.store_new_hardlinks = True
 
         def key_func_samename(data, filename, mtime):
             return (data, filename, mtime)

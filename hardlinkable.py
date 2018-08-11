@@ -114,25 +114,33 @@ by hard linking identical files.  It can also perform the linking."""
                       help="Perform the actual hardlinking",
                       action="store_true", default=False,)
 
-    # Allow disabling progress output during processing.
+    # Setup both --progress and --no-progress options, so that both are always
+    # accepted.  Allows the default option to vary depending on isatty
+    # detection, without having to change the command line when redirecting.
+    progress_dest = "show_progress"
+    no_progress_dest = "_dummy_show_progress"
+    progress_help = no_progress_help = _SUPPRESS_HELP
     if show_progress_default:
-        progress_cmd = "--no-progress"
-        progress_action = "store_false"
+        no_progress_help = "Disable progress output while processing"
+        progress_dest, no_progress_dest = no_progress_dest, progress_dest
     else:
-        progress_cmd = "--progress"
-        progress_action = "store_true"
-    parser.add_option(progress_cmd, dest="show_progress",
-                      help="Output progress information as the program proceeds",
-                      action=progress_action, default=show_progress_default,)
+        progress_help = "Output progress information as the program proceeds"
+
+    parser.add_option("--progress", dest=progress_dest,
+                      help=progress_help,
+                      action="store_true", default=False,)
+    parser.add_option("--no-progress", dest=no_progress_dest,
+                      help=no_progress_help,
+                      action="store_false", default=True,)
 
     # Allow json output if json module is present
     if json is not None:
-        parser.add_option("--json", dest="json_output",
+        parser.add_option("--json", dest="json_enabled",
                           help="Output results as JSON",
                           action="store_true", default=False,)
 
     # Do not print non-error output (overrides verbose)
-    parser.add_option("-q", "--quiet", dest="quiet",
+    parser.add_option("--quiet", dest="quiet",
                       help=_SUPPRESS_HELP,
                       action="store_true", default=False,)
 
@@ -263,9 +271,18 @@ def options_validation(parser, options):
 
     # Setup/reconcile output options (debugging is not overridden)
     if options.quiet:
-        options.verbosity = 0  # Removes stats link pair collection
+        # Based on verbosity, enable extra stats storage when quiet option is
+        # selected.  Useful with Hardlinkable objects directly.
+        if options.verbosity > 1:
+            options.store_old_hardlinks = True
+        if options.verbosity > 0:
+            options.store_new_hardlinks = True
+        options.verbosity = 0  # Disable any remaining verbosity output
         options.show_progress = False
         options.printstats = False
+
+    # Remove dummy show progress variable
+    del options._dummy_show_progress
 
 
 class Hardlinkable:
@@ -327,8 +344,11 @@ class Hardlinkable:
 
             assert not aborted_early
 
-        if json is not None and self.options.json_output and not self.options.quiet:
-            print(json.dumps(self.stats.dict_results(aborted_early)))
+        self.stats.endtime = _time.time()
+
+        if json is not None and self.options.json_enabled:
+            if not self.options.quiet:
+                print(json.dumps(self.stats.dict_results(aborted_early)))
         else:
             self.stats.output_results(aborted_early)
 
@@ -998,6 +1018,7 @@ class LinkingStats:
         self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run (ie. nlink==zero)
         self.bytes_saved_previously = 0     # bytes saved by previous hardlinks (walked dirs only)
         self.starttime = _time.time()       # track how long it takes
+        self.endtime = None
         self.hardlink_pairs = []            # list of files hardlinkable this run
         self.currently_hardlinked = {}      # list of files currently hardlinked
 
@@ -1089,7 +1110,7 @@ class LinkingStats:
         self.num_hardlinked_previously += 1
         self.bytes_saved_previously += filesize
         if (self.options.verbosity > 1 or
-            getattr(self.options, '_force_stats_to_store_old_hardlinks', False)):
+            getattr(self.options, 'store_old_hardlinks', False)):
             if src_namepair not in self.currently_hardlinked:
                 self.currently_hardlinked[src_namepair] = (filesize, [dst_namepair])
             else:
@@ -1112,7 +1133,7 @@ class LinkingStats:
         dst_stat_info = dst_file_info[2]
 
         if (self.options.verbosity > 0 or
-            getattr(self.options, '_force_stats_to_store_new_hardlinks', False)):
+            getattr(self.options, 'store_new_hardlinks', False)):
             self.hardlink_pairs.append((tuple(src_namepair),
                                         tuple(dst_namepair)))
         filesize = dst_stat_info.st_size
@@ -1149,36 +1170,46 @@ class LinkingStats:
         return count
 
     def dict_results(self, possibly_incomplete=False):
-        """Return the results as a dictionary, with namepairs converted to pathnames"""
+        """Destructively return the results as a dictionary, with namepairs
+        converted to pathnames"""
+        # Deletes currently_hardlinked and hardlink_pairs containers while
+        # building new pathname containers, to save memory.  Could be
+        # deepcopied first if required.
         stats_dict = _copy.copy(self.__dict__)
         del stats_dict['options']
 
-        # TODO: Possibly delete currently_hardlinked and hardlink_pairs as we
-        # build new dictionary, in order to save memory?
-        if self.options.verbosity > 0:
-            new_hardlink_pairs = [(_os.path.join(*x),_os.path.join(*y))
-                                  for x,y in stats_dict.pop('hardlink_pairs')]
-        else:
-            new_hardlink_pairs = []
+        hardlink_pairs = stats_dict.pop('hardlink_pairs')
+        pathname_hardlink_pairs = []
+        if (self.options.verbosity > 0 or
+            getattr(self.options, 'store_new_hardlinks', False)):
+            # reverse initially, to build in the same order as the original
+            hardlink_pairs = hardlink_pairs[::-1]
+            while hardlink_pairs:
+                x,y = hardlink_pairs.pop()
+                pathname_pair = (_os.path.join(*x),_os.path.join(*y))
+                pathname_hardlink_pairs.append(pathname_pair)
 
         # Save space if verbosity doesn't indicate output of
         # currently_hardlinked
-        new_currently_hardlinked = {}
-        if self.options.verbosity > 1:
-            for namepair,value in stats_dict.pop('currently_hardlinked').items():
+        currently_hardlinked = stats_dict.pop('currently_hardlinked')
+        pathname_currently_hardlinked = {}
+        if (self.options.verbosity > 1 or
+            getattr(self.options, 'store_old_hardlinks', False)):
+            while currently_hardlinked:
+                namepair,value = currently_hardlinked.popitem()
                 key = _os.path.join(*namepair)
-                new_value = {'filesize': value[0], 'pathnames': []}
+                pathname_value = {'filesize': value[0], 'pathnames': []}
                 for namepair in value[1]:
                     dst_pathname = _os.path.join(*namepair)
-                    new_value['pathnames'].append(dst_pathname)
+                    pathname_value['pathnames'].append(dst_pathname)
 
-                new_currently_hardlinked[key] = new_value
+                pathname_currently_hardlinked[key] = pathname_value
 
         d = {}
         if self.options.verbosity > 1:
-            d['currently_hardlinked'] = new_currently_hardlinked
+            d['currently_hardlinked'] = pathname_currently_hardlinked
         if self.options.verbosity > 0:
-            d['hardlink_pairs'] = new_hardlink_pairs
+            d['hardlink_pairs'] = pathname_hardlink_pairs
         if self.options.printstats:
             d['stats'] = stats_dict
         return d
@@ -1236,6 +1267,9 @@ class LinkingStats:
 
     def print_stats(self):
         """Print statistics and data about the current run"""
+        if self.endtime is None:
+            self.endtime = _time.time()
+
         print("Hard linking statistics")
         print("-----------------------")
         if not self.options.linking_enabled:
@@ -1266,6 +1300,8 @@ class LinkingStats:
         else:
             s4 = "Total hardlinkable bytes   : %s (%s)"
         print(s4 % (totalbytes, _humanize_number(totalbytes)))
+        print("Total run time             : %s seconds" %
+              round(self.endtime - self.starttime, 3))
         if self.options.verbosity > 0 or self.options.debug_level > 0:
             print("Inodes found               : %s" % self.num_inodes)
             print("Current hardlinks          : %s" % self.num_hardlinked_previously)
@@ -1283,8 +1319,6 @@ class LinkingStats:
                   (self.num_inodes - self.num_inodes_consolidated))
             assert (self.num_inodes - self.num_inodes_consolidated) >= 0
         if self.options.debug_level > 0:
-            print("Total run time             : %s seconds" %
-                  round(_time.time() - self.starttime, 3))
             print("Total file time mismatches : %s" % self.num_mismatched_file_times)
             print("Total file modes mismatches: %s" % self.num_mismatched_file_modes)
             print("Total uid/gid mismatches   : %s" % self.num_mismatched_file_ownership)
@@ -1359,7 +1393,7 @@ class _Progress:
 
         # Generate and print the output string
         s = ("\r%s files in %s dirs (secs: %s files/sec: %s%s comparisons: %s)" %
-              (num_files, num_dirs, int(time_elapsed), fps, up_down, num_comparisons))
+             (num_files, num_dirs, int(time_elapsed), fps, up_down, num_comparisons))
         self.line(s)
 
     def show_hardlinked_amount(self):
@@ -1375,7 +1409,7 @@ class _Progress:
         num_hardlinked = self.stats.num_hardlinked_thisrun
 
         s = ("\rHardlinks this run %s (elapsed secs: %s)" %
-              (num_hardlinked, int(time_elapsed)))
+             (num_hardlinked, int(time_elapsed)))
         self.line(s)
         self.last_time = now
 
@@ -1396,6 +1430,7 @@ class _Progress:
             assert len(output_string) == self.last_line_len
         self.last_line_len = len(output_string)
         _sys.stdout.write(output_string)
+        _sys.stdout.flush()
 
 
 #################
@@ -1636,6 +1671,16 @@ def main():
     except (IOError, AttributeError):
         use_tty = False
     options, directories = _parse_command_line(show_progress_default=use_tty)
+
+    # If no output or action possible from command, do nothing
+    if not options.linking_enabled:
+        if json is not None and options.json_enabled:
+            if options.quiet:
+                return
+        elif options.debug_level == 0:
+            # Note that debugging can override 'quiet' in non-json output
+            if options.quiet or (options.verbosity == 0 and not options.printstats):
+                return
 
     hl = Hardlinkable(options)
     try:
