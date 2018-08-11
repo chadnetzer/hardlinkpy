@@ -118,11 +118,13 @@ by hard linking identical files.  It can also perform the linking."""
     if show_progress_default:
         progress_cmd = "--no-progress"
         progress_action = "store_false"
+        progress_help = "Disable progress output while processing"
     else:
         progress_cmd = "--progress"
         progress_action = "store_true"
+        progress_help = "Output progress information as the program proceeds",
     parser.add_option(progress_cmd, dest="show_progress",
-                      help="Output progress information as the program proceeds",
+                      help=progress_help,
                       action=progress_action, default=show_progress_default,)
 
     # Allow json output if json module is present
