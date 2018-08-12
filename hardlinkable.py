@@ -1198,15 +1198,27 @@ class LinkingStats:
         del stats_dict['options']
 
         hardlink_pairs = stats_dict.pop('hardlink_pairs')
-        pathname_hardlink_pairs = []
         if (self.options.verbosity > 0 or
             getattr(self.options, 'store_new_hardlinks', False)):
+            hardlink_pathnames = []
+            link_list = []
             # reverse initially, to build in the same order as the original
             hardlink_pairs = hardlink_pairs[::-1]
             while hardlink_pairs:
-                x,y = hardlink_pairs.pop()
-                pathname_pair = (_os.path.join(*x),_os.path.join(*y))
-                pathname_hardlink_pairs.append(pathname_pair)
+                src_namepair, dst_namepair = hardlink_pairs.pop()
+                src_pathname, dst_pathname = (_os.path.join(*src_namepair),
+                                              _os.path.join(*dst_namepair))
+                # Output "compact" results, with multiple link destination
+                # paths in the list after the initial source path
+                if not link_list:
+                    link_list = [src_pathname, dst_pathname]
+                elif src_pathname != link_list[0]:
+                    hardlink_pathnames.append(link_list)
+                    link_list = [src_pathname, dst_pathname]
+                else:
+                    link_list.append(dst_pathname)
+            if link_list:
+                hardlink_pathnames.append(link_list)
 
         # Save space if verbosity doesn't indicate output of
         # currently_hardlinked
@@ -1228,7 +1240,11 @@ class LinkingStats:
         if self.options.verbosity > 1:
             d['currently_hardlinked'] = pathname_currently_hardlinked
         if self.options.verbosity > 0:
-            d['hardlink_pairs'] = pathname_hardlink_pairs
+            desc_str = ("List-of-lists where inner lists are linkable paths, "
+                    "with the first path the 'source' of each link, and the "
+                    "remaining paths the destinations.")
+            d['hardlink_pathnames_description'] = desc_str
+            d['hardlink_pathnames'] = hardlink_pathnames
         if self.options.printstats:
             d['stats'] = stats_dict
         return d
