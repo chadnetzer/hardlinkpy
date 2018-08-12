@@ -1280,9 +1280,14 @@ class LinkingStats:
         else:
             print("Files that are hardlinkable")
         print("-----------------------")
+        prev_src_namepair = None
         for (src_namepair, dst_namepair) in self.hardlink_pairs:
-            print("from: %s" % _os.path.join(*src_namepair))
+            # Compactify output by combining multiple destinations in a row
+            # with the same source
+            if src_namepair != prev_src_namepair:
+                print("from: %s" % _os.path.join(*src_namepair))
             print("  to: %s" % _os.path.join(*dst_namepair))
+            prev_src_namepair = src_namepair
 
     def print_stats(self):
         """Print statistics and data about the current run"""
