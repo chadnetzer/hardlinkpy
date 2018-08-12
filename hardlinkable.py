@@ -463,7 +463,7 @@ class Hardlinkable:
 
         fsdev = self._get_fsdev(stat_info.st_dev)
         ino = stat_info.st_ino
-        file_info = (dirname, filename, stat_info)
+        file_info = FileInfo(dirname, filename, stat_info)
         namepair = (dirname, filename)
 
         if ino not in fsdev.ino_stat:
@@ -728,7 +728,7 @@ class Hardlinkable:
         """Return a file_info tuple with the current stat_info value."""
         dirname, filename, stat_info = file_info
         fsdev = self._get_fsdev(stat_info.st_dev)
-        new_file_info = (dirname, filename, fsdev.ino_stat[stat_info.st_ino])
+        new_file_info = FileInfo(dirname, filename, fsdev.ino_stat[stat_info.st_ino])
         return new_file_info
 
     def _inode_stats(self):
@@ -869,8 +869,8 @@ class _FSDev:
                         src_namepair = self.arbitrary_namepair_from_ino(src_ino,
                                                                         lookup_filename)
                         src_dirname, src_filename = src_namepair
-                        src_file_info = (src_dirname, src_filename, src_stat_info)
-                        dst_file_info = (dst_dirname, dst_filename, dst_stat_info)
+                        src_file_info = FileInfo(src_dirname, src_filename, src_stat_info)
+                        dst_file_info = FileInfo(dst_dirname, dst_filename, dst_stat_info)
 
                         yield (src_file_info, dst_file_info)
 
@@ -1436,6 +1436,11 @@ class _Progress:
 #################
 # Module functions
 #################
+
+def FileInfo(dirname, filename, statinfo):
+    """'Constructs' fileinfo tuple.  Cheap substitute for namedtuple to support
+    older Python versions"""
+    return (dirname, filename, statinfo)
 
 def _stat_hash_value(stat_info, options):
     """Return a value appropriate for a python dict or shelve key, which can
