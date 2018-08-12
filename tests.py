@@ -1376,8 +1376,8 @@ class RandomizedOrderingBase(BaseTests):
 
             ino_nlinks = {}
             for pathname in pathnames:
-                stat_info = os.lstat(pathname)
-                ino_nlinks[stat_info.st_ino] = stat_info.st_nlink
+                statinfo = os.lstat(pathname)
+                ino_nlinks[statinfo.st_ino] = statinfo.st_nlink
 
             nlink_list = sorted(ino_nlinks.values(), reverse=True)
             self.assertLessEqual(max(nlink_list), max_nlinks)
