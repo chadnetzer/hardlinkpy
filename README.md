@@ -25,10 +25,8 @@ Hard linking statistics
 Statistics reflect what would result if actual linking were enabled
 Directories                : 3748
 Files                      : 89182
-Comparisons                : 29908
-Consolidatable inodes found: 10908
-Hardlinkable files found   : 10908
-Total old and new hardlinks: 10908
+Consolidatable inodes      : 10908
+Hardlinkable files         : 10908
 Currently hardlinked bytes : 0 (0 bytes)
 Additional linkable bytes  : 259121960 (247.118 MiB)
 Total hardlinkable bytes   : 259121960 (247.118 MiB)
@@ -51,16 +49,16 @@ Hard linking statistics
 Statistics reflect what would result if actual linking were enabled
 Directories                : 3748
 Files                      : 89182
-Comparisons                : 29908
-Consolidatable inodes found: 10908
-Hardlinkable files found   : 10908
-Total old and new hardlinks: 10908
+Consolidatable inodes      : 10908
+Hardlinkable files         : 10908
 Currently hardlinked bytes : 0 (0 bytes)
 Additional linkable bytes  : 259121960 (247.118 MiB)
 Total hardlinkable bytes   : 259121960 (247.118 MiB)
 Total run time             : 15.024 seconds
+Comparisons                : 29908
 Inodes found               : 89182
 Current hardlinks          : 0
+Total old and new hardlinks: 10908
 Total too small files      : 71
 Total remaining inodes     : 78274
 ```
