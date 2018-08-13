@@ -1276,7 +1276,6 @@ class LinkingStats:
             print("Statistics reflect what would result if actual linking were enabled")
         print("Directories                : %s" % self.num_dirs)
         print("Files                      : %s" % self.num_files)
-        print("Comparisons                : %s" % self.num_comparisons)
         if self.options.linking_enabled:
             s1 = "Consolidated inodes        : %s"
             s2 = "Hardlinked this run        : %s"
@@ -1285,8 +1284,6 @@ class LinkingStats:
             s2 = "Hardlinkable files found   : %s"
         print(s1 % self.num_inodes_consolidated)
         print(s2 % self.num_hardlinked_thisrun)
-        print("Total old and new hardlinks: %s" %
-              (self.num_hardlinked_previously + self.num_hardlinked_thisrun))
         print("Currently hardlinked bytes : %s (%s)" %
               (self.bytes_saved_previously, _humanize_number(self.bytes_saved_previously)))
         if self.options.linking_enabled:
@@ -1303,8 +1300,11 @@ class LinkingStats:
         print("Total run time             : %s seconds" %
               round(self.endtime - self.starttime, 3))
         if self.options.verbosity > 0 or self.options.debug_level > 0:
+            print("Comparisons                : %s" % self.num_comparisons)
             print("Inodes found               : %s" % self.num_inodes)
             print("Current hardlinks          : %s" % self.num_hardlinked_previously)
+            print("Total old + new hardlinks  : %s" %
+                  (self.num_hardlinked_previously + self.num_hardlinked_thisrun))
             if self.num_excluded_dirs:
                 print("Total excluded dirs        : %s" % self.num_excluded_dirs)
             if self.num_excluded_files:
