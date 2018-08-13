@@ -86,7 +86,7 @@ try:
 except NameError:
     _intern = _sys.intern
 
-__all__ = ["Hardlinkable", "LinkingStats"]
+__all__ = ["Hardlinkable", "FileInfo", "LinkingStats"]
 
 # global declarations
 __version__ = '0.8'
@@ -369,7 +369,7 @@ class Hardlinkable:
         return self.stats
 
     def matched_fileinfo(self, directories):
-        """Yield _FileInfo for all non-excluded/matched files"""
+        """Yield FileInfo for all non-excluded/matched files"""
         options = self.options
 
         # Now go through all the directories that have been added.
@@ -441,7 +441,7 @@ class Hardlinkable:
                     # storage by interning
                     dirname = _intern(dirname)
                     filename = _intern(filename)
-                    yield _FileInfo(dirname, filename, statinfo)
+                    yield FileInfo(dirname, filename, statinfo)
 
     def _linkable_fileinfo_pairs(self, directories):
         """Perform the walk, collect and sort linking data, and yield linkable
@@ -462,7 +462,7 @@ class Hardlinkable:
     # component (ie. the basename) without the path.  The tree walking provides
     # this, so we don't have to extract it with _os.path.split()
     def _find_identical_files(self, fileinfo):
-        """Add the given _FileInfo to the internal state of which inodes are to
+        """Add the given FileInfo to the internal state of which inodes are to
         be linked."""
         options = self.options
 
@@ -780,7 +780,7 @@ class Hardlinkable:
         assert self.stats.bytes_saved_thisrun == bytes_saved_thisrun
 
 
-class _FileInfo(object):
+class FileInfo(object):
     """A class to hold pathname and stat/inode information."""
     __slots__ = 'dirname', 'filename', 'statinfo'
 
@@ -894,8 +894,8 @@ class _FSDev:
                         src_namepair = self.arbitrary_namepair_from_ino(src_ino,
                                                                         lookup_filename)
                         src_dirname, src_filename = src_namepair
-                        src_fileinfo = _FileInfo(src_dirname, src_filename, src_statinfo)
-                        dst_fileinfo = _FileInfo(dst_dirname, dst_filename, dst_statinfo)
+                        src_fileinfo = FileInfo(src_dirname, src_filename, src_statinfo)
+                        dst_fileinfo = FileInfo(dst_dirname, dst_filename, dst_statinfo)
 
                         yield (src_fileinfo, dst_fileinfo)
 
@@ -947,7 +947,7 @@ class _FSDev:
             dirname, filename = l[0]
         else:
             dirname, filename = self.arbitrary_namepair_from_ino(ino)
-        return _FileInfo(dirname, filename, self.ino_stat[ino])
+        return FileInfo(dirname, filename, self.ino_stat[ino])
 
     def updated_statinfo(self, ino, nlink=None, mtime=None, atime=None, uid=None, gid=None):
         """Updates an ino_stat statinfo with the given values."""
