@@ -25,13 +25,12 @@ Hard linking statistics
 Statistics reflect what would result if actual linking were enabled
 Directories                : 3748
 Files                      : 89182
-Comparisons                : 29908
-Consolidatable inodes found: 10908
-Hardlinkable files found   : 10908
-Total old and new hardlinks: 10908
+Consolidatable inodes      : 10908
+Hardlinkable files         : 10908
 Currently hardlinked bytes : 0 (0 bytes)
 Additional linkable bytes  : 259121960 (247.118 MiB)
 Total hardlinkable bytes   : 259121960 (247.118 MiB)
+Total run time             : 15.024 seconds
 ```
 
 You can specify more verbosity to get a list of linkable files, and some additional stats:
@@ -50,18 +49,17 @@ Hard linking statistics
 Statistics reflect what would result if actual linking were enabled
 Directories                : 3748
 Files                      : 89182
-Comparisons                : 29908
-Consolidatable inodes found: 10908
-Hardlinkable files found   : 10908
-Total old and new hardlinks: 10908
+Consolidatable inodes      : 10908
+Hardlinkable files         : 10908
 Currently hardlinked bytes : 0 (0 bytes)
 Additional linkable bytes  : 259121960 (247.118 MiB)
 Total hardlinkable bytes   : 259121960 (247.118 MiB)
+Total run time             : 15.024 seconds
+Comparisons                : 29908
 Inodes found               : 89182
 Current hardlinks          : 0
+Total old and new hardlinks: 10908
 Total too small files      : 71
-Total unequal file times   : 771
-Total unequal file modes   : 411
 Total remaining inodes     : 78274
 ```
 
@@ -82,6 +80,8 @@ Options
 --no-stats, -q        Do not print the statistics
 --verbose, -v         Increase verbosity level (Up to 3 times)
 --enable-linking      Perform the actual hardlinking
+--no-progress         Disable progress output while processing
+--json                Output results as JSON
 
 File Matching
 -------------
@@ -92,6 +92,7 @@ owned by another user.
 --same-name, -f       Filenames have to be identical
 --ignore-perms, -p    File permissions do not need to match
 --ignore-time, -t     File modification times do not need to match
+--ignore-xattr        Xattrs do not need to match
 --min-size=SZ, -s SZ  Minimum file size (default: 1)
 --max-size=SZ, -S SZ  Maximum file size (Can add 'k', 'm', etc.)
 --content-only, -c    Only file contents have to match
@@ -106,9 +107,9 @@ Name Matching (may specify multiple times)
 
 This program is built on and evolved from hardlink.py (or hardlinkpy), which
 was originally written by John L. Villalovos (sodarock), and developed further
-by Antti Kaihola, Carl Henrik Lunde, and others.  It is able to calculate
-accurate statistics on how much space can be saved, without actually performing
-the linking.
+by Antti Kaihola, Carl Henrik Lunde, Wolf Ó Spealáin, and others.  It is able
+to calculate accurate statistics on how much space can be saved, without
+actually performing the linking.
 
 This version is named ```hardlinkable``` to indicate that, by default, it does
 *not* perform any linking, and the user has to explicitly opt-in to having it
@@ -128,3 +129,6 @@ size, mtime) but different content are discovered.
 Furthermore, because it gathers full inode/pathname information before
 attempting to optimize the link ordering, it also handles the "--same-name"
 option more accurately than many other versions (imo).
+
+Certain features are optional depending on the available python packages, such
+as json and xattr support.
