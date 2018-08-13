@@ -1280,8 +1280,8 @@ class LinkingStats:
             s1 = "Consolidated inodes        : %s"
             s2 = "Hardlinked this run        : %s"
         else:
-            s1 = "Consolidatable inodes found: %s"
-            s2 = "Hardlinkable files found   : %s"
+            s1 = "Consolidatable inodes      : %s"
+            s2 = "Hardlinkable files         : %s"
         print(s1 % self.num_inodes_consolidated)
         print(s2 % self.num_hardlinked_thisrun)
         print("Currently hardlinked bytes : %s (%s)" %
