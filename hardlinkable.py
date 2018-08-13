@@ -661,17 +661,7 @@ class Hardlinkable:
                 pathname1 = _os.path.join(dirname1, filename1)
                 pathname2 = _os.path.join(dirname2, filename2)
                 xattr_result = _equal_xattr(pathname1, pathname2)
-                if not xattr_result:
-                    self.stats.found_mismatched_xattr()
                 result = result and xattr_result
-
-        # Add some stats on the factors which may have falsified result
-        if st1.st_mtime != st2.st_mtime:
-            self.stats.found_mismatched_time()
-        if st1.st_mode != st2.st_mode:
-            self.stats.found_mismatched_mode()
-        if (st1.st_uid != st2.st_uid or st1.st_gid != st2.st_gid):
-            self.stats.found_mismatched_ownership()
 
         return result
 
@@ -697,9 +687,28 @@ class Hardlinkable:
                 fsdev.add_content_digest(fileinfo2)
                 self.stats.computed_digest(2)
 
-            namepair1 = _os.path.join(dirname1, filename1)
-            namepair2 = _os.path.join(dirname2, filename2)
-            result = self._are_file_contents_equal(namepair1, namepair2)
+            pathname1 = _os.path.join(dirname1, filename1)
+            pathname2 = _os.path.join(dirname2, filename2)
+            result = self._are_file_contents_equal(pathname1, pathname2)
+
+            if result:
+                # Record some stats when files are found to match, but stat
+                # parameters are mismatched (such as in content-only mode).
+                if stat1.st_mtime != stat2.st_mtime:
+                    self.stats.found_mismatched_time()
+                if stat1.st_mode != stat2.st_mode:
+                    self.stats.found_mismatched_mode()
+                if stat1.st_uid != stat2.st_uid:
+                    self.stats.found_mismatched_uid()
+                if stat1.st_gid != stat2.st_gid:
+                    self.stats.found_mismatched_gid()
+                if xattr is not None:
+                    # Slower than stat mismatch data, but only done per-matched
+                    # file
+                    xattr_result = _equal_xattr(pathname1, pathname2)
+                    if not xattr_result:
+                        self.stats.found_mismatched_xattr()
+
         return result
 
     def _found_hardlinkable_file(self, src_fileinfo, dst_fileinfo):
@@ -1021,6 +1030,11 @@ class LinkingStats:
         self.num_inodes = 0                 # inodes found this run
         self.num_inodes_consolidated = 0    # how man nlinks actually went to zero
         self.num_hardlinked_previously = 0  # already existing hardlinks (based on walked dirs)
+        self.num_mismatched_file_mtime = 0  # files with equal content and different mtime
+        self.num_mismatched_file_mode = 0   # files with equal content and different perm/mode
+        self.num_mismatched_file_uid = 0    # files with equal content and different uid
+        self.num_mismatched_file_gid = 0    # files with equal content and different gid
+        self.num_mismatched_file_xattr = 0  # files with equal content and different xattrs
         self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run (ie. nlink==zero)
         self.bytes_saved_previously = 0     # bytes saved by previous hardlinks (walked dirs only)
         self.starttime = _time.time()       # track how long it takes
@@ -1035,10 +1049,6 @@ class LinkingStats:
         self.num_hash_list_searches = 0     # Times a hash list search is initiated
         self.num_list_iterations = 0        # Number of iterations over a list in inode_hashes
         self.num_digests_computed = 0       # Number of times content digest was computed
-        self.num_mismatched_file_times = 0  # same sized files with different mtimes
-        self.num_mismatched_file_modes = 0  # same sized files with different perms
-        self.num_mismatched_file_ownership = 0  # same sized files with different ownership
-        self.num_mismatched_xattr = 0       # Times xattrs didn't match
 
     def found_directory(self):
         self.num_dirs += 1
@@ -1083,16 +1093,19 @@ class LinkingStats:
                 _logging.debug("File too small: %s" % pathname)
 
     def found_mismatched_time(self):
-        self.num_mismatched_file_times += 1
+        self.num_mismatched_file_mtime += 1
 
     def found_mismatched_mode(self):
-        self.num_mismatched_file_modes += 1
+        self.num_mismatched_file_mode += 1
 
-    def found_mismatched_ownership(self):
-        self.num_mismatched_file_ownership += 1
+    def found_mismatched_uid(self):
+        self.num_mismatched_file_uid += 1
+
+    def found_mismatched_gid(self):
+        self.num_mismatched_file_gid += 1
 
     def found_mismatched_xattr(self):
-        self.num_mismatched_xattr += 1
+        self.num_mismatched_file_xattr += 1
 
     def did_comparison(self, pathname1, pathname2, result):
         self.num_comparisons += 1
@@ -1321,14 +1334,20 @@ class LinkingStats:
                 print("Total too large files      : %s" % self.num_files_too_large)
             if self.num_files_too_small:
                 print("Total too small files      : %s" % self.num_files_too_small)
+            if self.num_mismatched_file_mtime:
+                print("Total file time mismatches : %s" % self.num_mismatched_file_mtime)
+            if self.num_mismatched_file_mode:
+                print("Total file mode mismatches : %s" % self.num_mismatched_file_mode)
+            if self.num_mismatched_file_uid:
+                print("Total file uid mismatches  : %s" % self.num_mismatched_file_uid)
+            if self.num_mismatched_file_gid:
+                print("Total file gid mismatches  : %s" % self.num_mismatched_file_gid)
+            if self.num_mismatched_file_xattr:
+                print("Total file xattr mismatches: %s" % self.num_mismatched_file_xattr)
             print("Total remaining inodes     : %s" %
                   (self.num_inodes - self.num_inodes_consolidated))
             assert (self.num_inodes - self.num_inodes_consolidated) >= 0
         if self.options.debug_level > 0:
-            print("Total file time mismatches : %s" % self.num_mismatched_file_times)
-            print("Total file modes mismatches: %s" % self.num_mismatched_file_modes)
-            print("Total uid/gid mismatches   : %s" % self.num_mismatched_file_ownership)
-            print("Total xattr mismatches     : %s" % self.num_mismatched_xattr)
             print("Total file hash hits       : %s  misses: %s  sum total: %s" %
                   (self.num_hash_hits, self.num_hash_misses,
                    (self.num_hash_hits + self.num_hash_misses)))
