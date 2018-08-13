@@ -787,6 +787,12 @@ class FileInfo(object):
         self.filename = filename
         self.statinfo = statinfo
 
+    def __repr__(self):
+        """Return a representation of the FileInfo instance"""
+        return "FileInfo(%s, %s, %s)" % (repr(self.dirname),
+                                         repr(self.filename),
+                                         repr(self.statinfo))
+
     def namepair(self):
         """Return a (dirname, filename) tuple."""
         return (self.dirname, self.filename)
