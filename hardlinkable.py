@@ -788,6 +788,28 @@ class Hardlinkable:
         assert self.stats.bytes_saved_thisrun == bytes_saved_thisrun
 
 
+class _FileInfo(object):
+    """A class to hold pathname and stat/inode information."""
+    __slots__ = 'dirname', 'filename', 'statinfo'
+
+    def __init__(self, dirname, filename, statinfo):
+        self.dirname = dirname
+        self.filename = filename
+        self.statinfo = statinfo
+
+    def unpack(self):
+        """Returns a tuple of attributes that can be unpacked"""
+        return (self.dirname, self.filename, self.statinfo)
+
+    def namepair(self):
+        """Return a (dirname, filename) tuple."""
+        return (self.dirname, self.filename)
+
+    def pathname(self):
+        """Return a pathname"""
+        return _os.path.join(self.dirname, self.filename)
+
+
 class _FSDev:
     """Per filesystem (ie. st_dev) operations"""
     def __init__(self, st_dev, max_nlinks):
@@ -1482,11 +1504,6 @@ class _Progress:
 #################
 # Module functions
 #################
-
-def FileInfo(dirname, filename, statinfo):
-    """'Constructs' fileinfo tuple.  Cheap substitute for namedtuple to support
-    older Python versions"""
-    return (dirname, filename, statinfo)
 
 def _stat_hash_value(statinfo, options):
     """Return a value appropriate for a python dict or shelve key, which can
