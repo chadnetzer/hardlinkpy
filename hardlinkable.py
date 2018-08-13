@@ -569,8 +569,8 @@ class Hardlinkable:
         # Quit early if the src or dst files have been updated since we first
         # lstat()-ed them. The cached mtime needs to be kept up to date for
         # this to work correctly.
-        if (file_has_been_modified(src_pathname, src_statinfo) or
-            file_has_been_modified(dst_pathname, dst_statinfo)):
+        if (_file_has_been_modified(src_pathname, src_statinfo) or
+            _file_has_been_modified(dst_pathname, dst_statinfo)):
             return False
 
         hardlink_succeeded = False
@@ -1604,7 +1604,7 @@ def _is_already_hardlinked(st1, st2):
     return result
 
 
-def file_has_been_modified(pathname, statinfo):
+def _file_has_been_modified(pathname, statinfo):
     """Return True if file is known to have been modified."""
     try:
         current_stat = _os.lstat(pathname)
