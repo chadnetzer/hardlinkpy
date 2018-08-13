@@ -738,13 +738,6 @@ class Hardlinkable:
                                       uid=uid,
                                       gid=gid)
 
-    def _updated_fileinfo(self, fileinfo):
-        """Return a fileinfo tuple with the current statinfo value."""
-        dirname, filename, statinfo = fileinfo
-        fsdev = self._get_fsdev(statinfo.st_dev)
-        new_fileinfo = FileInfo(dirname, filename, fsdev.ino_stat[statinfo.st_ino])
-        return new_fileinfo
-
     def _inode_stats(self):
         """Gather some basic inode stats from caches."""
         total_inodes = 0
@@ -978,10 +971,6 @@ class _FSDev:
             del self.ino_stat[ino]
             new_statinfo = None
         return new_statinfo
-
-    def ino_has_filename(self, ino, filename):
-        """Return true if the given ino has 'filename' linked to it."""
-        return (filename in self.ino_pathnames[ino])
 
     def add_linked_inodes(self, ino1, ino2):
         """Adds to the dictionary of ino1 to ino2 mappings."""
