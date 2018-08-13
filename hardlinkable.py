@@ -560,11 +560,11 @@ class Hardlinkable:
 
     def _hardlink_files(self, src_fileinfo, dst_fileinfo):
         """Actually perform the filesystem hardlinking of two files."""
-        src_dirname, src_filename, src_statinfo = src_fileinfo.unpack()
-        dst_dirname, dst_filename, dst_statinfo = dst_fileinfo.unpack()
+        src_statinfo = src_fileinfo.statinfo
+        dst_statinfo = dst_fileinfo.statinfo
 
-        src_pathname = _os.path.join(src_dirname, src_filename)
-        dst_pathname = _os.path.join(dst_dirname, dst_filename)
+        src_pathname = src_fileinfo.pathname()
+        dst_pathname = dst_fileinfo.pathname()
 
         # Quit early if the src or dst files have been updated since we first
         # lstat()-ed them. The cached mtime needs to be kept up to date for
@@ -642,8 +642,8 @@ class Hardlinkable:
     # considered for hardlinking if this function returns true.
     def _eligible_for_hardlink(self, fileinfo1, fileinfo2):
         """Return True if inode meta-data would not preclude linking"""
-        dirname1, filename1, st1 = fileinfo1.unpack()
-        dirname2, filename2, st2 = fileinfo2.unpack()
+        st1 = fileinfo1.statinfo
+        st2 = fileinfo2.statinfo
         options = self.options
         # A chain of required criteria:
         result = (not _is_already_hardlinked(st1, st2) and
@@ -657,8 +657,8 @@ class Hardlinkable:
                       (st1.st_uid == st2.st_uid and st1.st_gid == st2.st_gid))
 
             if xattr is not None and not options.ignore_xattr:
-                pathname1 = _os.path.join(dirname1, filename1)
-                pathname2 = _os.path.join(dirname2, filename2)
+                pathname1 = fileinfo1.pathname()
+                pathname2 = fileinfo2.pathname()
                 xattr_result = _equal_xattr(pathname1, pathname2)
                 result = result and xattr_result
 
@@ -678,16 +678,16 @@ class Hardlinkable:
         else:
             # Since we are going to read the content anyway (to compare them),
             # there is no i/o penalty in calculating a content hash.
-            dirname1, filename1, stat1 = fileinfo1.unpack()
-            dirname2, filename2, stat2 = fileinfo2.unpack()
+            stat1 = fileinfo1.statinfo
+            stat2 = fileinfo2.statinfo
             if use_digest:
                 fsdev = self._get_fsdev(stat1.st_dev)
                 fsdev.add_content_digest(fileinfo1)
                 fsdev.add_content_digest(fileinfo2)
                 self.stats.computed_digest(2)
 
-            pathname1 = _os.path.join(dirname1, filename1)
-            pathname2 = _os.path.join(dirname2, filename2)
+            pathname1 = fileinfo1.pathname()
+            pathname2 = fileinfo2.pathname()
             result = self._are_file_contents_equal(pathname1, pathname2)
 
             if result:
@@ -712,11 +712,11 @@ class Hardlinkable:
 
     def _found_hardlinkable_file(self, src_fileinfo, dst_fileinfo):
         """Update state to indicate if src and dst files are hard linkable"""
-        src_dirname, src_filename, src_statinfo = src_fileinfo.unpack()
-        dst_dirname, dst_filename, dst_statinfo = dst_fileinfo.unpack()
+        src_statinfo = src_fileinfo.statinfo
+        dst_statinfo = dst_fileinfo.statinfo
 
-        self.stats.found_hardlinkable((src_dirname, src_filename),
-                                      (dst_dirname, dst_filename))
+        self.stats.found_hardlinkable(src_fileinfo.namepair(),
+                                      dst_fileinfo.namepair())
 
         assert src_statinfo.st_dev == dst_statinfo.st_dev
         fsdev = self._get_fsdev(src_statinfo.st_dev)
@@ -795,10 +795,6 @@ class _FileInfo(object):
         self.dirname = dirname
         self.filename = filename
         self.statinfo = statinfo
-
-    def unpack(self):
-        """Returns a tuple of attributes that can be unpacked"""
-        return (self.dirname, self.filename, self.statinfo)
 
     def namepair(self):
         """Return a (dirname, filename) tuple."""
@@ -1017,19 +1013,18 @@ class _FSDev:
 
     def add_content_digest(self, fileinfo, digest=None):
         """Store a given digest for an inode (or generate one if not provided)"""
-        dirname, filename, statinfo = fileinfo.unpack()
-        if statinfo.st_ino not in self.inodes_with_digest:
-            pathname = _os.path.join(dirname, filename)
+        if fileinfo.statinfo.st_ino not in self.inodes_with_digest:
+            pathname = fileinfo.pathname()
             if digest is None:
                 digest = _content_digest(pathname)
                 if digest is None:
                     return
             digests = self.digest_inode_map.get(digest, None)
             if digests is None:
-                self.digest_inode_map[digest] = set([statinfo.st_ino])
+                self.digest_inode_map[digest] = set([fileinfo.statinfo.st_ino])
             else:
-                digests.add(statinfo.st_ino)
-            self.inodes_with_digest.add(statinfo.st_ino)
+                digests.add(fileinfo.statinfo.st_ino)
+            self.inodes_with_digest.add(fileinfo.statinfo.st_ino)
 
 
 class LinkingStats:
