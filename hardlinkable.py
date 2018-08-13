@@ -26,9 +26,7 @@
 # Python 2.3, which for example is the version provided with RHEL 4.  Support
 # for such old versions (while simultaneously supporting 3), leads to some
 # clunky coding practices at times, that could be made more elegant if support
-# for older versions were dropped.  The continual unpacking of tuples, such as
-# in the 'fileinfo' objects could likely be done more elegantly as
-# namedtuples, for example.
+# for older versions were dropped.
 #
 # Sometime after the first official, stable release it is likely that support
 # for anything less than Python 2.7 will be dropped, allowing a number of
