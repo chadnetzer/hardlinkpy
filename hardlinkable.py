@@ -476,8 +476,8 @@ class Hardlinkable:
         self.progress.clear()
         self._prelink_inode_stats = self._inode_stats()
         for fsdev in self._fsdevs.values():
-            for pair in fsdev.sorted_links(self.options, self.stats):
-                yield pair
+            for fileinfo_pair in fsdev.sorted_links(self.options, self.stats):
+                yield fileinfo_pair
                 self.progress.show_hardlinked_amount()
         self.progress.clear()
 
