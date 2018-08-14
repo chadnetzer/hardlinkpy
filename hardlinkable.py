@@ -60,35 +60,36 @@ try:
     DEFAULT_LINEAR_SEARCH_THRESH = 1
 except ImportError:
     try:
-        from binascii import crc32 as _crc32
+        from binascii import crc32 as _crc32  # type: ignore
         DEFAULT_LINEAR_SEARCH_THRESH = 1
     except ImportError:
         DEFAULT_LINEAR_SEARCH_THRESH = None
 
 try:
-    import xattr
+    import xattr  # type: ignore
 except ImportError:
     xattr = None
 
 try:
-    import json
+    import json  # type: ignore
 except ImportError:
     try:
-        import simplejson as json
+        import simplejson as json  # type: ignore
     except ImportError:
-        json = None
+        json = None  # type: ignore
 
 # Python 2.3 has the sets module, not the set type
 try:
     set
 except NameError:
-    from sets import Set as set
+    # Import of Set messes with mypy in --py2 mode
+    from sets import Set as set  # type: ignore
 
 # Python 3 moved intern() to sys module
 try:
-    _intern = intern
+    _intern = intern  # type: ignore
 except NameError:
-    _intern = _sys.intern
+    _intern = _sys.intern  # type: ignore
 
 __all__ = ["Hardlinkable", "FileInfo", "LinkingStats"]
 
