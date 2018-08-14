@@ -1714,7 +1714,9 @@ def _file_has_been_modified(pathname, statinfo):
         current_stat.st_mode != statinfo.st_mode or
         current_stat.st_uid != statinfo.st_uid or
         current_stat.st_gid != statinfo.st_gid):
-        return False
+        return True
+
+    return False
 
 
 def _humanize_number(number):
