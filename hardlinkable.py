@@ -515,10 +515,11 @@ class Hardlinkable:
             # our inode is already cached, we might be able to use past
             # comparison work to avoid further file comparisons, by looking to
             # see if it's an inode we've already seen and linked to others.
-            linked_inodes = _linked_inode_set(ino, fsdev.linked_inodes)
-            found_linked_ino = (len(linked_inodes & fsdev.inode_hashes[inode_hash]) > 0)
+            inode_set = _linked_inode_set(ino, fsdev.linked_inodes)
+            found_linked_ino = (len(inode_set & fsdev.inode_hashes[inode_hash]) > 0)
             if not found_linked_ino:
-                cached_inodes_seq = fsdev.inode_hashes[inode_hash]
+                cached_inodes_set = fsdev.inode_hashes[inode_hash]
+                cached_inodes_seq = cached_inodes_set  # type: Union[Set[int], List[int]]
                 # Since the cached inodes use a simple linear search, they can
                 # devolve to O(n**2) worst case, typically when contentonly
                 # option encounters a large number of same-size files.
@@ -531,18 +532,18 @@ class Hardlinkable:
                 # size, but different contents.
                 search_thresh = options.linear_search_thresh
                 use_content_digest = (search_thresh is not None and
-                                      len(cached_inodes_seq) > search_thresh)
+                                      len(cached_inodes_set) > search_thresh)
                 if use_content_digest:
                     digest = _content_digest(_os.path.join(*namepair))
                     # Revert to full search if digest can't be computed
                     if digest is not None:
                         self.stats.computed_digest()
-                        cached_inodes_no_digest = (cached_inodes_seq -
+                        cached_inodes_no_digest = (cached_inodes_set -
                                                    fsdev.inodes_with_digest)
                         fsdev.add_content_digest(fileinfo, digest)
-                        cached_inodes_same_digest = (cached_inodes_seq &
+                        cached_inodes_same_digest = (cached_inodes_set &
                                                      fsdev.digest_inode_map[digest])
-                        cached_inodes_different_digest = (cached_inodes_seq -
+                        cached_inodes_different_digest = (cached_inodes_set -
                                                           cached_inodes_same_digest -
                                                           cached_inodes_no_digest)
 
