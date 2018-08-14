@@ -53,6 +53,7 @@ from optparse import Values as _Values
 try:
     from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
     NamePair = Tuple[str, str]
+    InoSet = Set[int]
 except ImportError:
     # typing module not available for mypy.  Oh well.
     pass
@@ -517,7 +518,7 @@ class Hardlinkable:
             found_linked_ino = (len(inode_set & fsdev.inode_hashes[inode_hash]) > 0)
             if not found_linked_ino:
                 cached_inodes_set = fsdev.inode_hashes[inode_hash]
-                cached_inodes_seq = cached_inodes_set  # type: Union[Set[int], List[int]]
+                cached_inodes_seq = cached_inodes_set  # type: Union[InoSet, List[int]]
                 # Since the cached inodes use a simple linear search, they can
                 # devolve to O(n**2) worst case, typically when contentonly
                 # option encounters a large number of same-size files.
@@ -848,12 +849,12 @@ class _FSDev:
         self.max_nlinks = max_nlinks
 
         # For each hash value, track inode (and optionally filename)
-        self.inode_hashes = {}  # type: Dict[int, Set[int]]
+        self.inode_hashes = {}  # type: Dict[int, InoSet]
 
         # For each stat hash, keep a digest of the first 8K of content.  Used
         # to reduce linear search when looking through comparable files.
-        self.digest_inode_map = {}  # type: Dict[int, Set[int]]
-        self.inodes_with_digest = set()  # type: Set[int]
+        self.digest_inode_map = {}  # type: Dict[int, InoSet]
+        self.inodes_with_digest = set()  # type: InoSet
 
         # Keep track of per-inode stat info
         self.ino_stat = {}  # type: Dict[int, _os.stat_result]
@@ -865,7 +866,7 @@ class _FSDev:
         # ultimately we want to "link" the inodes together).  Each pair is
         # added twice, in each order, so that a pair can be found from either
         # inode.
-        self.linked_inodes = {}  # type: Dict[int, Set[int]]
+        self.linked_inodes = {}  # type: Dict[int, InoSet]
 
     def sorted_links(self, options, stats):
         # type: (_Values, LinkingStats) -> Iterable[Tuple[FileInfo, FileInfo]]
@@ -1652,13 +1653,13 @@ def _found_matched_filename_regex(name, matches):
 
 
 def _linked_inode_set(ino, linked_inodes):
-    # type: (int, Dict[int, Set[int]]) -> Set[int]
+    # type: (int, Dict[int, InoSet]) -> InoSet
     """Return set of inodes that are connected to given inode"""
 
     if ino not in linked_inodes:
         return set([ino])
     remaining_inodes = linked_inodes.copy()
-    result_set = set()  # type: Set[int]
+    result_set = set()  # type: InoSet
     pending = [ino]
     while pending:
         ino = pending.pop()
@@ -1675,7 +1676,7 @@ def _linked_inode_set(ino, linked_inodes):
 # it's implementation.  This is partly to avoid making unnecessary copies of
 # the linked_inodes dictionary, and to keep the calling args simple.
 def _linkable_inode_sets(linked_inodes):
-    # type: (Dict[int, Set[int]]) -> Iterable[Set[int]]
+    # type: (Dict[int, InoSet]) -> Iterable[InoSet]
     """Generate sets of inodes that can be connected.  Starts with a mapping of
     inode # keys, and set values, which are the inodes which are determined to
     be equal (and thus linkable) to the key inode."""
@@ -1686,7 +1687,7 @@ def _linkable_inode_sets(linked_inodes):
     for start_ino in linked_inodes:
         if start_ino not in remaining_inodes:
             continue
-        result_set = set()  # type: Set[int]
+        result_set = set()  # type: InoSet
         pending = [start_ino]
         # We know this loop terminates because we always remove an item from
         # the pending list, and a key from the remaining_inodes dict.  Since no
