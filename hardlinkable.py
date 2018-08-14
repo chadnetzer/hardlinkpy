@@ -1800,7 +1800,7 @@ def _equal_xattr(pathname1, pathname2):
     return True
 
 
-def _equal_xattr_dummy(p1, p2):
+def _equal_xattr_dummy(pathname1, pathname2):
     # type: (str, str) -> bool
     return True
 
