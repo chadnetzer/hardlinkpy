@@ -969,7 +969,7 @@ class _FSDev:
             try:
                 l = next(iter(d.values()))
             except NameError:
-                l = iter(d.values()).next()
+                l = iter(d.values()).next()  # type: ignore
         return l[0]
 
     def ino_append_namepair(self, ino, filename, namepair):
@@ -1001,7 +1001,7 @@ class _FSDev:
             ):
         """Updates an ino_stat statinfo with the given values."""
         statinfo = self.ino_stat[ino]
-        l = list(statinfo)
+        l = list(statinfo)  # type: ignore
         if nlink is not None:
             l[_stat.ST_NLINK] = nlink
         if mtime is not None:
