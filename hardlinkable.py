@@ -218,7 +218,7 @@ by another user.
     if get_default_options:
         (options, args) = parser.parse_args([""])
         options_validation(parser, options)
-        return options
+        return options, []
 
     (options, args) = parser.parse_args()
     if not args:
