@@ -1026,30 +1026,50 @@ class LinkingStats:
         self.reset()
 
     def reset(self):
-        self.num_dirs = 0                   # how many directories we find
-        self.num_files = 0                  # how many regular files we find
-        self.num_excluded_dirs = 0          # how many directories we exclude
-        self.num_excluded_files = 0         # how many files we exclude (by regex)
-        self.num_included_files = 0         # how many files we include (by regex)
-        self.num_files_too_large = 0        # how many files are too large
-        self.num_files_too_small = 0        # how many files are too small
-        self.num_comparisons = 0            # how many file content comparisons
-        self.num_equal_comparisons = 0      # how many file comparisons found equal
-        self.num_hardlinked_thisrun = 0     # hardlinks done this run
-        self.num_inodes = 0                 # inodes found this run
-        self.num_inodes_consolidated = 0    # how man nlinks actually went to zero
-        self.num_hardlinked_previously = 0  # already existing hardlinks (based on walked dirs)
-        self.num_mismatched_file_mtime = 0  # files with equal content and different mtime
-        self.num_mismatched_file_mode = 0   # files with equal content and different perm/mode
-        self.num_mismatched_file_uid = 0    # files with equal content and different uid
-        self.num_mismatched_file_gid = 0    # files with equal content and different gid
-        self.num_mismatched_file_xattr = 0  # files with equal content and different xattrs
-        self.bytes_saved_thisrun = 0        # bytes saved by hardlinking this run (ie. nlink==zero)
-        self.bytes_saved_previously = 0     # bytes saved by previous hardlinks (walked dirs only)
-        self.starttime = _time.time()       # track how long it takes
+        # Counter variables for number of directories and files found per run,
+        # number of excluded/included dirs and files, how many file sizes are
+        # outside of size range, and how many file contents are compared, etc.
+        self.num_dirs = 0
+        self.num_files = 0
+        self.num_excluded_dirs = 0
+        self.num_excluded_files = 0
+        self.num_included_files = 0
+        self.num_files_too_large = 0
+        self.num_files_too_small = 0
+        self.num_comparisons = 0
+        self.num_equal_comparisons = 0
+
+        # how man nlinks actually went to zero
+        self.num_inodes_consolidated = 0
+        self.num_inodes = 0
+
+        # already existing hardlinks (based on walked dirs)
+        self.num_hardlinked_previously = 0
+        self.num_hardlinked_thisrun = 0
+
+        # The 'mismatched' counters increment when a file with equal content
+        # has been found (which was not rejected by the inode differences, such
+        # as in 'content only' mode.
+        self.num_mismatched_file_mtime = 0
+        self.num_mismatched_file_mode = 0
+        self.num_mismatched_file_uid = 0
+        self.num_mismatched_file_gid = 0
+        self.num_mismatched_file_xattr = 0
+
+        # bytes saved by hardlinking this run (when st_nlink -> zero)
+        self.bytes_saved_thisrun = 0
+
+        # bytes saved by previous hardlinks (walked dirs only)
+        self.bytes_saved_previously = 0
+
+        # Time how long a run takes
+        self.starttime = _time.time()
         self.endtime = None
-        self.hardlink_pairs = []            # list of files hardlinkable this run
-        self.currently_hardlinked = {}      # list of files currently hardlinked
+
+        # Containers to store the new hardlinkable namepairs and
+        # previously/currently linked namepairs found.
+        self.hardlink_pairs = []
+        self.currently_hardlinked = {}
 
         # Debugging stats
         self.num_hash_hits = 0              # Amount of times a hash is found in inode_hashes
