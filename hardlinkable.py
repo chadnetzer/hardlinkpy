@@ -223,7 +223,7 @@ by another user.
     # Allow for a way to get a default options object (for Statistics)
     if get_default_options:
         (options, args) = parser.parse_args([""])
-        options_validation(parser, options)
+        _options_validation(parser, options)
         return options, []
 
     (options, args) = parser.parse_args()
@@ -236,12 +236,12 @@ by another user.
         if not _os.path.isdir(dirname):
             parser.error("%s is NOT a directory" % dirname)
 
-    options_validation(parser, options)
+    _options_validation(parser, options)
 
     return options, args
 
 
-def options_validation(parser, options):
+def _options_validation(parser, options):
     # type: (_OptionParser, _Values) -> None
     """Ensures given options are valid, and sets up options object"""
     if options.debug_level > 1:
