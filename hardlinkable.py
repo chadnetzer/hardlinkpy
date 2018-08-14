@@ -238,14 +238,17 @@ def options_validation(parser, options):
     if options.debug_level > 1:
         _logging.getLogger().setLevel(_logging.DEBUG)
 
+    # Since mypy complains about missing attributes for options (the 'dest'
+    # arguments), we ignore these errors below
+
     # Convert "humanized" size inputs to integer bytes
     try:
-        options.min_file_size = _humanized_number_to_bytes(options.min_file_size)
+        options.min_file_size = _humanized_number_to_bytes(options.min_file_size)  # type: ignore
     except ValueError:
         parser.error("option -s: invalid integer value: '%s'" % options.min_file_size)
     if options.max_file_size is not None:
         try:
-            options.max_file_size = _humanized_number_to_bytes(options.max_file_size)
+            options.max_file_size = _humanized_number_to_bytes(options.max_file_size)  # type: ignore
         except ValueError:
             parser.error("option -S: invalid integer value: '%s'" % options.max_file_size)
     # Check validity of min/max size options
@@ -271,11 +274,11 @@ def options_validation(parser, options):
             n = int(options.linear_search_thresh)
             if n < 0:
                 parser.error(err_str % options.linear_search_thresh)
-            options.linear_search_thresh = n
+            options.linear_search_thresh = n  # type: ignore
 
         except ValueError:
             if options.linear_search_thresh.lower() == "none":
-                options.linear_search_thresh = None
+                options.linear_search_thresh = None  # type: ignore
             else:
                 parser.error(err_str % options.linear_search_thresh)
 
@@ -284,12 +287,13 @@ def options_validation(parser, options):
         # Based on verbosity, enable extra stats storage when quiet option is
         # selected.  Useful with Hardlinkable objects directly.
         if options.verbosity > 1:
-            options.store_old_hardlinks = True
+            options.store_old_hardlinks = True  # type: ignore
         if options.verbosity > 0:
-            options.store_new_hardlinks = True
-        options.verbosity = 0  # Disable any remaining verbosity output
-        options.show_progress = False
-        options.printstats = False
+            options.store_new_hardlinks = True  # type: ignore
+        # Disable any remaining verbosity output
+        options.verbosity = 0  # type: ignore
+        options.show_progress = False  # type: ignore
+        options.printstats = False  # type: ignore
 
     # Remove dummy show progress variable
     del options._dummy_show_progress
@@ -324,7 +328,7 @@ class Hardlinkable:
         # byteslike.  We don't want to "walk" each string character as a dir,
         # especially since it has a good chance of starting with an '/'.
         if _sys.version_info[0] == 2:
-            if isinstance(directories, basestring):
+            if isinstance(directories, basestring):  # type: ignore
                 directories = [directories]
         elif isinstance(directories, str) or isinstance(directories, bytes):
             directories = [directories]
@@ -1708,7 +1712,7 @@ def _content_digest(pathname):
 
     # Python 2.3 disallows except/finally together
     try:
-        byte_data = f.read(_filecmp.BUFSIZE)
+        byte_data = f.read(_filecmp.BUFSIZE)  # type: ignore  #BUG workaround?
     except OSError:
         f.close()
         return None
