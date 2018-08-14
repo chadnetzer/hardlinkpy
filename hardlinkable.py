@@ -92,11 +92,17 @@ try:
 except NameError:
     _intern = _sys.intern  # type: ignore
 
-__all__ = ["Hardlinkable", "FileInfo", "LinkingStats"]
+__all__ = ["Hardlinkable", "FileInfo", "LinkingStats", "get_default_parser_options"]
 
 # global declarations
 __version__ = '0.8'
 _VERSION = "0.8 alpha - 2018-07-09 (09-Jul-2018)"
+
+
+def get_default_parser_options():
+    # type: () -> _Values
+    options, args = _parse_command_line(get_default_options=True)
+    return options
 
 
 def _parse_command_line(get_default_options=False, show_progress_default=False):
@@ -310,7 +316,7 @@ class Hardlinkable:
     def __init__(self, options=None):
         # type: (Optional[_Values]) -> None
         if options is None:
-            options = _parse_command_line(get_default_options=True)
+            options = get_default_parser_options()
         self.options = options
         self.stats = LinkingStats(options)
         self.progress = _Progress(options, self.stats)
