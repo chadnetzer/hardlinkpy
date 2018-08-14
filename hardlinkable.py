@@ -58,7 +58,7 @@ except ImportError:
 
 try:
     from zlib import crc32 as _crc32
-    DEFAULT_LINEAR_SEARCH_THRESH = 1
+    DEFAULT_LINEAR_SEARCH_THRESH = 1  # type: Optional[int]
 except ImportError:
     try:
         from binascii import crc32 as _crc32  # type: ignore
@@ -314,7 +314,7 @@ class Hardlinkable:
         self.options = options
         self.stats = LinkingStats(options)
         self.progress = _Progress(options, self.stats)
-        self._fsdevs = {}
+        self._fsdevs = {}  # type: Dict[int, _FSDev]
 
     def linkables(self, directories):
         # type: (List) -> Iterable[Tuple[str, str]]
@@ -440,7 +440,7 @@ class Hardlinkable:
                         # Try to discover the maximum number of nlinks possible for
                         # each new device.
                         try:
-                            max_nlinks = _os.pathconf(pathname, "PC_LINK_MAX")
+                            max_nlinks = _os.pathconf(pathname, "PC_LINK_MAX")  # type: Optional[int]
                         except OSError:
                             # Avoid retrying if PC_LINK_MAX fails for a device
                             max_nlinks = None
@@ -843,29 +843,24 @@ class _FSDev:
         self.max_nlinks = max_nlinks  # Can be None
 
         # For each hash value, track inode (and optionally filename)
-        # inode_hashes <- {hash_val: set(ino)}
-        self.inode_hashes = {}
+        self.inode_hashes = {}  # type: Dict[int, Set[int]]
 
         # For each stat hash, keep a digest of the first 8K of content.  Used
         # to reduce linear search when looking through comparable files.
-        # digest_inode_map <- {digest: set(ino)}
-        self.digest_inode_map = {}
-        self.inodes_with_digest = set()
+        self.digest_inode_map = {}  # type: Dict[int, Set[int]]
+        self.inodes_with_digest = set()  # type: Set[int]
 
         # Keep track of per-inode stat info
-        # ino_stat <- {st_ino: statinfo}
-        self.ino_stat = {}
+        self.ino_stat = {}  # type: Dict[int, _os.stat_result]
 
         # For each inode, keep track of all the pathnames
-        # ino_pathnames <- {st_ino: {filename: list((dirname, filename))}}
-        self.ino_pathnames = {}
+        self.ino_pathnames = {}  # type: Dict[int, Dict[str, List[Tuple[str, str]]]]
 
         # For each linkable file pair found, add their inodes as a pair (ie.
         # ultimately we want to "link" the inodes together).  Each pair is
         # added twice, in each order, so that a pair can be found from either
         # inode.
-        # linked_inodes = {largest_ino_num: set(ino_nums)}
-        self.linked_inodes = {}
+        self.linked_inodes = {}  # type: Dict[int, Set[int]]
 
     def sorted_links(self, options, stats):
         # type: (_Values, LinkingStats) -> Iterable[Tuple[FileInfo, FileInfo]]
@@ -881,7 +876,7 @@ class _FSDev:
             # Keep a list if inos from the end of the ino_list that cannot
             # be linked to (such as when in 'samename' mode), and reappend
             # them to nlist when the src inode advances.
-            remaining_inos = []
+            remaining_inos = []  # type: List[int]
 
             assert len(ino_list) > 0
             while ino_list or remaining_inos:  # outer while
@@ -1129,6 +1124,9 @@ class LinkingStats:
         self.num_hash_list_searches = 0     # Times a hash list search is initiated
         self.num_list_iterations = 0        # Number of iterations over a list in inode_hashes
         self.num_digests_computed = 0       # Number of times content digest was computed
+
+        # sanity checking data
+        self.inode_stats = []  # type: List[Dict[str, int]]
 
     def found_directory(self):
         self.num_dirs += 1
@@ -1626,7 +1624,7 @@ def _linked_inode_set(ino, linked_inodes):
     if ino not in linked_inodes:
         return set([ino])
     remaining_inodes = linked_inodes.copy()
-    result_set = set()
+    result_set = set()  # type: Set[int]
     pending = [ino]
     while pending:
         ino = pending.pop()
@@ -1654,7 +1652,7 @@ def _linkable_inode_sets(linked_inodes):
     for start_ino in linked_inodes:
         if start_ino not in remaining_inodes:
             continue
-        result_set = set()
+        result_set = set()  # type: Set[int]
         pending = [start_ino]
         # We know this loop terminates because we always remove an item from
         # the pending list, and a key from the remaining_inodes dict.  Since no
