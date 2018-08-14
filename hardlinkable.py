@@ -52,6 +52,7 @@ from optparse import Values as _Values
 
 try:
     from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
+    NamePair = Tuple[str, str]
 except ImportError:
     # typing module not available for mypy.  Oh well.
     pass
@@ -323,7 +324,7 @@ class Hardlinkable:
         self._fsdevs = {}  # type: Dict[int, _FSDev]
 
     def linkables(self, directories):
-        # type: (List) -> Iterable[Tuple[str, str]]
+        # type: (List) -> Iterable[NamePair]
         """Yield pairs of linkable pathnames in the given directories"""
         for (src_fileinfo, dst_fileinfo) in self._linkable_fileinfo_pairs(directories):
             src_pathname = src_fileinfo.pathname()
@@ -829,7 +830,7 @@ class FileInfo(object):
                                          repr(self.statinfo))
 
     def namepair(self):
-        # type: () -> Tuple[str, str]
+        # type: () -> NamePair
         """Return a (dirname, filename) tuple."""
         return (self.dirname, self.filename)
 
@@ -858,7 +859,7 @@ class _FSDev:
         self.ino_stat = {}  # type: Dict[int, _os.stat_result]
 
         # For each inode, keep track of all the pathnames
-        self.ino_pathnames = {}  # type: Dict[int, Dict[str, List[Tuple[str, str]]]]
+        self.ino_pathnames = {}  # type: Dict[int, Dict[str, List[NamePair]]]
 
         # For each linkable file pair found, add their inodes as a pair (ie.
         # ultimately we want to "link" the inodes together).  Each pair is
@@ -957,7 +958,7 @@ class _FSDev:
                         remaining_inos.append(dst_ino)
 
     def arbitrary_namepair_from_ino(self, ino, filename=None):
-        # type: (int, Optional[str]) -> Tuple[str, str]
+        # type: (int, Optional[str]) -> NamePair
         """Return a (dirname, filename) tuple associated with the inode."""
         # Get the dict of filename: [pathnames] for ino_key
         d = self.ino_pathnames[ino]
@@ -972,7 +973,7 @@ class _FSDev:
         return l[0]
 
     def ino_append_namepair(self, ino, filename, namepair):
-        # type: (int, str, Tuple[str, str]) -> None
+        # type: (int, str, NamePair) -> None
         """Add the (dirname, filename) tuple to the inode map (grouped by filename)"""
         d = self.ino_pathnames.setdefault(ino, {})
         l = d.setdefault(filename, [])
@@ -1030,7 +1031,7 @@ class _FSDev:
         s.add(ino1)
 
     def move_linked_namepair(self, namepair, src_ino, dst_ino):
-        # type: (Tuple[str, str], int, int) -> None
+        # type: (NamePair, int, int) -> None
         """Move namepair from dst_ino to src_ino (yes, backwards)"""
         dirname, filename = namepair
         pathnames = self.ino_pathnames[dst_ino][filename]
@@ -1119,8 +1120,8 @@ class LinkingStats:
 
         # Containers to store the new hardlinkable namepairs and
         # previously/currently linked namepairs found.
-        self.hardlink_pairs = []  # type: List[Tuple[Tuple[str, str], Tuple[str, str]]]
-        self.currently_hardlinked = {}  # type: Dict[Tuple[str, str], Tuple[int, List[Tuple[str, str]]]]
+        self.hardlink_pairs = []  # type: List[Tuple[NamePair, NamePair]]
+        self.currently_hardlinked = {}  # type: Dict[NamePair, Tuple[int, List[NamePair]]]
 
         # Debugging stats
         self.num_hash_hits = 0              # Amount of times a hash is found in inode_hashes
@@ -1216,7 +1217,7 @@ class LinkingStats:
                 _logging.debug(" to           : %s" % pathname2)
 
     def found_existing_hardlink(self, src_namepair, dst_namepair, statinfo):
-        # type: (Tuple[str, str], Tuple[str, str], _os.stat_result) -> None
+        # type: (NamePair, NamePair, _os.stat_result) -> None
         assert len(src_namepair) == 2
         assert len(dst_namepair) == 2
         if self.options.debug_level > 3:
@@ -1233,7 +1234,7 @@ class LinkingStats:
                 self.currently_hardlinked[src_namepair][1].append(dst_namepair)
 
     def found_hardlinkable(self, src_namepair, dst_namepair):
-        # type: (Tuple[str, str], Tuple[str, str]) -> None
+        # type: (NamePair, NamePair) -> None
         # We don't actually keep these stats, and we record the actual links
         # later, after the ordering by nlink count.  Just log.
         if self.options.debug_level > 1:
@@ -1703,7 +1704,7 @@ def _linkable_inode_sets(linked_inodes):
 
 
 def _namepairs_per_inode(d):
-    # type: (Dict[str, List[Tuple[str, str]]]) -> Iterable[Tuple[str, str]]
+    # type: (Dict[str, List[NamePair]]) -> Iterable[NamePair]
     """Yield namepairs for each value in the dictionary d"""
     # A dictionary of {filename:[namepair]}, ie. a filename and list of
     # namepairs.  Make a copy as d and it's list values may be modified between
