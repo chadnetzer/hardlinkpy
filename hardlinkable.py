@@ -948,7 +948,7 @@ class _FSDev:
                         new_dst_nlink = dst_statinfo.st_nlink - 1
                         src_statinfo = self.updated_statinfo(src_ino, nlink=new_src_nlink)
                         dst_statinfo = self.updated_statinfo(dst_ino, nlink=new_dst_nlink)
-                        assert src_statinfo.st_nlink <= self.max_nlinks
+                        assert self.max_nlinks is None or src_statinfo.st_nlink <= self.max_nlinks
                         assert dst_statinfo is None or dst_statinfo.st_nlink > 0
 
                         dst_namepair = dst_fileinfo.namepair()
