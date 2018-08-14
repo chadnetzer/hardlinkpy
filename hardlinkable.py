@@ -1076,6 +1076,7 @@ class LinkingStats:
 
     def reset(self):
         # type: () -> None
+
         # Counter variables for number of directories and files found per run,
         # number of excluded/included dirs and files, how many file sizes are
         # outside of size range, and how many file contents are compared, etc.
@@ -1114,12 +1115,12 @@ class LinkingStats:
 
         # Time how long a run takes
         self.starttime = _time.time()
-        self.endtime = None
+        self.endtime = None  # type: Optional[float]
 
         # Containers to store the new hardlinkable namepairs and
         # previously/currently linked namepairs found.
-        self.hardlink_pairs = []
-        self.currently_hardlinked = {}
+        self.hardlink_pairs = []  # type: List[Tuple[Tuple[str, str], Tuple[str, str]]]
+        self.currently_hardlinked = {}  # type: Dict[Tuple[str, str], Tuple[int, List[Tuple[str, str]]]]
 
         # Debugging stats
         self.num_hash_hits = 0              # Amount of times a hash is found in inode_hashes
