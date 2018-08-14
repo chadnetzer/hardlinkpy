@@ -481,9 +481,6 @@ class Hardlinkable:
                 self.progress.show_hardlinked_amount()
         self.progress.clear()
 
-    # dirname is the directory component and filename is just the file name
-    # component (ie. the basename) without the path.  The tree walking provides
-    # this, so we don't have to extract it with _os.path.split()
     def _find_identical_files(self, fileinfo):
         # type: (FileInfo) -> None
         """Add the given FileInfo to the internal state of which inodes are to
@@ -847,7 +844,7 @@ class _FSDev:
     def __init__(self, st_dev, max_nlinks):
         # type: (int, Optional[int]) -> None
         self.st_dev = st_dev
-        self.max_nlinks = max_nlinks  # Can be None
+        self.max_nlinks = max_nlinks
 
         # For each hash value, track inode (and optionally filename)
         self.inode_hashes = {}  # type: Dict[int, Set[int]]
@@ -880,7 +877,7 @@ class _FSDev:
             nlinks_list = nlinks_list[::-1]  # Reverse sort (Python 2.3 compat)
             ino_list = [x[1] for x in nlinks_list]  # strip nlinks sort key
 
-            # Keep a list if inos from the end of the ino_list that cannot
+            # Keep a list of inos from the end of the ino_list that cannot
             # be linked to (such as when in 'samename' mode), and reappend
             # them to nlist when the src inode advances.
             remaining_inos = []  # type: List[int]
