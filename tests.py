@@ -1093,7 +1093,7 @@ class TestSimpleStats(BaseTests):
     def setUp(self):
         self.setup_tempdir()
 
-        self.options = hardlinkable._parse_command_line(get_default_options=True)
+        self.options = hardlinkable.get_default_parser_options()
         self.options.linking_enabled = True
         self.options.contentonly = True
         self.options.printstats = False
@@ -1234,7 +1234,7 @@ class RandomizedOrderingBase(BaseTests):
         random.shuffle(self.test_data)
         random.shuffle(self.mtimes)
 
-        self.options = hardlinkable._parse_command_line(get_default_options=True)
+        self.options = hardlinkable.get_default_parser_options()
 
     def gen_files(self, dirs=None, filenames=None):
         if dirs is not None:
