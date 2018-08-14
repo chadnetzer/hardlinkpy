@@ -1134,14 +1134,17 @@ class LinkingStats:
         self.inode_stats = []  # type: List[Dict[str, int]]
 
     def found_directory(self):
+        # type: () -> None
         self.num_dirs += 1
 
     def found_regular_file(self, pathname):
+        # type: (str) -> None
         self.num_files += 1
         if self.options.debug_level > 4:
             _logging.debug("File          : %s" % pathname)
 
     def excluded_dirs(self, dirname, basenames):
+        # type: (str, Set[str]) -> None
         self.num_excluded_dirs += len(basenames)
         if self.options.debug_level > 5:
             for name in basenames:
@@ -1149,21 +1152,25 @@ class LinkingStats:
                 _logging.debug("Excluded dir  : %s" % pathname)
 
     def excluded_dir(self, pathname):
+        # type: (str) -> None
         self.num_excluded_dirs += 1
         if self.options.debug_level > 5:
             _logging.debug("Excluded dir  : %s" % pathname)
 
     def excluded_file(self, pathname):
+        # type: (str) -> None
         self.num_excluded_files += 1
         if self.options.debug_level > 5:
             _logging.debug("Excluded file : %s" % pathname)
 
     def included_file(self, pathname):
+        # type: (str) -> None
         self.num_included_files += 1
         if self.options.debug_level > 5:
             _logging.debug("Included file : %s" % pathname)
 
     def file_outside_size_range(self, pathname, filesize):
+        # type: (str, int) -> None
         if (self.options.max_file_size is not None and
             filesize > self.options.max_file_size):
             self.num_files_too_large += 1
@@ -1176,21 +1183,27 @@ class LinkingStats:
                 _logging.debug("File too small: %s" % pathname)
 
     def found_mismatched_time(self):
+        # type: () -> None
         self.num_mismatched_file_mtime += 1
 
     def found_mismatched_mode(self):
+        # type: () -> None
         self.num_mismatched_file_mode += 1
 
     def found_mismatched_uid(self):
+        # type: () -> None
         self.num_mismatched_file_uid += 1
 
     def found_mismatched_gid(self):
+        # type: () -> None
         self.num_mismatched_file_gid += 1
 
     def found_mismatched_xattr(self):
+        # type: () -> None
         self.num_mismatched_file_xattr += 1
 
     def did_comparison(self, pathname1, pathname2, result):
+        # type: (str, str, bool) -> None
         self.num_comparisons += 1
         if result:
             self.num_equal_comparisons += 1
@@ -1203,6 +1216,7 @@ class LinkingStats:
                 _logging.debug(" to           : %s" % pathname2)
 
     def found_existing_hardlink(self, src_namepair, dst_namepair, statinfo):
+        # type: (Tuple[str, str], Tuple[str, str], _os.stat_result) -> None
         assert len(src_namepair) == 2
         assert len(dst_namepair) == 2
         if self.options.debug_level > 3:
@@ -1219,6 +1233,7 @@ class LinkingStats:
                 self.currently_hardlinked[src_namepair][1].append(dst_namepair)
 
     def found_hardlinkable(self, src_namepair, dst_namepair):
+        # type: (Tuple[str, str], Tuple[str, str]) -> None
         # We don't actually keep these stats, and we record the actual links
         # later, after the ordering by nlink count.  Just log.
         if self.options.debug_level > 1:
@@ -1227,9 +1242,11 @@ class LinkingStats:
             _logging.debug(" to           : %s" % _os.path.join(*dst_namepair))
 
     def found_inode(self):
+        # type: () -> None
         self.num_inodes += 1
 
     def did_hardlink(self, src_fileinfo, dst_fileinfo):
+        # type: (FileInfo, FileInfo) -> None
         src_namepair = src_fileinfo.namepair()
         dst_namepair = dst_fileinfo.namepair()
         dst_statinfo = dst_fileinfo.statinfo
@@ -1246,26 +1263,33 @@ class LinkingStats:
             self.num_inodes_consolidated += 1
 
     def found_hash(self):
+        # type: () -> None
         self.num_hash_hits += 1
 
     def missed_hash(self):
+        # type: () -> None
         """When a hash lookup isn't found"""
         self.num_hash_misses += 1
 
     def no_hash_match(self):
+        # type: () -> None
         """When a hash lookup succeeds, but no matching value found"""
         self.num_hash_mismatches += 1
 
     def search_hash_list(self):
+        # type: () -> None
         self.num_hash_list_searches += 1
 
     def inc_hash_list_iteration(self):
+        # type: () -> None
         self.num_list_iterations += 1
 
     def computed_digest(self, num=1):
+        # type: (int) -> None
         self.num_digests_computed += num
 
     def _count_hardlinked_previously(self):
+        # type: () -> int
         count = 0
         for filesize, namepairs in self.currently_hardlinked.values():
             count += len(namepairs)
@@ -1333,6 +1357,7 @@ class LinkingStats:
         return d
 
     def output_results(self, possibly_incomplete=False):
+        # type: (bool) -> None
         """Main output function after hardlink run completed"""
         if self.options.quiet and self.options.debug_level == 0:
             return
@@ -1357,6 +1382,7 @@ class LinkingStats:
             self.print_stats()
 
     def output_currently_linked(self):
+        # type: () -> None
         """Print out the already linked files that are found"""
         print("Currently hardlinked files")
         print("-----------------------")
@@ -1373,6 +1399,7 @@ class LinkingStats:
                    _humanize_number(filesize * len(namepairs))))
 
     def output_linked_pairs(self):
+        # type: () -> None
         """Print out the stats for the files we hardlinked, if any"""
         if self.options.linking_enabled:
             print("Files that were hardlinked this run")
@@ -1389,6 +1416,7 @@ class LinkingStats:
             prev_src_namepair = src_namepair
 
     def print_stats(self):
+        # type: () -> None
         """Print statistics and data about the current run"""
         if self.endtime is None:
             self.endtime = _time.time()
