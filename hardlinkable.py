@@ -1464,7 +1464,7 @@ class LinkingStats:
                     self.num_hardlinked_thisrun)))
             print("Total hash searches        : %s" % self.num_hash_list_searches)
             if self.num_hash_list_searches == 0:
-                avg_per_search = "N/A"
+                avg_per_search = "N/A"  # type: Union[str, float]
             else:
                 raw_avg = float(self.num_list_iterations) / self.num_hash_list_searches
                 avg_per_search = round(raw_avg, 3)
