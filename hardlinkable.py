@@ -1147,7 +1147,7 @@ class LinkingStats:
         self.num_excluded_dirs += len(basenames)
         if self.options.debug_level > 5:
             for name in basenames:
-                pathname = os.path.join(dirname, name)
+                pathname = _os.path.join(dirname, name)
                 _logging.debug("Excluded dir  : %s" % pathname)
 
     def excluded_dir(self, pathname):
