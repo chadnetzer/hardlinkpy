@@ -50,6 +50,12 @@ from optparse import SUPPRESS_HELP as _SUPPRESS_HELP
 from optparse import TitledHelpFormatter as _TitledHelpFormatter
 
 try:
+    from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
+except ImportError:
+    # typing module not available for mypy.  Oh well.
+    pass
+
+try:
     from zlib import crc32 as _crc32
     DEFAULT_LINEAR_SEARCH_THRESH = 1
 except ImportError:
