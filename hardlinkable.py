@@ -310,7 +310,7 @@ def _options_validation(parser, options):
     del options._dummy_show_progress
 
 
-class Hardlinkable:
+class Hardlinkable(object):
     """Allows scanning directories for hard-linkable files.  Can return
     iteratorable of pathname pairs that can be linked, statistics on what space
     would be saved by linking, and actually perform the linking if
@@ -841,7 +841,7 @@ class FileInfo(object):
         return _os.path.join(self.dirname, self.filename)
 
 
-class _FSDev:
+class _FSDev(object):
     """Per filesystem (ie. st_dev) operations"""
     def __init__(self, st_dev, max_nlinks):
         # type: (int, Optional[int]) -> None
@@ -1070,7 +1070,7 @@ class _FSDev:
             self.inodes_with_digest.add(fileinfo.statinfo.st_ino)
 
 
-class LinkingStats:
+class LinkingStats(object):
     def __init__(self, options):
         # type: (_Values) -> None
         self.options = options
@@ -1502,7 +1502,7 @@ class LinkingStats:
             print("Total digests computed     : %s" % self.num_digests_computed)
 
 
-class _Progress:
+class _Progress(object):
     """Helps facilitate progress output repeatedly printed on the same line (ie. no scrolling)"""
     def __init__(self, options, stats):
         # type: (_Values, LinkingStats) -> None
