@@ -980,16 +980,10 @@ class _FSDev(object):
         l = d.setdefault(filename, [])
         l.append(namepair)
 
-    def fileinfo_from_ino(self, ino, filename=None):
-        # type: (int, Optional[str]) -> FileInfo
-        """When filename is None, chooses an arbitrary namepair linked to the inode"""
-        if filename:
-            assert ino in self.ino_pathnames
-            assert filename in self.ino_pathnames[ino]
-            l = self.ino_pathnames[ino][filename]
-            dirname, filename = l[0]
-        else:
-            dirname, filename = self.arbitrary_namepair_from_ino(ino)
+    def fileinfo_from_ino(self, ino):
+        # type: (int) -> FileInfo
+        """Return an arbitrary FileInfo associated with the given inode number."""
+        dirname, filename = self.arbitrary_namepair_from_ino(ino)
         return FileInfo(dirname, filename, self.ino_stat[ino])
 
     def updated_statinfo(self,
