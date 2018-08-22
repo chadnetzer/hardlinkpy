@@ -938,7 +938,7 @@ class _FSDev(object):
 
                         # After yielding, we can update statinfo to
                         # account for hard-linking
-                        stats.did_hardlink(src_fileinfo, dst_fileinfo)
+                        stats.found_hardlinkable_files(src_fileinfo, dst_fileinfo)
 
                         new_src_nlink = src_statinfo.st_nlink + 1
                         new_dst_nlink = dst_statinfo.st_nlink - 1
@@ -1225,34 +1225,29 @@ class LinkingStats(object):
             else:
                 self.currently_hardlinked[src_namepair][1].append(dst_namepair)
 
-    def found_hardlinkable(self, src_namepair, dst_namepair):
-        # type: (NamePair, NamePair) -> None
-        # We don't actually keep these stats, and we record the actual links
-        # later, after the ordering by nlink count.  Just log.
+    def found_inode(self):
+        # type: () -> None
+        self.num_inodes += 1
+
+    def found_hardlinkable_files(self, src_fileinfo, dst_fileinfo):
+        # type: (FileInfo, FileInfo) -> None
+        src_namepair = src_fileinfo.namepair()
+        dst_namepair = dst_fileinfo.namepair()
+
         if self.options.debug_level > 1:
             assert src_namepair != dst_namepair
             _logging.debug("Linkable      : %s" % _os.path.join(*src_namepair))
             _logging.debug(" to           : %s" % _os.path.join(*dst_namepair))
 
-    def found_inode(self):
-        # type: () -> None
-        self.num_inodes += 1
-
-    def did_hardlink(self, src_fileinfo, dst_fileinfo):
-        # type: (FileInfo, FileInfo) -> None
-        src_namepair = src_fileinfo.namepair()
-        dst_namepair = dst_fileinfo.namepair()
-        dst_statinfo = dst_fileinfo.statinfo
-
         if (self.options.verbosity > 0 or
             getattr(self.options, 'store_new_hardlinks', False)):
             pair = (src_namepair, dst_namepair)
             self.hardlink_pairs.append(pair)
-        filesize = dst_statinfo.st_size
+
         self.num_hardlinked_thisrun += 1
-        if dst_statinfo.st_nlink == 1:
+        if dst_fileinfo.statinfo.st_nlink == 1:
             # We only save bytes if the last link was actually removed.
-            self.bytes_saved_thisrun += filesize
+            self.bytes_saved_thisrun += dst_fileinfo.statinfo.st_size
             self.num_inodes_consolidated += 1
 
     def found_hash(self):
