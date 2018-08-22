@@ -568,7 +568,7 @@ class Hardlinkable(object):
                     if self._are_files_hardlinkable(cached_fileinfo,
                                                     fileinfo,
                                                     use_content_digest):
-                        self._found_hardlinkable_file(cached_fileinfo, fileinfo)
+                        self._found_hardlinkable_inodes(cached_fileinfo, fileinfo)
                         break
                 else:  # nobreak
                     self.stats.no_hash_match()
@@ -739,16 +739,13 @@ class Hardlinkable(object):
 
         return result
 
-    def _found_hardlinkable_file(self, src_fileinfo, dst_fileinfo):
+    def _found_hardlinkable_inodes(self, src_fileinfo, dst_fileinfo):
         # type: (FileInfo, FileInfo) -> None
         """Update state to indicate if src and dst files are hard linkable"""
         src_statinfo = src_fileinfo.statinfo
         dst_statinfo = dst_fileinfo.statinfo
-
-        self.stats.found_hardlinkable(src_fileinfo.namepair(),
-                                      dst_fileinfo.namepair())
-
         assert src_statinfo.st_dev == dst_statinfo.st_dev
+
         fsdev = self._get_fsdev(src_statinfo.st_dev)
         fsdev.add_linked_inodes(src_statinfo.st_ino, dst_statinfo.st_ino)
 
