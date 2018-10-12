@@ -1216,10 +1216,6 @@ class LinkingStats(object):
             else:
                 self.currently_hardlinked[src_namepair][1].append(dst_namepair)
 
-    def found_inode(self):
-        # type: () -> None
-        self.num_inodes += 1
-
     def found_hardlinkable_files(self, src_fileinfo, dst_fileinfo):
         # type: (FileInfo, FileInfo) -> None
         src_namepair = src_fileinfo.namepair()
@@ -1240,6 +1236,10 @@ class LinkingStats(object):
             # We only save bytes if the last link was actually removed.
             self.bytes_saved_thisrun += dst_fileinfo.statinfo.st_size
             self.num_inodes_consolidated += 1
+
+    def found_inode(self):
+        # type: () -> None
+        self.num_inodes += 1
 
     def found_hash(self):
         # type: () -> None
