@@ -536,10 +536,12 @@ class Hardlinkable(object):
                     digest = _content_digest(_os.path.join(*namepair))
                     # Revert to full search if digest can't be computed
                     if digest is not None:
-                        self.stats.computed_digest()
+                        if fileinfo.statinfo.st_ino not in fsdev.inodes_with_digest:
+                            fsdev.add_content_digest(fileinfo, digest)
+                            self.stats.computed_digest()
+
                         cached_inodes_no_digest = (cached_inodes_set -
                                                    fsdev.inodes_with_digest)
-                        fsdev.add_content_digest(fileinfo, digest)
                         cached_inodes_same_digest = (cached_inodes_set &
                                                      fsdev.digest_inode_map[digest])
                         cached_inodes_different_digest = (cached_inodes_set -
@@ -712,9 +714,13 @@ class Hardlinkable(object):
             stat2 = fileinfo2.statinfo
             if use_digest:
                 fsdev = self._get_fsdev(stat1.st_dev)
-                fsdev.add_content_digest(fileinfo1)
-                fsdev.add_content_digest(fileinfo2)
-                self.stats.computed_digest(2)
+                if fileinfo1.statinfo.st_ino not in fsdev.inodes_with_digest:
+                    fsdev.add_content_digest(fileinfo1)
+                    self.stats.computed_digest()
+
+                if fileinfo2.statinfo.st_ino not in fsdev.inodes_with_digest:
+                    fsdev.add_content_digest(fileinfo2)
+                    self.stats.computed_digest()
 
             pathname1 = fileinfo1.pathname()
             pathname2 = fileinfo2.pathname()
