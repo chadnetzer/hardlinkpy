@@ -1263,9 +1263,9 @@ class LinkingStats(object):
         # type: () -> None
         self.num_list_iterations += 1
 
-    def computed_digest(self, num=1):
+    def computed_digest(self):
         # type: (int) -> None
-        self.num_digests_computed += num
+        self.num_digests_computed += 1
 
     def _count_hardlinked_previously(self):
         # type: () -> int
