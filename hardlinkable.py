@@ -536,10 +536,12 @@ class Hardlinkable(object):
                     digest = _content_digest(_os.path.join(*namepair))
                     # Revert to full search if digest can't be computed
                     if digest is not None:
-                        self.stats.computed_digest()
+                        if fileinfo.statinfo.st_ino not in fsdev.inodes_with_digest:
+                            fsdev.add_content_digest(fileinfo, digest)
+                            self.stats.computed_digest()
+
                         cached_inodes_no_digest = (cached_inodes_set -
                                                    fsdev.inodes_with_digest)
-                        fsdev.add_content_digest(fileinfo, digest)
                         cached_inodes_same_digest = (cached_inodes_set &
                                                      fsdev.digest_inode_map[digest])
                         cached_inodes_different_digest = (cached_inodes_set -
@@ -568,7 +570,8 @@ class Hardlinkable(object):
                     if self._are_files_hardlinkable(cached_fileinfo,
                                                     fileinfo,
                                                     use_content_digest):
-                        self._found_hardlinkable_file(cached_fileinfo, fileinfo)
+                        assert cached_fileinfo.statinfo.st_dev == fsdev.st_dev
+                        fsdev.add_linked_inodes(cached_ino, ino)
                         break
                 else:  # nobreak
                     self.stats.no_hash_match()
@@ -711,9 +714,13 @@ class Hardlinkable(object):
             stat2 = fileinfo2.statinfo
             if use_digest:
                 fsdev = self._get_fsdev(stat1.st_dev)
-                fsdev.add_content_digest(fileinfo1)
-                fsdev.add_content_digest(fileinfo2)
-                self.stats.computed_digest(2)
+                if fileinfo1.statinfo.st_ino not in fsdev.inodes_with_digest:
+                    fsdev.add_content_digest(fileinfo1)
+                    self.stats.computed_digest()
+
+                if fileinfo2.statinfo.st_ino not in fsdev.inodes_with_digest:
+                    fsdev.add_content_digest(fileinfo2)
+                    self.stats.computed_digest()
 
             pathname1 = fileinfo1.pathname()
             pathname2 = fileinfo2.pathname()
@@ -738,19 +745,6 @@ class Hardlinkable(object):
                         self.stats.found_mismatched_xattr()
 
         return result
-
-    def _found_hardlinkable_file(self, src_fileinfo, dst_fileinfo):
-        # type: (FileInfo, FileInfo) -> None
-        """Update state to indicate if src and dst files are hard linkable"""
-        src_statinfo = src_fileinfo.statinfo
-        dst_statinfo = dst_fileinfo.statinfo
-
-        self.stats.found_hardlinkable(src_fileinfo.namepair(),
-                                      dst_fileinfo.namepair())
-
-        assert src_statinfo.st_dev == dst_statinfo.st_dev
-        fsdev = self._get_fsdev(src_statinfo.st_dev)
-        fsdev.add_linked_inodes(src_statinfo.st_ino, dst_statinfo.st_ino)
 
     def _updated_statinfo(self,
                           statinfo,
@@ -923,8 +917,8 @@ class _FSDev(object):
                         break
 
                     # Loop through all linkable pathnames in the last inode
-                    namepairs = _namepairs_per_inode(self.ino_pathnames[dst_ino])
-                    for dst_dirname, dst_filename in namepairs:
+                    p = self.ino_pathnames[dst_ino]
+                    for dst_dirname, dst_filename in _namepairs_per_inode(p):
                         if (options.samename and
                             dst_filename not in self.ino_pathnames[src_ino]):
                             # Skip inodes without equal filenames in samename mode
@@ -941,7 +935,7 @@ class _FSDev(object):
 
                         # After yielding, we can update statinfo to
                         # account for hard-linking
-                        stats.did_hardlink(src_fileinfo, dst_fileinfo)
+                        stats.found_hardlinkable_files(src_fileinfo, dst_fileinfo)
 
                         new_src_nlink = src_statinfo.st_nlink + 1
                         new_dst_nlink = dst_statinfo.st_nlink - 1
@@ -1050,18 +1044,16 @@ class _FSDev(object):
     def add_content_digest(self, fileinfo, digest=None):
         # type: (FileInfo, Optional[int]) -> None
         """Store a given digest for an inode (or generate one if not provided)"""
-        if fileinfo.statinfo.st_ino not in self.inodes_with_digest:
-            pathname = fileinfo.pathname()
+        if digest is None:
+            digest = _content_digest(fileinfo.pathname())
             if digest is None:
-                digest = _content_digest(pathname)
-                if digest is None:
-                    return
-            digests = self.digest_inode_map.get(digest, None)
-            if digests is None:
-                self.digest_inode_map[digest] = set([fileinfo.statinfo.st_ino])
-            else:
-                digests.add(fileinfo.statinfo.st_ino)
-            self.inodes_with_digest.add(fileinfo.statinfo.st_ino)
+                return
+        digests = self.digest_inode_map.get(digest, None)
+        if digests is None:
+            self.digest_inode_map[digest] = set([fileinfo.statinfo.st_ino])
+        else:
+            digests.add(fileinfo.statinfo.st_ino)
+        self.inodes_with_digest.add(fileinfo.statinfo.st_ino)
 
 
 class LinkingStats(object):
@@ -1228,35 +1220,30 @@ class LinkingStats(object):
             else:
                 self.currently_hardlinked[src_namepair][1].append(dst_namepair)
 
-    def found_hardlinkable(self, src_namepair, dst_namepair):
-        # type: (NamePair, NamePair) -> None
-        # We don't actually keep these stats, and we record the actual links
-        # later, after the ordering by nlink count.  Just log.
+    def found_hardlinkable_files(self, src_fileinfo, dst_fileinfo):
+        # type: (FileInfo, FileInfo) -> None
+        src_namepair = src_fileinfo.namepair()
+        dst_namepair = dst_fileinfo.namepair()
+
         if self.options.debug_level > 1:
             assert src_namepair != dst_namepair
             _logging.debug("Linkable      : %s" % _os.path.join(*src_namepair))
             _logging.debug(" to           : %s" % _os.path.join(*dst_namepair))
 
-    def found_inode(self):
-        # type: () -> None
-        self.num_inodes += 1
-
-    def did_hardlink(self, src_fileinfo, dst_fileinfo):
-        # type: (FileInfo, FileInfo) -> None
-        src_namepair = src_fileinfo.namepair()
-        dst_namepair = dst_fileinfo.namepair()
-        dst_statinfo = dst_fileinfo.statinfo
-
         if (self.options.verbosity > 0 or
             getattr(self.options, 'store_new_hardlinks', False)):
             pair = (src_namepair, dst_namepair)
             self.hardlink_pairs.append(pair)
-        filesize = dst_statinfo.st_size
+
         self.num_hardlinked_thisrun += 1
-        if dst_statinfo.st_nlink == 1:
+        if dst_fileinfo.statinfo.st_nlink == 1:
             # We only save bytes if the last link was actually removed.
-            self.bytes_saved_thisrun += filesize
+            self.bytes_saved_thisrun += dst_fileinfo.statinfo.st_size
             self.num_inodes_consolidated += 1
+
+    def found_inode(self):
+        # type: () -> None
+        self.num_inodes += 1
 
     def found_hash(self):
         # type: () -> None
@@ -1280,9 +1267,9 @@ class LinkingStats(object):
         # type: () -> None
         self.num_list_iterations += 1
 
-    def computed_digest(self, num=1):
+    def computed_digest(self):
         # type: (int) -> None
-        self.num_digests_computed += num
+        self.num_digests_computed += 1
 
     def _count_hardlinked_previously(self):
         # type: () -> int
