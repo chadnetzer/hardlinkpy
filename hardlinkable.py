@@ -1044,18 +1044,16 @@ class _FSDev(object):
     def add_content_digest(self, fileinfo, digest=None):
         # type: (FileInfo, Optional[int]) -> None
         """Store a given digest for an inode (or generate one if not provided)"""
-        if fileinfo.statinfo.st_ino not in self.inodes_with_digest:
-            pathname = fileinfo.pathname()
+        if digest is None:
+            digest = _content_digest(fileinfo.pathname())
             if digest is None:
-                digest = _content_digest(pathname)
-                if digest is None:
-                    return
-            digests = self.digest_inode_map.get(digest, None)
-            if digests is None:
-                self.digest_inode_map[digest] = set([fileinfo.statinfo.st_ino])
-            else:
-                digests.add(fileinfo.statinfo.st_ino)
-            self.inodes_with_digest.add(fileinfo.statinfo.st_ino)
+                return
+        digests = self.digest_inode_map.get(digest, None)
+        if digests is None:
+            self.digest_inode_map[digest] = set([fileinfo.statinfo.st_ino])
+        else:
+            digests.add(fileinfo.statinfo.st_ino)
+        self.inodes_with_digest.add(fileinfo.statinfo.st_ino)
 
 
 class LinkingStats(object):
