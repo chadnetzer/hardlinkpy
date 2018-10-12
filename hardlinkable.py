@@ -917,8 +917,8 @@ class _FSDev(object):
                         break
 
                     # Loop through all linkable pathnames in the last inode
-                    namepairs = _namepairs_per_inode(self.ino_pathnames[dst_ino])
-                    for dst_dirname, dst_filename in namepairs:
+                    p = self.ino_pathnames[dst_ino]
+                    for dst_dirname, dst_filename in _namepairs_per_inode(p):
                         if (options.samename and
                             dst_filename not in self.ino_pathnames[src_ino]):
                             # Skip inodes without equal filenames in samename mode
