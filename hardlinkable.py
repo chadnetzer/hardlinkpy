@@ -740,16 +740,6 @@ class Hardlinkable(object):
 
         return result
 
-    def _found_hardlinkable_inodes(self, src_fileinfo, dst_fileinfo):
-        # type: (FileInfo, FileInfo) -> None
-        """Update state to indicate if src and dst files are hard linkable"""
-        src_statinfo = src_fileinfo.statinfo
-        dst_statinfo = dst_fileinfo.statinfo
-        assert src_statinfo.st_dev == dst_statinfo.st_dev
-
-        fsdev = self._get_fsdev(src_statinfo.st_dev)
-        fsdev.add_linked_inodes(src_statinfo.st_ino, dst_statinfo.st_ino)
-
     def _updated_statinfo(self,
                           statinfo,
                           nlink=None,
