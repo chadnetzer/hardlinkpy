@@ -568,7 +568,8 @@ class Hardlinkable(object):
                     if self._are_files_hardlinkable(cached_fileinfo,
                                                     fileinfo,
                                                     use_content_digest):
-                        self._found_hardlinkable_inodes(cached_fileinfo, fileinfo)
+                        assert cached_fileinfo.statinfo.st_dev == fsdev.st_dev
+                        fsdev.add_linked_inodes(cached_ino, ino)
                         break
                 else:  # nobreak
                     self.stats.no_hash_match()
