@@ -1,6 +1,10 @@
-# hardlinkable - find and optionally link identical files
+# hardlinkablepy - find and optionally link identical files
 
-`hardlinkable` is a tool to scan directories and report files that could be
+Note - I have moved my efforts to `hardlinkable`, which can be found as a
+sibling repo to this one.  It is written in Go, is a bit faster and has some
+additional features compared to this version. -Chad Netzer
+
+`hardlinkable.py` is a tool to scan directories and report files that could be
 hardlinked together because they have matching content, and (by default) other
 criteria such as modification time, permissions and ownership.  It can
 optionally perform the linking as well, saving storage space (but by default,
@@ -19,7 +23,7 @@ to 2.3.
 
 ## Example output
 ```
-$ hardlinkable download_dirs
+$ hardlinkable.py download_dirs
 Hard linking statistics
 -----------------------
 Statistics reflect what would result if actual linking were enabled
@@ -35,7 +39,7 @@ Total run time             : 15.024 seconds
 
 You can specify more verbosity to get a list of linkable files, and some additional stats:
 ```
-$ hardlinkable -v download_dirs
+$ hardlinkable.py -v download_dirs
 Files that are hardlinkable
 -----------------------
 from: download_dir/bak1/some_image1.png
@@ -65,10 +69,10 @@ Total remaining inodes     : 78274
 
 ## Help
 ```
-$ hardlinkable -h
+$ hardlinkable.py -h
 Usage
 =====
-  hardlinkable [options] directory [ directory ... ]
+  hardlinkable.py [options] directory [ directory ... ]
 
 This is a tool to scan directories and report on the space that could be saved
 by hard linking identical files.  It can also perform the linking.
@@ -111,7 +115,7 @@ by Antti Kaihola, Carl Henrik Lunde, Wolf Ó Spealáin, and others.  It is able
 to calculate accurate statistics on how much space can be saved, without
 actually performing the linking.
 
-This version is named ```hardlinkable``` to indicate that, by default, it does
+This version is named `hardlinkable.py` to indicate that, by default, it does
 *not* perform any linking, and the user has to explicitly opt-in to having it
 perform the linking step.  This (to me) is the safer and more-sensible default;
 it's not unusual to want to run it a few times with different options, and see
